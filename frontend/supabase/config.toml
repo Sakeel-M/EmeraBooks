@@ -1,0 +1,10 @@
+project_id = "hnvwrxkjnnepnchjunel"
+
+[functions.zoho-integration]
+verify_jwt = false
+
+[functions.odoo-integration]
+verify_jwt = false
+
+[functions.quickbooks-integration]
+verify_jwt = false

@@ -1,0 +1,15 @@
+# Core Dependencies
+Flask==3.0.0
+Flask-CORS==4.0.0
+python-dotenv==1.0.0
+
+# AI & Processing
+openai==1.54.0
+
+# Excel Processing
+openpyxl==3.1.5
+
+# PDF Processing Libraries (Multiple options for compatibility)
+pdfplumber==0.11.4
+PyPDF2==3.0.1
+PyMuPDF==1.24.0
