@@ -14,7 +14,7 @@ NC='\033[0m'
 
 # Configuration
 APP_DIR="/var/www/finance-app"
-REPO_URL="https://github.com/Sakeel-M/Financial_bakcend.git"
+REPO_URL="https://github.com/Sakeel-M/EmeraBooks.git"
 
 print_header() {
     echo -e "${BLUE}"
