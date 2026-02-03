@@ -1,7 +1,6 @@
 import { 
-  Home, 
-  CreditCard, 
-  FileText, 
+  Home,
+  FileText,
   Receipt, 
   Users, 
   Building2,
@@ -45,7 +44,6 @@ import { toast } from "sonner";
 
 const menuItems = [
   { title: "Home", url: "/", icon: Home },
-  { title: "Banks & Cards", url: "/banks", icon: CreditCard },
   { title: "Bills", url: "/bills", icon: FileText },
   { title: "Invoices", url: "/invoices", icon: Receipt },
   { title: "Vendors", url: "/vendors", icon: Building2 },
