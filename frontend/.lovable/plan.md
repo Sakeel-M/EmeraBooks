@@ -2,7 +2,7 @@
 
 # Fix Admin Page and Add Sidebar with Better Design
 
-## Problems Identified
+## Problems Identifie
 
 1. **Edge function bug**: The `admin-users` edge function uses `auth.getClaims()` which does not exist in the Supabase JS client. It should use `auth.getUser()` instead to verify the caller's identity.
 2. **HTTP method mismatch**: The frontend calls `supabase.functions.invoke("admin-users")` which defaults to POST, but the edge function lists users only on GET. Need to explicitly pass `method: "GET"` or restructure to handle POST for listing too.
