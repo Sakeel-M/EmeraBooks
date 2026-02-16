@@ -13,13 +13,13 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Configuration
-APP_DIR="/var/www/finance-app"
+APP_DIR="/var/www/emerabooks"
 REPO_URL="https://github.com/Sakeel-M/EmeraBooks.git"
 
 print_header() {
     echo -e "${BLUE}"
     echo "=========================================="
-    echo "  Finance Analytics - VPS Setup"
+    echo "  EmeraBooks - VPS Setup"
     echo "=========================================="
     echo -e "${NC}"
 }
@@ -47,15 +47,22 @@ print_header
 check_root
 
 # Get user inputs
-print_info "This script will setup your Finance Analytics application on this VPS"
+print_info "This script will setup your EmeraBooks application on this VPS"
 echo ""
 read -p "Enter your OpenAI API Key: " OPENAI_KEY
 read -p "Enter your VPS IP address or domain: " VPS_HOST
+read -p "Enter your Supabase Project ID: " SUPABASE_PROJECT_ID
+read -p "Enter your Supabase Publishable Key: " SUPABASE_KEY
+read -p "Enter your Supabase URL: " SUPABASE_URL
 echo ""
 
 if [ -z "$OPENAI_KEY" ] || [ -z "$VPS_HOST" ]; then
-    print_error "API Key and VPS host are required!"
+    print_error "OpenAI API Key and VPS host are required!"
     exit 1
+fi
+
+if [ -z "$SUPABASE_PROJECT_ID" ] || [ -z "$SUPABASE_KEY" ] || [ -z "$SUPABASE_URL" ]; then
+    print_warning "Supabase credentials not provided. You'll need to configure Frontend/.env manually later."
 fi
 
 # Step 1: Update system
@@ -94,7 +101,7 @@ if [ -d "$APP_DIR" ]; then
 else
     mkdir -p /var/www
     cd /var/www
-    git clone $REPO_URL finance-app
+    git clone $REPO_URL emerabooks
 fi
 cd $APP_DIR
 print_success "Repository cloned"
@@ -127,16 +134,22 @@ deactivate
 
 # Step 8: Setup Frontend
 print_info "Step 8: Setting up frontend..."
-cd $APP_DIR/frontend
+cd $APP_DIR/Frontend
 
 npm install
 print_success "Frontend dependencies installed"
 
 # Create frontend .env
-cat > .env << EOF
-VITE_API_URL=http://$VPS_HOST
+if [ ! -z "$SUPABASE_PROJECT_ID" ]; then
+    cat > .env << EOF
+VITE_SUPABASE_PROJECT_ID=$SUPABASE_PROJECT_ID
+VITE_SUPABASE_PUBLISHABLE_KEY=$SUPABASE_KEY
+VITE_SUPABASE_URL=$SUPABASE_URL
 EOF
-print_success "Frontend .env file created"
+    print_success "Frontend .env file created with Supabase configuration"
+else
+    print_warning "Skipping .env creation - configure manually later"
+fi
 
 # Build frontend
 npm run build
@@ -144,33 +157,108 @@ print_success "Frontend built successfully"
 
 # Step 9: Setup Systemd Service
 print_info "Step 9: Configuring systemd service..."
-cp $APP_DIR/finance-backend.service /etc/systemd/system/
+
+# Create systemd service file
+cat > /etc/systemd/system/emerabooks-backend.service << 'EOF'
+[Unit]
+Description=EmeraBooks Flask Backend API
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/emerabooks/backend
+Environment="PATH=/var/www/emerabooks/backend/venv/bin"
+Environment="FLASK_ENV=production"
+ExecStart=/var/www/emerabooks/backend/venv/bin/gunicorn -w 4 -b 127.0.0.1:5000 --timeout 120 app:app
+Restart=always
+RestartSec=10
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 systemctl daemon-reload
-systemctl enable finance-backend
-systemctl start finance-backend
+systemctl enable emerabooks-backend
+systemctl start emerabooks-backend
 sleep 3
 
-if systemctl is-active --quiet finance-backend; then
+if systemctl is-active --quiet emerabooks-backend; then
     print_success "Backend service started"
 else
     print_error "Backend service failed to start"
-    print_info "Check logs: journalctl -u finance-backend -n 50"
+    print_info "Check logs: journalctl -u emerabooks-backend -n 50"
 fi
 
 # Step 10: Configure Nginx
 print_info "Step 10: Configuring Nginx..."
 
-# Update nginx config with actual domain/IP
-sed -i "s/your-domain.com/$VPS_HOST/g" $APP_DIR/nginx.conf
-sed -i "s/www.your-domain.com/www.$VPS_HOST/g" $APP_DIR/nginx.conf
+# Create Nginx configuration
+cat > /etc/nginx/sites-available/emerabooks << EOF
+# Backend API server
+upstream flask_backend {
+    server 127.0.0.1:5000;
+    keepalive 64;
+}
 
-cp $APP_DIR/nginx.conf /etc/nginx/sites-available/finance-app
+server {
+    listen 80;
+    server_name $VPS_HOST;
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header X-Content-Type-Options "nosniff" always;
+
+    # Frontend
+    location / {
+        root /var/www/emerabooks/Frontend/dist;
+        try_files \$uri \$uri/ /index.html;
+
+        # Cache static assets
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+    }
+
+    # Backend API
+    location /api/ {
+        proxy_pass http://flask_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
+
+        # CORS
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
+        add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
+    }
+
+    # Upload size
+    client_max_body_size 50M;
+
+    # Logging
+    access_log /var/log/nginx/emerabooks_access.log;
+    error_log /var/log/nginx/emerabooks_error.log;
+}
+EOF
 
 # Remove default site
 rm -f /etc/nginx/sites-enabled/default
 
 # Enable our site
-ln -sf /etc/nginx/sites-available/finance-app /etc/nginx/sites-enabled/
+ln -sf /etc/nginx/sites-available/emerabooks /etc/nginx/sites-enabled/
 
 # Test and reload nginx
 nginx -t
@@ -188,16 +276,15 @@ print_success "Firewall configured"
 print_info "Step 12: Setting proper permissions..."
 chown -R www-data:www-data $APP_DIR
 chmod -R 755 $APP_DIR
-chmod +x $APP_DIR/deploy.sh
+chmod +x $APP_DIR/deploy-hostinger.sh 2>/dev/null || true
 chmod +x $APP_DIR/setup-vps.sh
 print_success "Permissions set"
 
-# Step 13: Create log files
-print_info "Step 13: Creating log files..."
-touch /var/log/finance-backend-access.log
-touch /var/log/finance-backend-error.log
-chown www-data:www-data /var/log/finance-backend-*.log
-print_success "Log files created"
+# Step 13: Create log directory
+print_info "Step 13: Creating log directory..."
+mkdir -p /var/log/emerabooks
+chown www-data:www-data /var/log/emerabooks
+print_success "Log directory created"
 
 # Final Summary
 echo ""
@@ -213,14 +300,14 @@ echo "Access your application at:"
 echo -e "${BLUE}  http://$VPS_HOST${NC}"
 echo ""
 echo "Useful commands:"
-echo "  - View backend logs: sudo journalctl -u finance-backend -f"
-echo "  - View Nginx logs: sudo tail -f /var/log/nginx/error.log"
-echo "  - Restart backend: sudo systemctl restart finance-backend"
+echo "  - View backend logs: sudo journalctl -u emerabooks-backend -f"
+echo "  - View Nginx logs: sudo tail -f /var/log/nginx/emerabooks_error.log"
+echo "  - Restart backend: sudo systemctl restart emerabooks-backend"
 echo "  - Restart Nginx: sudo systemctl restart nginx"
-echo "  - Deploy updates: cd $APP_DIR && sudo ./deploy.sh"
+echo "  - Deploy updates: cd $APP_DIR && sudo ./deploy-hostinger.sh"
 echo ""
 echo "Service Status:"
-systemctl status finance-backend --no-pager -l | head -n 3
+systemctl status emerabooks-backend --no-pager -l | head -n 3
 systemctl status nginx --no-pager -l | head -n 3
 echo ""
 print_info "Next Steps:"

@@ -8,6 +8,8 @@ backend/*.pyc
 .env
 .env.local
 backend/.env
+Frontend/.env
+frontend/.env
 
 # IDE and Editor
 .vscode/
@@ -19,6 +21,7 @@ backend/.env
 # OS
 .DS_Store
 Thumbs.db
+NUL
 
 # Build outputs
 frontend/dist/
