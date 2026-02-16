@@ -35,6 +35,11 @@ All colors MUST be HSL.
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
+    /* Warning colors for alerts */
+    --warning: 45 93% 47%;
+    --warning-foreground: 45 93% 12%;
+    --warning-muted: 45 93% 94%;
+
     --border: 143 20% 88%;
     --input: 143 20% 90%;
     --ring: 143 44% 22%;

@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import Index from "./pages/Index";
 import Banks from "./pages/Banks";
 import Bills from "./pages/Bills";
@@ -20,8 +21,15 @@ import Integrations from "./pages/Integrations";
 import IntegrationCallback from "./pages/IntegrationCallback";
 import SyncHistory from "./pages/SyncHistory";
 import Reconciliation from "./pages/Reconciliation";
+import PayablesReceivables from "./pages/PayablesReceivables";
+import Ledger from "./pages/Ledger";
+import Admin from "./pages/Admin";
 
 const queryClient = new QueryClient();
+
+const P = ({ children }: { children: React.ReactNode }) => (
+  <ProtectedRoute>{children}</ProtectedRoute>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -30,22 +38,25 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
-          <Route path="/banks" element={<Banks />} />
-          <Route path="/bills" element={<Bills />} />
-          <Route path="/invoices" element={<Invoices />} />
-          <Route path="/vendors" element={<Vendors />} />
-          <Route path="/customers" element={<Customers />} />
-          <Route path="/financials" element={<Financials />} />
-          <Route path="/accounting" element={<Accounting />} />
-          <Route path="/documents" element={<Documents />} />
-          <Route path="/budget" element={<Budget />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/integrations" element={<Integrations />} />
+          <Route path="/" element={<P><Index /></P>} />
+          <Route path="/banks" element={<P><Banks /></P>} />
+          <Route path="/bills" element={<P><Bills /></P>} />
+          <Route path="/invoices" element={<P><Invoices /></P>} />
+          <Route path="/vendors" element={<P><Vendors /></P>} />
+          <Route path="/customers" element={<P><Customers /></P>} />
+          <Route path="/financials" element={<P><Financials /></P>} />
+          <Route path="/accounting" element={<P><Accounting /></P>} />
+          <Route path="/documents" element={<P><Documents /></P>} />
+          <Route path="/budget" element={<P><Budget /></P>} />
+          <Route path="/settings" element={<P><Settings /></P>} />
+          <Route path="/integrations" element={<P><Integrations /></P>} />
           <Route path="/integrations/callback/:provider" element={<IntegrationCallback />} />
-          <Route path="/sync-history" element={<SyncHistory />} />
-          <Route path="/reconciliation" element={<Reconciliation />} />
+          <Route path="/sync-history" element={<P><SyncHistory /></P>} />
+          <Route path="/reconciliation" element={<P><Reconciliation /></P>} />
+          <Route path="/payables-receivables" element={<P><PayablesReceivables /></P>} />
+          <Route path="/ledger" element={<P><Ledger /></P>} />
+          <Route path="/admin" element={<P><Admin /></P>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

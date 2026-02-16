@@ -45,13 +45,22 @@ const Files = () => {
   };
 
   const handleDelete = async (id: string) => {
-    await database.deleteFile(id);
-    await loadFiles();
-    toast({
-      title: "File Deleted",
-      description: "The file has been removed from your history.",
-    });
-    setDeleteId(null);
+    try {
+      await database.deleteFile(id);
+      await loadFiles();
+      toast({
+        title: "File Deleted",
+        description: "The file and its related data have been removed.",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Delete failed",
+        description: err?.message || "Could not delete the file.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleteId(null);
+    }
   };
 
   if (loading) {

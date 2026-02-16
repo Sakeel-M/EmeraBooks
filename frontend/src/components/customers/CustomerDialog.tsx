@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -55,17 +55,34 @@ export function CustomerDialog({
   const form = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
     defaultValues: {
-      name: customer?.name || "",
-      email: customer?.email || "",
-      phone: customer?.phone || "",
-      address: customer?.address || "",
-      city: customer?.city || "",
-      state: customer?.state || "",
-      zip_code: customer?.zip_code || "",
-      country: customer?.country || "",
-      notes: customer?.notes || "",
+      name: "",
+      email: "",
+      phone: "",
+      address: "",
+      city: "",
+      state: "",
+      zip_code: "",
+      country: "",
+      notes: "",
     },
   });
+
+  // Reset form when customer prop or dialog open state changes
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        name: customer?.name || "",
+        email: customer?.email || "",
+        phone: customer?.phone || "",
+        address: customer?.address || "",
+        city: customer?.city || "",
+        state: customer?.state || "",
+        zip_code: customer?.zip_code || "",
+        country: customer?.country || "",
+        notes: customer?.notes || "",
+      });
+    }
+  }, [customer, open, form]);
 
   const onSubmit = async (data: CustomerFormData) => {
     setIsLoading(true);

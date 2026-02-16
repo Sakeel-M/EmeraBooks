@@ -60,7 +60,7 @@ export const CHART_COLORS = {
   ],
 };
 
-export const formatCurrencyValue = (value: number, currency = "USD") => {
+export const formatCurrencyValue = (value: number, currency: string = "USD") => {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,

@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { StatCard } from "@/components/shared/StatCard";
 import { DollarSign, AlertCircle, TrendingUp, Wallet } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useCurrency } from "@/hooks/useCurrency";
 
 interface FinancialMetrics {
   totalRevenue: number;
@@ -17,18 +18,12 @@ interface FinancialMetrics {
 export function FinancialSummary() {
   const [metrics, setMetrics] = useState<FinancialMetrics | null>(null);
   const [loading, setLoading] = useState(true);
+  const { currency: userCurrency } = useCurrency();
 
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
-        // Detect currency
-        const { data: currencyData } = await supabase
-          .from('uploaded_files')
-          .select('currency')
-          .limit(1)
-          .maybeSingle();
-
-        const currency = currencyData?.currency || 'USD';
+        const currency = userCurrency;
 
         // Total Revenue: All invoices
         const { data: allInvoices } = await supabase
@@ -85,7 +80,7 @@ export function FinancialSummary() {
           totalExpenses,
           netProfit,
           outstandingBalance,
-          currency,
+          currency: userCurrency,
           invoiceCount,
           billCount,
         });

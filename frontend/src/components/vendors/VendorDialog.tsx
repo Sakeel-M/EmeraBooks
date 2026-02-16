@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { vendorSchema, type VendorFormData } from "@/lib/validations/vendor";
@@ -8,18 +9,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { CategorySelect } from "@/components/shared/CategorySelect";
 
 interface VendorDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   vendor?: any;
-  onSuccess: () => void;
+  onSuccess: (vendorId?: string) => void;
 }
 
 export function VendorDialog({ open, onOpenChange, vendor, onSuccess }: VendorDialogProps) {
   const form = useForm<VendorFormData>({
     resolver: zodResolver(vendorSchema),
-    defaultValues: vendor || {
+    defaultValues: {
       name: "",
       email: "",
       phone: "",
@@ -29,8 +31,27 @@ export function VendorDialog({ open, onOpenChange, vendor, onSuccess }: VendorDi
       zip_code: "",
       country: "",
       notes: "",
+      category: "",
     },
   });
+
+  // Reset form when vendor prop or dialog open state changes
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        name: vendor?.name || "",
+        email: vendor?.email || "",
+        phone: vendor?.phone || "",
+        address: vendor?.address || "",
+        city: vendor?.city || "",
+        state: vendor?.state || "",
+        zip_code: vendor?.zip_code || "",
+        country: vendor?.country || "",
+        notes: vendor?.notes || "",
+        category: vendor?.category || "",
+      });
+    }
+  }, [vendor, open, form]);
 
   const onSubmit = async (data: VendorFormData) => {
     try {
@@ -45,7 +66,7 @@ export function VendorDialog({ open, onOpenChange, vendor, onSuccess }: VendorDi
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("User not authenticated");
 
-        const { error } = await supabase.from("vendors").insert([{
+        const { data: newVendor, error } = await supabase.from("vendors").insert([{
           name: data.name,
           email: data.email,
           phone: data.phone,
@@ -56,9 +77,13 @@ export function VendorDialog({ open, onOpenChange, vendor, onSuccess }: VendorDi
           country: data.country,
           notes: data.notes,
           user_id: user.id,
-        }]);
+        }]).select().single();
         if (error) throw error;
         toast.success("Vendor created successfully");
+        onSuccess(newVendor.id);
+        onOpenChange(false);
+        form.reset();
+        return;
       }
       onSuccess();
       onOpenChange(false);
@@ -187,6 +212,20 @@ export function VendorDialog({ open, onOpenChange, vendor, onSuccess }: VendorDi
                   <FormLabel>Country</FormLabel>
                   <FormControl>
                     <Input {...field} placeholder="United States" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="category"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Category</FormLabel>
+                  <FormControl>
+                    <CategorySelect value={field.value || ""} onChange={field.onChange} type="vendor" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

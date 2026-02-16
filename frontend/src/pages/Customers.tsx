@@ -13,6 +13,7 @@ import { CustomerDetail } from "@/components/customers/CustomerDetail";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useCurrency } from "@/hooks/useCurrency";
 
 interface Customer {
   id: string;
@@ -40,6 +41,7 @@ export default function Customers() {
   const [selectedRows, setSelectedRows] = useState<Customer[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
+  const { currency } = useCurrency();
 
   useEffect(() => {
     fetchCustomers();
@@ -128,7 +130,7 @@ export default function Customers() {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "USD",
+      currency,
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);

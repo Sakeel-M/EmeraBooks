@@ -1,4 +1,4 @@
-// Reconciliation Logic Utilities
+// Reconciliation Logic Utilities — Internal Ledger Matching (Digits-style)
 
 export interface BankTransaction {
   id: string;
@@ -9,25 +9,13 @@ export interface BankTransaction {
   file_id?: string;
 }
 
-export interface OdooTransaction {
-  id: number | string;
-  date?: string;
-  payment_date?: string;
-  name?: string;
-  amount?: number;
-  amount_total?: number;
-  ref?: string;
-  partner_id?: [number, string] | null;
-  partner_name?: string;
-  memo?: string;
-}
-
-export interface NormalizedTransaction {
+export interface LedgerEntry {
   id: string;
   date: string;
   description: string;
   amount: number;
-  original?: OdooTransaction;
+  account_name?: string;
+  type: 'transaction' | 'journal_line';
 }
 
 export interface ReconciliationSettings {
@@ -39,306 +27,230 @@ export interface ReconciliationSettings {
   aiMatching: boolean;
 }
 
-export interface MatchedTransaction {
+export interface MatchedItem {
   id: string;
-  date: string;
-  description: string;
-  bankAmount: number;
-  odooAmount: number;
+  statementDate: string;
+  statementDescription: string;
+  statementAmount: number;
+  ledgerDate: string;
+  ledgerDescription: string;
+  ledgerAmount: number;
+  ledgerEntryId: string;
 }
 
-export interface AmountMismatch {
-  id: string;
-  date: string;
-  description: string;
-  bankAmount: number;
-  odooAmount: number;
-  difference: number;
-}
-
-export interface DateDiscrepancy {
-  id: string;
-  bankDate: string;
-  odooDate: string;
-  description: string;
-  amount: number;
-  daysDiff: number;
-}
-
-export interface DuplicateTransaction {
+export interface FlaggedItem {
   id: string;
   date: string;
   description: string;
   amount: number;
-  occurrences: number;
-}
-
-export interface MissingTransaction {
-  id: string;
-  date: string;
-  description: string;
-  amount: number;
+  flagType: 'missing_in_ledger' | 'missing_in_statement' | 'amount_mismatch' | 'date_mismatch' | 'duplicate';
+  ledgerEntryId?: string;
+  ledgerAmount?: number;
+  ledgerDate?: string;
+  difference?: number;
+  daysDiff?: number;
+  occurrences?: number;
 }
 
 export interface ReconciliationResults {
   matchRate: number;
   totalDiscrepancy: number;
-  matched: MatchedTransaction[];
-  amountMismatches: AmountMismatch[];
-  missingInOdoo: MissingTransaction[];
-  missingInBank: MissingTransaction[];
-  dateDiscrepancies: DateDiscrepancy[];
-  duplicates: DuplicateTransaction[];
-}
-
-function normalizeOdooTransactions(odooTxns: OdooTransaction[]): NormalizedTransaction[] {
-  return odooTxns.map(t => ({
-    id: String(t.id),
-    date: t.date || t.payment_date || '',
-    description: t.name || t.ref || t.memo || (t.partner_id ? t.partner_id[1] : '') || '',
-    amount: Math.abs(t.amount || t.amount_total || 0),
-    original: t
-  }));
-}
-
-interface AmountMatchResult {
-  isExact: boolean;
-  isClose: boolean;
-  difference: number;
+  matched: MatchedItem[];
+  flags: FlaggedItem[];
+  unreconciledDifference: number;
 }
 
 function checkAmountMatch(
-  bankAmount: number, 
-  odooAmount: number, 
+  a: number,
+  b: number,
   settings: ReconciliationSettings
-): AmountMatchResult {
-  const diff = bankAmount - odooAmount;
+): { isExact: boolean; isClose: boolean; difference: number } {
+  const diff = a - b;
   const absDiff = Math.abs(diff);
-  
-  if (absDiff === 0) {
-    return { isExact: true, isClose: true, difference: 0 };
-  }
-  
-  if (settings.amountTolerance === 'cents' && absDiff <= 0.01) {
+
+  if (absDiff === 0) return { isExact: true, isClose: true, difference: 0 };
+
+  if (settings.amountTolerance === 'cents' && absDiff <= 0.01)
     return { isExact: false, isClose: true, difference: diff };
-  }
-  
-  if (settings.amountTolerance === 'percent' && bankAmount > 0 && (absDiff / bankAmount) <= 0.01) {
+
+  if (settings.amountTolerance === 'percent' && a > 0 && absDiff / a <= 0.01)
     return { isExact: false, isClose: true, difference: diff };
-  }
-  
+
   return { isExact: false, isClose: false, difference: diff };
 }
 
-interface DateMatchResult {
-  isExact: boolean;
-  isClose: boolean;
-  daysDiff: number;
-}
-
 function checkDateMatch(
-  bankDate: string, 
-  odooDate: string, 
+  dateA: string,
+  dateB: string,
   settings: ReconciliationSettings
-): DateMatchResult {
-  if (!bankDate || !odooDate) {
-    return { isExact: false, isClose: false, daysDiff: 999 };
-  }
-  
-  const bankTime = new Date(bankDate).getTime();
-  const odooTime = new Date(odooDate).getTime();
-  const daysDiff = Math.abs(Math.round((bankTime - odooTime) / (1000 * 60 * 60 * 24)));
-  
-  if (daysDiff === 0) {
-    return { isExact: true, isClose: true, daysDiff: 0 };
-  }
-  
-  if (daysDiff <= settings.dateTolerance) {
-    return { isExact: false, isClose: true, daysDiff };
-  }
-  
+): { isExact: boolean; isClose: boolean; daysDiff: number } {
+  if (!dateA || !dateB) return { isExact: false, isClose: false, daysDiff: 999 };
+
+  const a = new Date(dateA).getTime();
+  const b = new Date(dateB).getTime();
+  const daysDiff = Math.abs(Math.round((a - b) / (1000 * 60 * 60 * 24)));
+
+  if (daysDiff === 0) return { isExact: true, isClose: true, daysDiff: 0 };
+  if (daysDiff <= settings.dateTolerance) return { isExact: false, isClose: true, daysDiff };
   return { isExact: false, isClose: false, daysDiff };
 }
 
-function checkDescriptionMatch(bankDesc: string, odooDesc: string): boolean {
-  if (!bankDesc || !odooDesc) return false;
-  
-  const normalizedBank = bankDesc.toLowerCase().trim();
-  const normalizedOdoo = odooDesc.toLowerCase().trim();
-  
-  // Exact match
-  if (normalizedBank === normalizedOdoo) return true;
-  
-  // Partial match - one contains the other
-  if (normalizedBank.includes(normalizedOdoo) || normalizedOdoo.includes(normalizedBank)) {
-    return true;
-  }
-  
-  // Word-based matching - at least 50% words match
-  const bankWords = normalizedBank.split(/\s+/).filter(w => w.length > 2);
-  const odooWords = normalizedOdoo.split(/\s+/).filter(w => w.length > 2);
-  
-  if (bankWords.length === 0 || odooWords.length === 0) return false;
-  
-  const matchingWords = bankWords.filter(bw => 
-    odooWords.some(ow => bw.includes(ow) || ow.includes(bw))
-  );
-  
-  return matchingWords.length >= Math.min(bankWords.length, odooWords.length) * 0.5;
-}
-
-function findDuplicates(transactions: NormalizedTransaction[]): DuplicateTransaction[] {
-  const seen = new Map<string, { transaction: NormalizedTransaction; count: number }>();
-  
-  for (const t of transactions) {
-    const key = `${t.date}-${t.amount.toFixed(2)}-${t.description.toLowerCase().trim()}`;
-    const existing = seen.get(key);
-    
-    if (existing) {
-      existing.count++;
-    } else {
-      seen.set(key, { transaction: t, count: 1 });
-    }
-  }
-  
-  const duplicates: DuplicateTransaction[] = [];
-  
-  for (const [, value] of seen) {
-    if (value.count > 1) {
-      duplicates.push({
-        id: value.transaction.id,
-        date: value.transaction.date,
-        description: value.transaction.description,
-        amount: value.transaction.amount,
-        occurrences: value.count
-      });
-    }
-  }
-  
-  return duplicates;
+function checkDescriptionMatch(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  const na = a.toLowerCase().trim();
+  const nb = b.toLowerCase().trim();
+  if (na === nb) return true;
+  if (na.includes(nb) || nb.includes(na)) return true;
+  const wordsA = na.split(/\s+/).filter(w => w.length > 2);
+  const wordsB = nb.split(/\s+/).filter(w => w.length > 2);
+  if (wordsA.length === 0 || wordsB.length === 0) return false;
+  const matching = wordsA.filter(wa => wordsB.some(wb => wa.includes(wb) || wb.includes(wa)));
+  return matching.length >= Math.min(wordsA.length, wordsB.length) * 0.5;
 }
 
 export function reconcileTransactions(
-  bankTxns: BankTransaction[],
-  odooTxns: OdooTransaction[],
+  statementTxns: BankTransaction[],
+  ledgerEntries: LedgerEntry[],
   settings: ReconciliationSettings
 ): ReconciliationResults {
-  const normalizedOdoo = normalizeOdooTransactions(odooTxns);
-  
-  const matched: MatchedTransaction[] = [];
-  const amountMismatches: AmountMismatch[] = [];
-  const dateDiscrepancies: DateDiscrepancy[] = [];
-  const usedOdooIds = new Set<string>();
-  const usedBankIds = new Set<string>();
-  
+  const matched: MatchedItem[] = [];
+  const flags: FlaggedItem[] = [];
+  const usedLedgerIds = new Set<string>();
+  const usedStatementIds = new Set<string>();
   let totalDiscrepancy = 0;
-  
-  // First pass: Find exact matches
-  for (const bank of bankTxns) {
-    if (usedBankIds.has(bank.id)) continue;
-    
-    const bankAmount = Math.abs(bank.amount);
-    
-    for (const odoo of normalizedOdoo) {
-      if (usedOdooIds.has(odoo.id)) continue;
-      
-      const amountMatch = settings.matchByAmount 
-        ? checkAmountMatch(bankAmount, odoo.amount, settings)
+
+  // Pass 1: exact matches
+  for (const stmt of statementTxns) {
+    if (usedStatementIds.has(stmt.id)) continue;
+    const stmtAmt = Math.abs(stmt.amount);
+
+    for (const ledger of ledgerEntries) {
+      if (usedLedgerIds.has(ledger.id)) continue;
+
+      const amtMatch = settings.matchByAmount
+        ? checkAmountMatch(stmtAmt, Math.abs(ledger.amount), settings)
         : { isExact: true, isClose: true, difference: 0 };
-        
       const dateMatch = settings.matchByDate
-        ? checkDateMatch(bank.transaction_date, odoo.date, settings)
+        ? checkDateMatch(stmt.transaction_date, ledger.date, settings)
         : { isExact: true, isClose: true, daysDiff: 0 };
-        
-      const descMatch = settings.matchByDescription 
-        ? checkDescriptionMatch(bank.description, odoo.description)
+      const descMatch = settings.matchByDescription
+        ? checkDescriptionMatch(stmt.description, ledger.description)
         : true;
-      
-      // Perfect match
-      if (amountMatch.isExact && dateMatch.isExact && descMatch) {
+
+      if (amtMatch.isExact && dateMatch.isExact && descMatch) {
         matched.push({
-          id: bank.id,
-          date: bank.transaction_date,
-          description: bank.description,
-          bankAmount,
-          odooAmount: odoo.amount
+          id: stmt.id,
+          statementDate: stmt.transaction_date,
+          statementDescription: stmt.description,
+          statementAmount: stmtAmt,
+          ledgerDate: ledger.date,
+          ledgerDescription: ledger.description,
+          ledgerAmount: Math.abs(ledger.amount),
+          ledgerEntryId: ledger.id,
         });
-        usedOdooIds.add(odoo.id);
-        usedBankIds.add(bank.id);
+        usedLedgerIds.add(ledger.id);
+        usedStatementIds.add(stmt.id);
         break;
       }
-      
-      // Amount mismatch but date matches
-      if (!amountMatch.isExact && amountMatch.isClose && dateMatch.isExact && descMatch) {
-        amountMismatches.push({
-          id: bank.id,
-          date: bank.transaction_date,
-          description: bank.description,
-          bankAmount,
-          odooAmount: odoo.amount,
-          difference: amountMatch.difference
+
+      // Amount mismatch
+      if (!amtMatch.isExact && amtMatch.isClose && dateMatch.isExact && descMatch) {
+        flags.push({
+          id: stmt.id,
+          date: stmt.transaction_date,
+          description: stmt.description,
+          amount: stmtAmt,
+          flagType: 'amount_mismatch',
+          ledgerEntryId: ledger.id,
+          ledgerAmount: Math.abs(ledger.amount),
+          difference: amtMatch.difference,
         });
-        totalDiscrepancy += Math.abs(amountMatch.difference);
-        usedOdooIds.add(odoo.id);
-        usedBankIds.add(bank.id);
+        totalDiscrepancy += Math.abs(amtMatch.difference);
+        usedLedgerIds.add(ledger.id);
+        usedStatementIds.add(stmt.id);
         break;
       }
-      
-      // Date mismatch but amount matches
-      if (amountMatch.isExact && !dateMatch.isExact && dateMatch.isClose && descMatch) {
-        dateDiscrepancies.push({
-          id: bank.id,
-          bankDate: bank.transaction_date,
-          odooDate: odoo.date,
-          description: bank.description,
-          amount: bankAmount,
-          daysDiff: dateMatch.daysDiff
+
+      // Date mismatch
+      if (amtMatch.isExact && !dateMatch.isExact && dateMatch.isClose && descMatch) {
+        flags.push({
+          id: stmt.id,
+          date: stmt.transaction_date,
+          description: stmt.description,
+          amount: stmtAmt,
+          flagType: 'date_mismatch',
+          ledgerEntryId: ledger.id,
+          ledgerDate: ledger.date,
+          daysDiff: dateMatch.daysDiff,
         });
-        usedOdooIds.add(odoo.id);
-        usedBankIds.add(bank.id);
+        usedLedgerIds.add(ledger.id);
+        usedStatementIds.add(stmt.id);
         break;
       }
     }
   }
-  
-  // Find missing in Odoo (bank transactions not matched)
-  const missingInOdoo: MissingTransaction[] = bankTxns
-    .filter(t => !usedBankIds.has(t.id))
-    .map(t => ({
-      id: t.id,
-      date: t.transaction_date,
-      description: t.description,
-      amount: Math.abs(t.amount)
-    }));
-  
-  // Find missing in Bank (Odoo transactions not matched)
-  const missingInBank: MissingTransaction[] = normalizedOdoo
-    .filter(t => !usedOdooIds.has(t.id))
-    .map(t => ({
-      id: t.id,
-      date: t.date,
-      description: t.description,
-      amount: t.amount
-    }));
-  
-  // Find duplicates in Odoo
-  const duplicates = findDuplicates(normalizedOdoo);
-  
-  // Calculate match rate
-  const totalBank = bankTxns.length;
-  const matchRate = totalBank > 0 
-    ? (matched.length / totalBank) * 100 
-    : 0;
-  
+
+  // Missing in ledger
+  for (const stmt of statementTxns) {
+    if (!usedStatementIds.has(stmt.id)) {
+      flags.push({
+        id: stmt.id,
+        date: stmt.transaction_date,
+        description: stmt.description,
+        amount: Math.abs(stmt.amount),
+        flagType: 'missing_in_ledger',
+      });
+    }
+  }
+
+  // Missing in statement
+  for (const ledger of ledgerEntries) {
+    if (!usedLedgerIds.has(ledger.id)) {
+      flags.push({
+        id: ledger.id,
+        date: ledger.date,
+        description: ledger.description,
+        amount: Math.abs(ledger.amount),
+        flagType: 'missing_in_statement',
+        ledgerEntryId: ledger.id,
+      });
+    }
+  }
+
+  // Duplicates in statement
+  const seen = new Map<string, { txn: BankTransaction; count: number }>();
+  for (const t of statementTxns) {
+    const key = `${t.transaction_date}-${Math.abs(t.amount).toFixed(2)}-${t.description.toLowerCase().trim()}`;
+    const existing = seen.get(key);
+    if (existing) existing.count++;
+    else seen.set(key, { txn: t, count: 1 });
+  }
+  for (const [, val] of seen) {
+    if (val.count > 1) {
+      flags.push({
+        id: val.txn.id,
+        date: val.txn.transaction_date,
+        description: val.txn.description,
+        amount: Math.abs(val.txn.amount),
+        flagType: 'duplicate',
+        occurrences: val.count,
+      });
+    }
+  }
+
+  const totalStatement = statementTxns.length;
+  const matchRate = totalStatement > 0 ? (matched.length / totalStatement) * 100 : 0;
+
+  const stmtTotal = statementTxns.reduce((s, t) => s + t.amount, 0);
+  const ledgerTotal = ledgerEntries.reduce((s, e) => s + e.amount, 0);
+  const unreconciledDifference = Math.round((stmtTotal - ledgerTotal) * 100) / 100;
+
   return {
     matchRate: Math.round(matchRate * 10) / 10,
     totalDiscrepancy: Math.round(totalDiscrepancy * 100) / 100,
     matched,
-    amountMismatches,
-    missingInOdoo,
-    missingInBank,
-    dateDiscrepancies,
-    duplicates
+    flags,
+    unreconciledDifference,
   };
 }
 
@@ -348,5 +260,5 @@ export const defaultSettings: ReconciliationSettings = {
   matchByDescription: false,
   dateTolerance: 3,
   amountTolerance: 'exact',
-  aiMatching: false
+  aiMatching: false,
 };

@@ -49,6 +49,7 @@ export const invoiceSchema = z.object({
     .max(100, "Maximum 100 line items allowed"),
   status: z.enum(["draft", "sent", "paid", "overdue", "cancelled"])
     .default("draft"),
+  category: z.string().optional(),
 }).refine((data) => data.due_date >= data.invoice_date, {
   message: "Due date must be on or after invoice date",
   path: ["due_date"],

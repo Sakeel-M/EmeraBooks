@@ -200,11 +200,13 @@ export type Database = {
           amount_paid: number | null
           bill_date: string
           bill_number: string
+          category: string | null
           created_at: string | null
           currency: string | null
           due_date: string
           id: string
           notes: string | null
+          source_file_id: string | null
           status: Database["public"]["Enums"]["bill_status"] | null
           subtotal: number
           tax_amount: number | null
@@ -217,11 +219,13 @@ export type Database = {
           amount_paid?: number | null
           bill_date: string
           bill_number: string
+          category?: string | null
           created_at?: string | null
           currency?: string | null
           due_date: string
           id?: string
           notes?: string | null
+          source_file_id?: string | null
           status?: Database["public"]["Enums"]["bill_status"] | null
           subtotal?: number
           tax_amount?: number | null
@@ -234,11 +238,13 @@ export type Database = {
           amount_paid?: number | null
           bill_date?: string
           bill_number?: string
+          category?: string | null
           created_at?: string | null
           currency?: string | null
           due_date?: string
           id?: string
           notes?: string | null
+          source_file_id?: string | null
           status?: Database["public"]["Enums"]["bill_status"] | null
           subtotal?: number
           tax_amount?: number | null
@@ -248,6 +254,13 @@ export type Database = {
           vendor_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "bills_source_file_id_fkey"
+            columns: ["source_file_id"]
+            isOneToOne: false
+            referencedRelation: "uploaded_files"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "bills_vendor_id_fkey"
             columns: ["vendor_id"]
@@ -283,6 +296,33 @@ export type Database = {
           currency?: string
           id?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      categories: {
+        Row: {
+          color: string | null
+          created_at: string
+          id: string
+          name: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          type?: string
           user_id?: string
         }
         Relationships: []
@@ -512,6 +552,7 @@ export type Database = {
       invoices: {
         Row: {
           amount_paid: number | null
+          category: string | null
           created_at: string | null
           currency: string | null
           customer_id: string | null
@@ -520,6 +561,7 @@ export type Database = {
           invoice_date: string
           invoice_number: string
           notes: string | null
+          source_file_id: string | null
           status: Database["public"]["Enums"]["invoice_status"] | null
           subtotal: number
           tax_amount: number | null
@@ -530,6 +572,7 @@ export type Database = {
         }
         Insert: {
           amount_paid?: number | null
+          category?: string | null
           created_at?: string | null
           currency?: string | null
           customer_id?: string | null
@@ -538,6 +581,7 @@ export type Database = {
           invoice_date: string
           invoice_number: string
           notes?: string | null
+          source_file_id?: string | null
           status?: Database["public"]["Enums"]["invoice_status"] | null
           subtotal?: number
           tax_amount?: number | null
@@ -548,6 +592,7 @@ export type Database = {
         }
         Update: {
           amount_paid?: number | null
+          category?: string | null
           created_at?: string | null
           currency?: string | null
           customer_id?: string | null
@@ -556,6 +601,7 @@ export type Database = {
           invoice_date?: string
           invoice_number?: string
           notes?: string | null
+          source_file_id?: string | null
           status?: Database["public"]["Enums"]["invoice_status"] | null
           subtotal?: number
           tax_amount?: number | null
@@ -570,6 +616,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_source_file_id_fkey"
+            columns: ["source_file_id"]
+            isOneToOne: false
+            referencedRelation: "uploaded_files"
             referencedColumns: ["id"]
           },
         ]
@@ -648,6 +701,190 @@ export type Database = {
             columns: ["journal_entry_id"]
             isOneToOne: false
             referencedRelation: "journal_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payables_receivables: {
+        Row: {
+          amount: number
+          category: string | null
+          created_at: string | null
+          currency: string | null
+          description: string | null
+          due_date: string | null
+          id: string
+          source: string | null
+          source_id: string | null
+          status: string | null
+          title: string
+          type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          amount?: number
+          category?: string | null
+          created_at?: string | null
+          currency?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          source?: string | null
+          source_id?: string | null
+          status?: string | null
+          title: string
+          type: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          category?: string | null
+          created_at?: string | null
+          currency?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          source?: string | null
+          source_id?: string | null
+          status?: string | null
+          title?: string
+          type?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      reconciliation_items: {
+        Row: {
+          created_at: string | null
+          flag_type: string | null
+          id: string
+          journal_entry_line_id: string | null
+          match_status: string
+          notes: string | null
+          reconciliation_id: string
+          resolved: boolean | null
+          resolved_at: string | null
+          statement_line_amount: number
+          statement_line_date: string | null
+          statement_line_description: string | null
+          transaction_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          flag_type?: string | null
+          id?: string
+          journal_entry_line_id?: string | null
+          match_status?: string
+          notes?: string | null
+          reconciliation_id: string
+          resolved?: boolean | null
+          resolved_at?: string | null
+          statement_line_amount?: number
+          statement_line_date?: string | null
+          statement_line_description?: string | null
+          transaction_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          flag_type?: string | null
+          id?: string
+          journal_entry_line_id?: string | null
+          match_status?: string
+          notes?: string | null
+          reconciliation_id?: string
+          resolved?: boolean | null
+          resolved_at?: string | null
+          statement_line_amount?: number
+          statement_line_date?: string | null
+          statement_line_description?: string | null
+          transaction_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reconciliation_items_journal_entry_line_id_fkey"
+            columns: ["journal_entry_line_id"]
+            isOneToOne: false
+            referencedRelation: "journal_entry_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reconciliation_items_reconciliation_id_fkey"
+            columns: ["reconciliation_id"]
+            isOneToOne: false
+            referencedRelation: "reconciliations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reconciliation_items_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reconciliations: {
+        Row: {
+          bank_account_id: string | null
+          created_at: string | null
+          finalized_at: string | null
+          id: string
+          ledger_ending_balance: number | null
+          period_end: string
+          period_start: string
+          statement_ending_balance: number | null
+          statement_file_id: string | null
+          status: string
+          unreconciled_difference: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          bank_account_id?: string | null
+          created_at?: string | null
+          finalized_at?: string | null
+          id?: string
+          ledger_ending_balance?: number | null
+          period_end: string
+          period_start: string
+          statement_ending_balance?: number | null
+          statement_file_id?: string | null
+          status?: string
+          unreconciled_difference?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          bank_account_id?: string | null
+          created_at?: string | null
+          finalized_at?: string | null
+          id?: string
+          ledger_ending_balance?: number | null
+          period_end?: string
+          period_start?: string
+          statement_ending_balance?: number | null
+          statement_file_id?: string | null
+          status?: string
+          unreconciled_difference?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reconciliations_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reconciliations_statement_file_id_fkey"
+            columns: ["statement_file_id"]
+            isOneToOne: false
+            referencedRelation: "uploaded_files"
             referencedColumns: ["id"]
           },
         ]
@@ -828,27 +1065,90 @@ export type Database = {
       }
       user_preferences: {
         Row: {
+          company_address_line1: string | null
+          company_address_line2: string | null
+          company_city: string | null
+          company_email: string | null
+          company_logo_url: string | null
+          company_name: string | null
+          company_state: string | null
+          company_zip: string | null
           created_at: string
           id: string
+          invoice_accent_color: string | null
+          invoice_footer_text: string | null
+          invoice_show_notes: boolean | null
+          invoice_show_tax: boolean | null
+          invoice_show_terms: boolean | null
+          invoice_template: string | null
           preferred_currency: string | null
           theme: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          company_address_line1?: string | null
+          company_address_line2?: string | null
+          company_city?: string | null
+          company_email?: string | null
+          company_logo_url?: string | null
+          company_name?: string | null
+          company_state?: string | null
+          company_zip?: string | null
           created_at?: string
           id?: string
+          invoice_accent_color?: string | null
+          invoice_footer_text?: string | null
+          invoice_show_notes?: boolean | null
+          invoice_show_tax?: boolean | null
+          invoice_show_terms?: boolean | null
+          invoice_template?: string | null
           preferred_currency?: string | null
           theme?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          company_address_line1?: string | null
+          company_address_line2?: string | null
+          company_city?: string | null
+          company_email?: string | null
+          company_logo_url?: string | null
+          company_name?: string | null
+          company_state?: string | null
+          company_zip?: string | null
           created_at?: string
           id?: string
+          invoice_accent_color?: string | null
+          invoice_footer_text?: string | null
+          invoice_show_notes?: boolean | null
+          invoice_show_tax?: boolean | null
+          invoice_show_terms?: boolean | null
+          invoice_template?: string | null
           preferred_currency?: string | null
           theme?: string | null
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
         Relationships: []
@@ -857,6 +1157,7 @@ export type Database = {
         Row: {
           address: string | null
           balance: number | null
+          category: string | null
           city: string | null
           country: string | null
           created_at: string | null
@@ -873,6 +1174,7 @@ export type Database = {
         Insert: {
           address?: string | null
           balance?: number | null
+          category?: string | null
           city?: string | null
           country?: string | null
           created_at?: string | null
@@ -889,6 +1191,7 @@ export type Database = {
         Update: {
           address?: string | null
           balance?: number | null
+          category?: string | null
           city?: string | null
           country?: string | null
           created_at?: string | null
@@ -909,10 +1212,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       account_type: "asset" | "liability" | "equity" | "revenue" | "expense"
+      app_role: "admin" | "moderator" | "user"
       bill_status: "draft" | "pending" | "paid" | "overdue" | "cancelled"
       connection_status: "active" | "inactive" | "error"
       inbox_item_status: "pending" | "reviewed" | "approved" | "rejected"
@@ -1045,6 +1355,7 @@ export const Constants = {
   public: {
     Enums: {
       account_type: ["asset", "liability", "equity", "revenue", "expense"],
+      app_role: ["admin", "moderator", "user"],
       bill_status: ["draft", "pending", "paid", "overdue", "cancelled"],
       connection_status: ["active", "inactive", "error"],
       inbox_item_status: ["pending", "reviewed", "approved", "rejected"],

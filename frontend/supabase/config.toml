@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.quickbooks-integration]
 verify_jwt = false
+
+[functions.ai-financial-insights]
+verify_jwt = false

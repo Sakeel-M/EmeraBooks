@@ -14,8 +14,8 @@ interface ReconciliationSummaryProps {
   matchRate: number;
   matched: number;
   amountMismatches: number;
-  missingInOdoo: number;
-  missingInBank: number;
+  missingInLedger: number;
+  missingInStatement: number;
   dateDiscrepancies: number;
   duplicates: number;
   totalDiscrepancy: number;
@@ -25,8 +25,8 @@ export function ReconciliationSummary({
   matchRate,
   matched,
   amountMismatches,
-  missingInOdoo,
-  missingInBank,
+  missingInLedger,
+  missingInStatement,
   dateDiscrepancies,
   duplicates,
   totalDiscrepancy
@@ -51,8 +51,8 @@ export function ReconciliationSummary({
       iconColor: "text-yellow-600",
     },
     {
-      label: "Missing in Odoo",
-      value: missingInOdoo,
+      label: "Missing in Ledger",
+      value: missingInLedger,
       icon: XCircle,
       bgColor: "bg-red-50 dark:bg-red-950",
       borderColor: "border-red-200 dark:border-red-800",
@@ -60,8 +60,8 @@ export function ReconciliationSummary({
       iconColor: "text-red-600",
     },
     {
-      label: "Missing in Bank",
-      value: missingInBank,
+      label: "Missing in Statement",
+      value: missingInStatement,
       icon: HelpCircle,
       bgColor: "bg-orange-50 dark:bg-orange-950",
       borderColor: "border-orange-200 dark:border-orange-800",
@@ -136,7 +136,7 @@ export function ReconciliationSummary({
           <AlertTriangle className="h-4 w-4 text-yellow-600" />
           <AlertDescription className="text-yellow-700 dark:text-yellow-300">
             <span className="font-medium">Total Discrepancy Found:</span> ${totalDiscrepancy.toFixed(2)} - 
-            Review the details below and correct errors in Odoo.
+            Review the details below and correct any discrepancies.
           </AlertDescription>
         </Alert>
       )}

@@ -49,21 +49,36 @@ const Settings = () => {
   };
 
   const clearAllData = async () => {
-    // Clear all files from database
-    const files = await database.getAllFiles();
-    for (const file of files) {
-      await database.deleteFile(file.id);
+    try {
+      const files = await database.getAllFiles();
+      let failed = 0;
+      for (const file of files) {
+        try {
+          await database.deleteFile(file.id);
+        } catch {
+          failed++;
+        }
+      }
+      localStorage.removeItem("currentFileId");
+      setShowClearDialog(false);
+      if (failed > 0) {
+        toast({
+          title: "Partial clear",
+          description: `${files.length - failed} files removed, ${failed} failed. Please try again.`,
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Data Cleared", description: "All your data has been removed." });
+      }
+      window.location.href = "/";
+    } catch (err: any) {
+      setShowClearDialog(false);
+      toast({
+        title: "Clear failed",
+        description: err?.message || "Could not clear data. Are you signed in?",
+        variant: "destructive",
+      });
     }
-    
-    // Clear current file reference
-    localStorage.removeItem("currentFileId");
-    
-    setShowClearDialog(false);
-    toast({
-      title: "Data Cleared",
-      description: "All your data has been removed.",
-    });
-    window.location.href = "/";
   };
 
   const currencies = ["USD", "EUR", "GBP", "AED", "INR", "CAD", "AUD"];

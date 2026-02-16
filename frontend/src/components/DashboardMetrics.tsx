@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { TrendingUp, TrendingDown, Users, Building2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
+import { useCurrency } from "@/hooks/useCurrency";
 
 interface MetricData {
   value: number;
@@ -14,47 +15,11 @@ const DashboardMetrics = () => {
   const [spend, setSpend] = useState<MetricData>({ value: 0, change: 0, trend: 'down' });
   const [customers, setCustomers] = useState<MetricData>({ value: 0, change: 0, trend: 'up' });
   const [vendors, setVendors] = useState<MetricData>({ value: 0, change: 0, trend: 'up' });
-  const [currency, setCurrency] = useState('USD');
+  const { currency } = useCurrency();
 
   useEffect(() => {
     fetchMetrics();
-    detectCurrency();
   }, []);
-
-  const detectCurrency = async () => {
-    // Try to get currency from uploaded files first
-    const { data: files } = await supabase
-      .from('uploaded_files')
-      .select('currency')
-      .order('created_at', { ascending: false })
-      .limit(1);
-    
-    if (files && files.length > 0 && files[0].currency) {
-      setCurrency(files[0].currency);
-      return;
-    }
-
-    // Fall back to invoices
-    const { data: invoices } = await supabase
-      .from('invoices')
-      .select('currency')
-      .limit(1);
-    
-    if (invoices && invoices.length > 0 && invoices[0].currency) {
-      setCurrency(invoices[0].currency);
-      return;
-    }
-
-    // Fall back to bills
-    const { data: bills } = await supabase
-      .from('bills')
-      .select('currency')
-      .limit(1);
-    
-    if (bills && bills.length > 0 && bills[0].currency) {
-      setCurrency(bills[0].currency);
-    }
-  };
 
   const fetchMetrics = async () => {
     // Get latest invoice and bill dates to use as reference
@@ -115,7 +80,7 @@ const DashboardMetrics = () => {
       : 0;
 
     if (currentRevenue && currentRevenue.length > 0) {
-      setCurrency(currentRevenue[0].currency || 'USD');
+      // Currency is now handled by useCurrency hook
     }
 
     setRevenue({

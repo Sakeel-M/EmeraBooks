@@ -109,17 +109,173 @@ export const database = {
   },
 
   async deleteFile(id: string): Promise<boolean> {
-    const { error } = await supabase
+    // Fail fast if not logged in
+    const userId = await getCurrentUserId(); // throws if not authenticated
+    console.log(`🗑️ Starting cascade delete for file: ${id} (user: ${userId})`);
+
+    // 1. Fetch the file metadata for legacy backfill
+    const { data: fileData, error: fileError } = await supabase
+      .from("uploaded_files")
+      .select("created_at")
+      .eq("id", id)
+      .single();
+
+    if (fileError || !fileData) {
+      throw new Error("Report not found or you don't have permission to delete it.");
+    }
+
+    // 2. Legacy backfill: tag old auto-created bills/invoices with source_file_id
+    //    so the FK CASCADE will clean them up when we delete the report
+    const fileCreatedAt = new Date(fileData.created_at);
+    const startTime = new Date(fileCreatedAt.getTime() - 10_000).toISOString();
+
+    // Cap the window at the next newer file's created_at (or +24h)
+    const { data: nextFile } = await supabase
+      .from("uploaded_files")
+      .select("created_at")
+      .gt("created_at", fileData.created_at)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .single();
+
+    const maxEnd = new Date(fileCreatedAt.getTime() + 24 * 60 * 60 * 1000);
+    const endTime = nextFile
+      ? new Date(Math.min(new Date(nextFile.created_at).getTime() - 1000, maxEnd.getTime())).toISOString()
+      : maxEnd.toISOString();
+
+    // Backfill bills
+    const { error: backfillBillsErr } = await supabase
+      .from("bills")
+      .update({ source_file_id: id })
+      .is("source_file_id", null)
+      .ilike("bill_number", "BILL-%")
+      .gte("created_at", startTime)
+      .lte("created_at", endTime);
+
+    if (backfillBillsErr) console.warn("Backfill bills warning:", backfillBillsErr.message);
+
+    // Backfill invoices
+    const { error: backfillInvErr } = await supabase
+      .from("invoices")
+      .update({ source_file_id: id })
+      .is("source_file_id", null)
+      .ilike("invoice_number", "INV-%")
+      .gte("created_at", startTime)
+      .lte("created_at", endTime);
+
+    if (backfillInvErr) console.warn("Backfill invoices warning:", backfillInvErr.message);
+
+    // 3. Delete the uploaded_files row — CASCADE will handle:
+    //    transactions, analysis_results, bills (+ bill_items), invoices (+ invoice_items)
+    const { error: deleteError } = await supabase
       .from("uploaded_files")
       .delete()
       .eq("id", id);
 
-    if (error) {
-      console.error("Error deleting file:", error);
-      return false;
+    if (deleteError) {
+      throw new Error(`Failed to delete report: ${deleteError.message}`);
     }
 
+    // 4. Check if user has any remaining files
+    const { count: remainingFiles } = await supabase
+      .from("uploaded_files")
+      .select("id", { count: "exact", head: true });
+
+    if (remainingFiles === 0) {
+      // No files left — purge ALL auto-created data
+      await this.purgeAllAutoCreatedData();
+    } else {
+      // Still have files — delete orphaned records
+      await this.deleteOrphanedAutoRecords();
+    }
+
+    console.log(`✅ Cascade delete complete for file: ${id}`);
     return true;
+  },
+
+  // Purge all auto-created records (bills, invoices, vendors, customers)
+  async purgeAllAutoCreatedData(): Promise<void> {
+    console.log("🧹 Purging all auto-created data (no files remain)...");
+
+    // Bulk delete — bill_items/invoice_items cascade automatically from parent FK
+    await supabase.from("bills").delete().ilike("bill_number", "BILL-%");
+    await supabase.from("invoices").delete().ilike("invoice_number", "INV-%");
+    await supabase.from("vendors").delete().eq("notes", "Auto-created from bank statement");
+    await supabase.from("customers").delete().eq("notes", "Auto-created from bank statement");
+    await supabase.from("payables_receivables").delete().eq("source", "auto");
+
+    // Clear localStorage ghost data
+    localStorage.removeItem("currentFileId");
+    localStorage.removeItem("finance_current_file");
+    localStorage.removeItem("finance_uploaded_files");
+
+    console.log("✅ Purge complete");
+  },
+
+  // Delete orphaned auto-created bills/invoices with NULL source_file_id
+  async deleteOrphanedAutoRecords(): Promise<void> {
+    console.log("🧹 Cleaning orphaned auto-created records with NULL source_file_id...");
+
+    // Bulk delete orphaned bills/invoices (cascade handles items)
+    await supabase.from("bills").delete().ilike("bill_number", "BILL-%").is("source_file_id", null);
+    await supabase.from("invoices").delete().ilike("invoice_number", "INV-%").is("source_file_id", null);
+
+    // Delete auto-vendors/customers that have zero remaining bills/invoices
+    // Since we just deleted orphan bills/invoices, any auto-vendor with 0 bills is orphaned
+    const { data: autoVendors } = await supabase
+      .from("vendors")
+      .select("id")
+      .eq("notes", "Auto-created from bank statement");
+
+    if (autoVendors && autoVendors.length > 0) {
+      for (const vendor of autoVendors) {
+        const { count } = await supabase
+          .from("bills")
+          .select("id", { count: "exact", head: true })
+          .eq("vendor_id", vendor.id);
+        if (count === 0) {
+          await supabase.from("vendors").delete().eq("id", vendor.id);
+        }
+      }
+    }
+
+    const { data: autoCustomers } = await supabase
+      .from("customers")
+      .select("id")
+      .eq("notes", "Auto-created from bank statement");
+
+    if (autoCustomers && autoCustomers.length > 0) {
+      for (const customer of autoCustomers) {
+        const { count } = await supabase
+          .from("invoices")
+          .select("id", { count: "exact", head: true })
+          .eq("customer_id", customer.id);
+        if (count === 0) {
+          await supabase.from("customers").delete().eq("id", customer.id);
+        }
+      }
+    }
+
+    console.log("✅ Orphan cleanup complete");
+  },
+
+  // Standalone cleanup callable from Index page on startup
+  async cleanupOrphanedData(): Promise<void> {
+    try {
+      await getCurrentUserId();
+    } catch {
+      return; // Not authenticated, skip
+    }
+
+    const { count } = await supabase
+      .from("uploaded_files")
+      .select("id", { count: "exact", head: true });
+
+    if (count === 0) {
+      await this.purgeAllAutoCreatedData();
+    } else {
+      await this.deleteOrphanedAutoRecords();
+    }
   },
 
   // Transaction operations
@@ -220,8 +376,17 @@ export const database = {
   // Budget operations
   async saveBudgets(budgets: Record<string, number>, currency: string): Promise<boolean> {
     const userId = await getCurrentUserId();
-    // Delete existing budgets first
-    await supabase.from("budgets").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    
+    // Delete only THIS user's existing budgets (not all budgets)
+    const { error: deleteError } = await supabase
+      .from("budgets")
+      .delete()
+      .eq("user_id", userId);
+
+    if (deleteError) {
+      console.error("Error deleting existing budgets:", deleteError);
+      return false;
+    }
 
     // Insert new budgets
     const budgetData = Object.entries(budgets).map(([category, amount]) => ({
@@ -230,6 +395,8 @@ export const database = {
       currency,
       user_id: userId,
     }));
+
+    if (budgetData.length === 0) return true;
 
     const { error } = await supabase
       .from("budgets")
@@ -406,6 +573,7 @@ export const database = {
             status: "paid",
             currency: currency,
             notes: `${category} - ${description}`,
+            source_file_id: fileId,
           });
 
           if (!error) billsCreated++;
@@ -455,6 +623,7 @@ export const database = {
             status: "paid",
             currency: currency,
             notes: `${category} - ${description}`,
+            source_file_id: fileId,
           });
 
           if (!error) invoicesCreated++;

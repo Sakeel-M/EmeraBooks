@@ -10,6 +10,7 @@ export const vendorSchema = z.object({
   zip_code: z.string().optional(),
   country: z.string().optional(),
   notes: z.string().optional(),
+  category: z.string().optional(),
 });
 
 export type VendorFormData = z.infer<typeof vendorSchema>;

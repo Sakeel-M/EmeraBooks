@@ -1,11 +1,13 @@
 import { 
-  Home,
-  FileText,
+  Home, 
+  CreditCard, 
+  FileText, 
   Receipt, 
   Users, 
   Building2,
   BarChart3, 
   Calculator,
+  BookOpen,
   FolderOpen,
   Settings,
   Target,
@@ -13,7 +15,8 @@ import {
   Plug,
   ChevronUp,
   History,
-  GitCompareArrows
+  GitCompareArrows,
+  Wallet
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useNavigate } from "react-router-dom";
@@ -42,16 +45,20 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+
 const menuItems = [
   { title: "Home", url: "/", icon: Home },
+  { title: "Banks & Cards", url: "/banks", icon: CreditCard },
   { title: "Bills", url: "/bills", icon: FileText },
   { title: "Invoices", url: "/invoices", icon: Receipt },
   { title: "Vendors", url: "/vendors", icon: Building2 },
   { title: "Customers", url: "/customers", icon: Users },
   { title: "Financials", url: "/financials", icon: BarChart3 },
   { title: "Accounting", url: "/accounting", icon: Calculator },
+  { title: "Ledger", url: "/ledger", icon: BookOpen },
   { title: "Documents", url: "/documents", icon: FolderOpen },
   { title: "Budget", url: "/budget", icon: Target },
+  { title: "Payables & Receivables", url: "/payables-receivables", icon: Wallet },
   { title: "Reconciliation", url: "/reconciliation", icon: GitCompareArrows },
   { title: "Integrations", url: "/integrations", icon: Plug },
   { title: "Sync History", url: "/sync-history", icon: History },
@@ -70,6 +77,7 @@ export function AppSidebar({ bankInfo }: AppSidebarProps) {
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
   const navigate = useNavigate();
+  
 
   const { data: user } = useQuery({
     queryKey: ['current-user'],
@@ -125,6 +133,7 @@ export function AppSidebar({ bankInfo }: AppSidebarProps) {
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink
+
                       to={item.url}
                       end={item.url === "/"}
                       className="flex items-center gap-3 px-3 py-2 rounded-lg text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"

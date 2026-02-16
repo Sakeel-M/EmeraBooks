@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 import { database } from "@/lib/database";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 
 const Budget = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [budgets, setBudgets] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [analysis, setAnalysis] = useState<any>(null);
@@ -18,28 +20,47 @@ const Budget = () => {
 
   useEffect(() => {
     const loadData = async () => {
-      const savedBudgets = await database.getBudgets();
-      setBudgets(savedBudgets);
+      try {
+        const savedBudgets = await database.getBudgets();
+        setBudgets(savedBudgets);
 
-      const currentFileId = database.getCurrentFile();
-      if (currentFileId) {
-        const fileData = await database.getFileById(currentFileId);
-        const analysisData = await database.getAnalysisByFileId(currentFileId);
-        setFile(fileData);
-        setAnalysis(analysisData);
+        const currentFileId = database.getCurrentFile();
+        if (currentFileId) {
+          const fileData = await database.getFileById(currentFileId);
+          const analysisData = await database.getAnalysisByFileId(currentFileId);
+          setFile(fileData);
+          setAnalysis(analysisData);
+        }
+      } catch (error) {
+        console.error("Error loading budget data:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load budget data. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     loadData();
-  }, []);
+  }, [toast]);
 
   const saveBudgets = async () => {
-    const currency = file?.currency || "USD";
-    await database.saveBudgets(budgets, currency);
-    toast({
-      title: "Budgets Saved",
-      description: "Your budget allocations have been saved successfully.",
-    });
+    try {
+      const currency = file?.currency || "USD";
+      await database.saveBudgets(budgets, currency);
+      toast({
+        title: "Budgets Saved",
+        description: "Your budget allocations have been saved successfully.",
+      });
+    } catch (error) {
+      console.error("Error saving budgets:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save budgets. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (loading) {
@@ -59,9 +80,15 @@ const Budget = () => {
     return (
       <Layout>
         <div className="flex items-center justify-center h-[calc(100vh-200px)]">
-          <div className="text-center space-y-4">
-            <p className="text-xl font-medium text-muted-foreground">No data available</p>
-            <p className="text-sm text-muted-foreground">Please upload and analyze a file first</p>
+          <div className="text-center space-y-4 max-w-md">
+            <Target className="w-16 h-16 mx-auto text-muted-foreground" />
+            <h2 className="text-xl font-semibold text-foreground">No Data Available</h2>
+            <p className="text-muted-foreground">
+              Upload and analyze a bank statement to start tracking your budget by category.
+            </p>
+            <Button onClick={() => navigate("/")}>
+              Go to Dashboard
+            </Button>
           </div>
         </div>
       </Layout>
