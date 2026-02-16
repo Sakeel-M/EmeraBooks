@@ -1,6 +1,10 @@
-# FinanceTracker - MicroSaaS Financial Analytics
+# EmeraBooks - Financial Management Application
 
-A comprehensive financial analytics application that helps you categorize spending, analyze patterns, and get AI-powered insights from your financial data.
+A comprehensive financial management and bookkeeping application with advanced analytics, AI-powered insights, and complete accounting features.
+
+**Live Site:** [emerabooks.com](https://emerabooks.com)
+
+[![Deploy to Hostinger](https://github.com/Sakeel-M/EmeraBooks/actions/workflows/deploy.yml/badge.svg)](https://github.com/Sakeel-M/EmeraBooks/actions/workflows/deploy.yml)
 
 ## Features
 
@@ -26,19 +30,27 @@ A comprehensive financial analytics application that helps you categorize spendi
 ## Tech Stack
 
 ### Frontend
-- **React** with Vite for fast development
-- **Tailwind CSS** for responsive styling
-- **Chart.js & React-ChartJS-2** for data visualization
+- **React 18** with TypeScript for type-safe development
+- **Vite** for fast build and development
+- **Tailwind CSS** + **shadcn/ui** for beautiful, responsive UI
+- **Supabase** for database and authentication
+- **Recharts** for data visualization
+- **React Query** for server state management
+- **React Router** for navigation
 - **Lucide React** for icons
-- **Axios** for API communication
 
 ### Backend
 - **Python Flask** for API server
-- **Pandas** for data processing
 - **OpenPyXL** for Excel file handling
 - **pdfplumber/PyPDF2/PyMuPDF** for PDF extraction
-- **OpenAI API** for intelligent analysis and PDF parsing
+- **OpenAI API** for AI-powered insights and analysis
 - **Flask-CORS** for cross-origin requests
+
+### Infrastructure
+- **Supabase** - PostgreSQL database, authentication, and real-time subscriptions
+- **Hostinger VPS** - Ubuntu 24.04 LTS with Nginx
+- **GitHub Actions** - CI/CD for automatic deployments
+- **Gunicorn** - Production WSGI server
 
 ## Setup Instructions
 
@@ -198,6 +210,59 @@ npm run build
 ## License
 
 MIT License - see LICENSE file for details
+
+## 🚀 Deployment
+
+### Automatic Deployment (Production)
+
+This project uses GitHub Actions for automatic deployment to Hostinger VPS.
+
+**Every push to `main` branch automatically deploys to production!**
+
+#### Setup Auto-Deployment:
+
+1. **Quick Setup** (10 minutes):
+   ```powershell
+   # Run the PowerShell setup script
+   .\setup-github-deploy.ps1
+   ```
+
+2. **What it does:**
+   - Generates SSH keys
+   - Configures VPS access
+   - Sets up GitHub Secrets
+   - Enables automatic deployment
+
+3. **Result:**
+   - Push to main → Auto-deploys in 2-3 minutes ✨
+   - Full deployment history in GitHub Actions
+   - No manual SSH needed!
+
+#### Deployment Guides:
+- **Quick Reference:** [QUICK_DEPLOY_GUIDE.md](QUICK_DEPLOY_GUIDE.md)
+- **Complete Setup:** [SETUP_AUTO_DEPLOY.md](SETUP_AUTO_DEPLOY.md)
+- **Full Documentation:** [HOSTINGER_DEPLOYMENT.md](HOSTINGER_DEPLOYMENT.md)
+
+#### Manual Deployment:
+
+If you need to deploy manually:
+
+```bash
+# SSH into VPS
+ssh root@72.60.222.167
+
+# Navigate and deploy
+cd /var/www/emerabooks
+git pull origin main
+sudo ./deploy-hostinger.sh
+```
+
+#### Deployment Status:
+
+- **GitHub Actions:** [View Deployments](https://github.com/Sakeel-M/EmeraBooks/actions)
+- **Live Site:** [emerabooks.com](https://emerabooks.com)
+
+---
 
 ## Support
 
