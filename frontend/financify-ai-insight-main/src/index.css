@@ -1,0 +1,149 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 143 30% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 143 30% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 143 30% 15%;
+
+    /* Tarawat Green primary theme */
+    --primary: 143 44% 22%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Warm Beige secondary */
+    --secondary: 32 52% 92%;
+    --secondary-foreground: 143 44% 22%;
+
+    --muted: 32 30% 96%;
+    --muted-foreground: 143 20% 40%;
+
+    /* Forest Green accent */
+    --accent: 143 44% 28%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Warning colors for alerts */
+    --warning: 45 93% 47%;
+    --warning-foreground: 45 93% 12%;
+    --warning-muted: 45 93% 94%;
+
+    --border: 143 20% 88%;
+    --input: 143 20% 90%;
+    --ring: 143 44% 22%;
+
+    --radius: 0.75rem;
+
+    /* Custom Tarawat design tokens */
+    --tarawat-green-50: 143 44% 97%;
+    --tarawat-green-100: 143 44% 92%;
+    --tarawat-green-500: 143 44% 22%;
+    --tarawat-green-600: 143 44% 18%;
+    --tarawat-green-700: 143 44% 14%;
+
+    --tarawat-beige-50: 32 52% 97%;
+    --tarawat-beige-100: 32 52% 92%;
+    --tarawat-beige-500: 32 52% 80%;
+    --tarawat-beige-600: 32 45% 65%;
+    --tarawat-beige-700: 32 40% 50%;
+
+    /* Sidebar colors - Dark green sidebar */
+    --sidebar-background: 143 44% 22%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 32 52% 80%;
+    --sidebar-primary-foreground: 143 44% 15%;
+    --sidebar-accent: 143 44% 28%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 143 44% 18%;
+    --sidebar-ring: 32 52% 80%;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(143 44% 22%), hsl(143 44% 28%));
+    --gradient-subtle: linear-gradient(180deg, hsl(0 0% 100%), hsl(32 52% 97%));
+    
+    /* Shadows with green glow */
+    --shadow-green: 0 10px 40px -10px hsl(143 44% 22% / 0.3);
+    --shadow-card: 0 2px 8px -2px hsl(143 30% 15% / 0.08);
+    
+    /* Transitions */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading;
+  }
+}
+
+/* Chart Animations */
+@layer utilities {
+  .chart-enter {
+    animation: chartEnter 0.8s ease-out forwards;
+  }
+
+  @keyframes chartEnter {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .chart-bar-enter {
+    animation: barGrow 1s ease-out forwards;
+    transform-origin: bottom;
+  }
+
+  @keyframes barGrow {
+    from {
+      transform: scaleY(0);
+    }
+    to {
+      transform: scaleY(1);
+    }
+  }
+
+  .chart-glow {
+    filter: drop-shadow(0 0 8px hsl(var(--primary) / 0.3));
+  }
+
+  .stat-card-hover {
+    @apply transition-all duration-300;
+  }
+
+  .stat-card-hover:hover {
+    @apply shadow-lg -translate-y-1;
+    box-shadow: var(--shadow-green);
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, hsl(143 44% 22%), hsl(32 52% 70%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
