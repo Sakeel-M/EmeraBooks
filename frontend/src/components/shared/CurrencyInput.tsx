@@ -1,6 +1,14 @@
 import { Input } from "@/components/ui/input";
 import { forwardRef } from "react";
 
+const currencySymbols: Record<string, string> = {
+  USD: "$", EUR: "€", GBP: "£", AED: "د.إ", SAR: "﷼", EGP: "E£",
+  INR: "₹", JPY: "¥", CNY: "¥", KRW: "₩", TRY: "₺", BRL: "R$",
+  ZAR: "R", NGN: "₦", KES: "KSh", CAD: "C$", AUD: "A$", CHF: "CHF",
+};
+
+const getCurrencySymbol = (code: string) => currencySymbols[code] || code;
+
 interface CurrencyInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
   value: number;
   onChange: (value: number) => void;
@@ -21,8 +29,8 @@ export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
 
     return (
       <div className="relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-          {currency === "USD" ? "$" : currency}
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
+          {getCurrencySymbol(currency)}
         </span>
         <Input
           {...props}
@@ -30,7 +38,7 @@ export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
           type="text"
           value={formatValue(value)}
           onChange={handleChange}
-          className="pl-8"
+          className="pl-10"
         />
       </div>
     );

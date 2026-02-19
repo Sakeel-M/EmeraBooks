@@ -3,10 +3,11 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
-import { ArrowLeft, CalendarIcon } from "lucide-react";
+import { ArrowLeft, CalendarIcon, Plus } from "lucide-react";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,6 +23,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { invoiceSchema, InvoiceFormData } from "@/lib/validations/invoice";
 import { LineItemsEditor } from "@/components/invoices/LineItemsEditor";
+import { CustomerDialog } from "@/components/customers/CustomerDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -42,6 +44,9 @@ export default function InvoiceFormPage() {
   const [isFetching, setIsFetching] = useState(!!id);
   const [customers, setCustomers] = useState<any[]>([]);
   const [loadedData, setLoadedData] = useState<InvoiceFormData | null>(null);
+  const [companyTrn, setCompanyTrn] = useState("");
+  const [customerTrn, setCustomerTrn] = useState("");
+  const [showNewCustomerDialog, setShowNewCustomerDialog] = useState(false);
 
   const form = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceSchema),
@@ -58,13 +63,33 @@ export default function InvoiceFormPage() {
     },
   });
 
-  // Fetch customers
+  const watchedCustomerId = form.watch("customer_id");
+
+  // Auto-fill customer TRN when customer selection changes
   useEffect(() => {
-    supabase
-      .from("customers")
-      .select("id, name, email")
-      .order("name")
-      .then(({ data }) => setCustomers(data || []));
+    const customer = customers.find(c => c.id === watchedCustomerId);
+    setCustomerTrn(customer?.tax_number || "");
+  }, [watchedCustomerId, customers]);
+
+  // Fetch customers + company TRN
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      const [customersRes, userRes] = await Promise.all([
+        supabase.from("customers").select("id, name, email, tax_number").order("name"),
+        supabase.auth.getUser(),
+      ]);
+      setCustomers(customersRes.data || []);
+
+      if (userRes.data.user) {
+        const { data: prefs } = await supabase
+          .from("user_preferences")
+          .select("company_tax_number")
+          .eq("user_id", userRes.data.user.id)
+          .maybeSingle();
+        setCompanyTrn(prefs?.company_tax_number || "");
+      }
+    };
+    fetchInitialData();
   }, []);
 
   // Fetch invoice data for edit mode
@@ -137,9 +162,35 @@ export default function InvoiceFormPage() {
     }
   };
 
+  const refreshCustomers = async () => {
+    const { data } = await supabase.from("customers").select("id, name, email, tax_number").order("name");
+    setCustomers(data || []);
+  };
+
+  const handleNewCustomerSuccess = async () => {
+    await refreshCustomers();
+    // Auto-select the newest customer
+    const { data: newest } = await supabase
+      .from("customers")
+      .select("id")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+    if (newest) form.setValue("customer_id", newest.id);
+  };
+
   const onSubmit = async (data: InvoiceFormData, sendInvoice: boolean = false) => {
     setIsLoading(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("User not authenticated");
+
+      // Save company TRN to preferences
+      await supabase.from("user_preferences").upsert({
+        user_id: user.id,
+        company_tax_number: companyTrn || null,
+      }, { onConflict: "user_id" });
+
       const subtotal = data.items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
       const tax_amount = data.items.reduce((s, i) => s + i.quantity * i.unit_price * (i.tax_rate / 100), 0);
       const total_amount = subtotal + tax_amount;
@@ -168,8 +219,6 @@ export default function InvoiceFormPage() {
         invoiceId = id;
         await supabase.from("invoice_items").delete().eq("invoice_id", id);
       } else {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("User not authenticated");
         const { data: newInv, error } = await supabase
           .from("invoices")
           .insert([{ ...invoiceData, user_id: user.id, amount_paid: 0 }])
@@ -267,24 +316,37 @@ export default function InvoiceFormPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Customer *</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select customer" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {customers.length === 0 ? (
-                              <SelectItem value="none" disabled>No customers found</SelectItem>
-                            ) : (
-                              customers.map((c) => (
-                                <SelectItem key={c.id} value={c.id}>
-                                  {c.name}{c.email && ` (${c.email})`}
-                                </SelectItem>
-                              ))
-                            )}
-                          </SelectContent>
-                        </Select>
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select customer" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {customers.length === 0 ? (
+                                  <SelectItem value="none" disabled>No customers found</SelectItem>
+                                ) : (
+                                  customers.map((c) => (
+                                    <SelectItem key={c.id} value={c.id}>
+                                      {c.name}{c.email && ` (${c.email})`}
+                                    </SelectItem>
+                                  ))
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setShowNewCustomerDialog(true)}
+                            title="Add new customer"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </div>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -386,6 +448,34 @@ export default function InvoiceFormPage() {
 
                 <Separator />
 
+                {/* Tax Information */}
+                <h3 className="text-lg font-semibold">Tax Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Your Company TRN</Label>
+                    <Input
+                      value={companyTrn}
+                      onChange={e => setCompanyTrn(e.target.value)}
+                      placeholder="e.g. 100123456789003"
+                    />
+                    <p className="text-xs text-muted-foreground">Saved to your invoice profile</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Customer TRN</Label>
+                    <Input
+                      value={customerTrn}
+                      readOnly
+                      placeholder="Select a customer to auto-fill"
+                      className="bg-muted/50 cursor-default"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {customerTrn ? "From customer record" : "Set TRN in Customer management"}
+                    </p>
+                  </div>
+                </div>
+
+                <Separator />
+
                 <h3 className="text-lg font-semibold">Line Items</h3>
                 <LineItemsEditor form={form} />
 
@@ -440,6 +530,12 @@ export default function InvoiceFormPage() {
           </form>
         </Form>
       </div>
+
+      <CustomerDialog
+        open={showNewCustomerDialog}
+        onOpenChange={setShowNewCustomerDialog}
+        onSuccess={handleNewCustomerSuccess}
+      />
     </Layout>
   );
 }

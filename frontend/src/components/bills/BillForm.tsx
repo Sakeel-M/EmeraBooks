@@ -356,6 +356,7 @@ export function BillForm({ open, onOpenChange, bill, onSuccess }: BillFormProps)
                       <CurrencyInput
                         value={field.value}
                         onChange={field.onChange}
+                        currency={userCurrency}
                       />
                     </FormControl>
                     <FormMessage />

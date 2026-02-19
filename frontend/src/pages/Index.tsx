@@ -157,12 +157,16 @@ const Index = () => {
       await database.saveTransactions(savedFile.id, data.full_data);
       const analysis = await api.analyzeData(data.full_data, data.bank_info);
       await database.saveAnalysis(savedFile.id, { ai_analysis: analysis.ai_analysis, basic_statistics: analysis.basic_statistics, data_overview: analysis.data_overview });
-      await database.syncBankDataToBusinessRecords(savedFile.id, data.full_data, data.bank_info.currency);
+      // Update UI immediately
       database.setCurrentFile(savedFile.id);
       await loadFiles();
       await loadFileData(savedFile.id);
       setActiveTab("overview");
       toast({ title: "Analysis Complete!", description: "Your bank statement has been analyzed." });
+
+      // Sync business records in background (non-blocking)
+      database.syncBankDataToBusinessRecords(savedFile.id, data.full_data, data.bank_info.currency)
+        .catch((err) => console.warn("Business records sync error:", err));
     } catch (error: any) {
       toast({ title: "Upload Failed", description: error.message || "Could not process your data.", variant: "destructive" });
     } finally {

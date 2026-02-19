@@ -177,10 +177,6 @@ const Settings = () => {
               <span className="font-medium">1.0.0</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">API Endpoint</span>
-              <span className="font-mono text-xs">http://127.0.0.1:5000</span>
-            </div>
-            <div className="flex justify-between">
               <span className="text-muted-foreground">Supported Banks</span>
               <span className="font-medium">Global</span>
             </div>
