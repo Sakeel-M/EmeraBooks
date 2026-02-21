@@ -61,6 +61,20 @@ export default function Integrations() {
     return connections.find(c => c.connection_type === type) || null;
   };
 
+  const extractEdgeFunctionError = async (response: any): Promise<string> => {
+    if (response.error) {
+      try {
+        const errorData = await response.error.context?.json();
+        if (errorData?.error) return errorData.error;
+      } catch {}
+      return response.error.message || 'An unknown error occurred';
+    }
+    if (response.data?.error) {
+      return response.data.error;
+    }
+    return '';
+  };
+
   const handleZohoConnect = async (credentials: any) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
@@ -79,8 +93,9 @@ export default function Integrations() {
       },
     });
 
-    if (response.error) {
-      throw new Error(response.error.message);
+    const errorMsg = await extractEdgeFunctionError(response);
+    if (errorMsg) {
+      throw new Error(errorMsg);
     }
 
     // Store credentials temporarily for callback
@@ -103,8 +118,9 @@ export default function Integrations() {
       },
     });
 
-    if (response.error || response.data.error) {
-      throw new Error(response.error?.message || response.data.error);
+    const odooErrorMsg = await extractEdgeFunctionError(response);
+    if (odooErrorMsg) {
+      throw new Error(odooErrorMsg);
     }
 
     await fetchConnections();
@@ -121,8 +137,9 @@ export default function Integrations() {
       },
     });
 
-    if (response.error) {
-      throw new Error(response.error.message);
+    const qbErrorMsg = await extractEdgeFunctionError(response);
+    if (qbErrorMsg) {
+      throw new Error(qbErrorMsg);
     }
 
     // Store credentials temporarily for callback
@@ -143,8 +160,9 @@ export default function Integrations() {
       body: { action: 'disconnect' },
     });
 
-    if (response.error) {
-      throw new Error(response.error.message);
+    const disconnectError = await extractEdgeFunctionError(response);
+    if (disconnectError) {
+      throw new Error(disconnectError);
     }
 
     await fetchConnections();
@@ -197,8 +215,9 @@ export default function Integrations() {
 
     const response = await supabase.functions.invoke(functionName, { body });
 
-    if (response.error || response.data.error) {
-      throw new Error(response.error?.message || response.data.error);
+    const syncError = await extractEdgeFunctionError(response);
+    if (syncError) {
+      throw new Error(syncError);
     }
 
     // Update last_sync timestamp

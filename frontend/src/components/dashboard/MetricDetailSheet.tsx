@@ -17,13 +17,16 @@ interface MetricDetailSheetProps {
   onClose: () => void;
 }
 
-const fmt = (amount: number, currency: string) =>
-  new Intl.NumberFormat("en-US", {
+const fmt = (amount: number, currency: string) => {
+  const formatted = new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(amount);
+  if (currency !== "AED") return formatted;
+  return formatted.replace(/AED|د\.إ\.?\s?/g, "Đ");
+};
 
 const MetricDetailSheet = ({ metricType, transactions, currency, onClose }: MetricDetailSheetProps) => {
   const [search, setSearch] = useState("");
@@ -106,11 +109,11 @@ const IncomeView = ({ transactions, currency, search }: { transactions: Transact
           <div className="space-y-2">
             {topSources.map(([category, amount]) => (
               <div key={category} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <ArrowUpRight className="w-3 h-3 text-green-500" />
-                  <span className="text-sm text-foreground">{category}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <ArrowUpRight className="w-3 h-3 text-green-500 shrink-0" />
+                  <span className="text-sm text-foreground truncate">{category}</span>
                 </div>
-                <span className="text-sm font-medium text-foreground">{fmt(amount, currency)}</span>
+                <span className="text-sm font-medium text-foreground shrink-0 whitespace-nowrap ml-3">{fmt(amount, currency)}</span>
               </div>
             ))}
           </div>
@@ -157,12 +160,12 @@ const ExpensesView = ({ transactions, currency, search }: { transactions: Transa
               const pct = total > 0 ? ((amount / total) * 100).toFixed(1) : "0";
               return (
                 <div key={category} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <ArrowDownRight className="w-3 h-3 text-red-500" />
-                    <span className="text-sm text-foreground">{category}</span>
-                    <Badge variant="secondary" className="text-xs">{pct}%</Badge>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <ArrowDownRight className="w-3 h-3 text-red-500 shrink-0" />
+                    <span className="text-sm text-foreground truncate">{category}</span>
+                    <Badge variant="secondary" className="text-xs shrink-0">{pct}%</Badge>
                   </div>
-                  <span className="text-sm font-medium text-foreground">{fmt(amount, currency)}</span>
+                  <span className="text-sm font-medium text-foreground shrink-0 whitespace-nowrap ml-3">{fmt(amount, currency)}</span>
                 </div>
               );
             })}
@@ -337,7 +340,7 @@ const TransactionList = ({ transactions, currency, type }: { transactions: Trans
             <Badge variant="outline" className="text-xs">{t.category}</Badge>
           </div>
         </div>
-        <span className={`text-sm font-medium ml-2 ${type === "income" ? "text-green-600" : "text-red-600"}`}>
+        <span className={`text-sm font-medium ml-3 shrink-0 whitespace-nowrap ${type === "income" ? "text-green-600" : "text-red-600"}`}>
           {fmt(Math.abs(t.amount), currency)}
         </span>
       </div>

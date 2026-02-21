@@ -9,6 +9,7 @@ import { Search, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from "recharts";
+import { replaceAedSymbol } from "@/lib/utils";
 
 interface CategoryDetailPanelProps {
   open: boolean;
@@ -23,7 +24,7 @@ interface CategoryDetailPanelProps {
 
 export function CategoryDetailPanel({ open, onClose, category, invoices, bills, quarterLabels, quarterRanges, currency = "USD" }: CategoryDetailPanelProps) {
   const fmt = (v: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
+    replaceAedSymbol(new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v), currency);
   const [search, setSearch] = useState("");
 
   const isRevenue = category.startsWith("rev-") || invoices.some(inv => (inv.category || "Other Revenue") === category);

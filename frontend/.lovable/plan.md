@@ -1,38 +1,32 @@
 
-
-# Fix: Bill Form Shows Dollar Sign Instead of User's Currency
+# Fix: Replace "AED" with "Đ" Symbol in Remaining Pages
 
 ## Problem
-The bill creation form always shows "$" in the amount field, even when the user's preferred currency is set to something else (e.g., AED). The `useCurrency` hook is already imported and called in `BillForm.tsx`, but the currency value is never passed to the `CurrencyInput` component.
+Several pages still display the raw currency code "AED" instead of the custom Dirham symbol "Đ". This affects the Budget page, Invoice form, Customers page/detail, Payables & Receivables, Home page detail sheet, and Financial Summary.
 
-## Fix
-One line change in `src/components/bills/BillForm.tsx`: pass the `userCurrency` value to the `CurrencyInput` component's `currency` prop.
-
-### Current code (line ~238):
-```tsx
-<CurrencyInput
-  value={field.value}
-  onChange={field.onChange}
-/>
-```
-
-### Fixed code:
-```tsx
-<CurrencyInput
-  value={field.value}
-  onChange={field.onChange}
-  currency={userCurrency}
-/>
-```
-
-## How It Works
-- `useCurrency()` is already called at the top of `BillForm` and returns the user's preferred currency from their settings
-- `CurrencyInput` already supports a `currency` prop and displays the correct symbol when provided
-- The currency symbol mapping in `CurrencyInput` currently only handles "USD" with "$" and falls back to the currency code for others -- this is sufficient since codes like "AED" will display as "AED" prefix
+## Root Cause
+These files use either:
+- String concatenation like `{currency} {amount}` (Budget page), which outputs "AED 4,000" instead of "Đ 4,000"
+- Inline `Intl.NumberFormat` calls without the `replaceAedSymbol` post-processor
 
 ## Files to Change
 
-| File | Change |
-|---|---|
-| `src/components/bills/BillForm.tsx` | Add `currency={userCurrency}` prop to CurrencyInput |
+| File | Issue | Fix |
+|---|---|---|
+| `src/pages/Budget.tsx` | Uses `{currency} {amount}` string concat | Replace with `formatAmount()` from utils |
+| `src/components/invoices/LineItemsEditor.tsx` | Inline `Intl.NumberFormat` without AED override | Use `replaceAedSymbol` wrapper or import `formatAmount` |
+| `src/components/customers/CustomerDetail.tsx` | Inline `formatCurrency` without AED override | Wrap with `replaceAedSymbol` |
+| `src/pages/Customers.tsx` | Inline `formatCurrency` without AED override | Wrap with `replaceAedSymbol` |
+| `src/components/dashboard/MetricDetailSheet.tsx` | Inline `fmt` without AED override | Wrap with `replaceAedSymbol` |
+| `src/lib/payables.ts` | `formatCurrency` without AED override | Wrap with `replaceAedSymbol` |
+| `src/components/dashboard/FinancialSummary.tsx` | Inline `formatCurrency` without AED override | Wrap with `replaceAedSymbol` |
 
+## Technical Details
+
+### Budget.tsx (largest change)
+Replace all instances of `{currency} {value.toLocaleString()}` pattern with `formatAmount(value, currency)` imported from `@/lib/utils`. This handles the Đ symbol automatically.
+
+### All other files
+Add `import { replaceAedSymbol } from "@/lib/utils"` and wrap the existing `Intl.NumberFormat(...).format(amount)` calls with `replaceAedSymbol(result, currency)`, following the same pattern already used in 15+ other files.
+
+This ensures every currency display across the entire application consistently shows "Đ" for AED.

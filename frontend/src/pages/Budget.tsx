@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { useToast } from "@/hooks/use-toast";
 import { EnhancedDateRangePicker } from "@/components/shared/EnhancedDateRangePicker";
 import { startOfMonth, endOfMonth, format } from "date-fns";
+import { formatAmount } from "@/lib/utils";
 
 const Budget = () => {
   const { toast } = useToast();
@@ -27,6 +28,27 @@ const Budget = () => {
 
   useEffect(() => {
     loadBudgets();
+    // Auto-detect latest transaction month
+    const detectLatestMonth = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data } = await supabase
+          .from("transactions")
+          .select("transaction_date")
+          .eq("user_id", user.id)
+          .order("transaction_date", { ascending: false })
+          .limit(1);
+        if (data && data.length > 0) {
+          const latest = new Date(data[0].transaction_date);
+          setDateFrom(startOfMonth(latest));
+          setDateTo(endOfMonth(latest));
+        }
+      } catch (error) {
+        console.error("Error detecting latest transaction date:", error);
+      }
+    };
+    detectLatestMonth();
   }, []);
 
   useEffect(() => {
@@ -154,13 +176,13 @@ const Budget = () => {
               <div>
                 <p className="text-sm text-muted-foreground">Total Budget</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {currency} {totalBudget.toLocaleString()}
+                  {formatAmount(totalBudget, currency)}
                 </p>
               </div>
               <div className="text-right">
                 <p className="text-sm text-muted-foreground">Total Spent</p>
                 <p className={`text-2xl font-bold ${totalProgress >= 90 ? "text-destructive" : "text-foreground"}`}>
-                  {currency} {totalSpent.toLocaleString()}
+                  {formatAmount(totalSpent, currency)}
                 </p>
               </div>
             </div>
@@ -196,7 +218,7 @@ const Budget = () => {
                         <div>
                           <h3 className="font-semibold text-foreground">{category}</h3>
                           <p className="text-sm text-muted-foreground">
-                            Spent: {currency} {spent.toLocaleString()}
+                            Spent: {formatAmount(spent, currency)}
                           </p>
                         </div>
                       </div>
@@ -220,8 +242,7 @@ const Budget = () => {
                       <div className="space-y-2">
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">
-                            Remaining: {currency}{" "}
-                            {Math.max(0, budget - spent).toLocaleString()}
+                            Remaining: {formatAmount(Math.max(0, budget - spent), currency)}
                           </span>
                           <span className={getStatusColor(category)}>{progress.toFixed(1)}%</span>
                         </div>

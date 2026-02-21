@@ -1,3 +1,4 @@
+import { replaceAedSymbol } from "@/lib/utils";
 // Chart color palette using Tarawat Brand Colors
 export const CHART_COLORS = {
   // Primary Tarawat Green
@@ -61,10 +62,13 @@ export const CHART_COLORS = {
 };
 
 export const formatCurrencyValue = (value: number, currency: string = "USD") => {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
+  return replaceAedSymbol(
+    new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value),
+    currency
+  );
 };

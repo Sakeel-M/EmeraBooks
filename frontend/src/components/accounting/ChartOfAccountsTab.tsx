@@ -12,6 +12,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Progress } from "@/components/ui/progress";
+import { useCurrency } from "@/hooks/useCurrency";
+import { formatAmount } from "@/lib/utils";
 
 const typeColors: Record<string, string> = {
   asset: "bg-blue-100 text-blue-700",
@@ -79,6 +81,8 @@ function categoryToAccountNumber(category: string, isIncome: boolean): string {
 }
 
 export function ChartOfAccountsTab() {
+  const { currency } = useCurrency();
+  const fmtBal = (v: number) => formatAmount(v, currency);
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<any>(null);
@@ -174,7 +178,7 @@ export function ChartOfAccountsTab() {
 
     const { error } = await supabase.from("accounts").insert(toInsert);
     if (error) {
-      toast.error("Failed to load standard accounts");
+      toast.error(`Failed to load standard accounts: ${error.message}`);
     } else {
       toast.success(`Loaded ${toInsert.length} standard accounts`);
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
@@ -208,6 +212,35 @@ export function ChartOfAccountsTab() {
 
       const allTxns = transactions || [];
       setSyncProgress(10);
+
+      // Step 2.5: Clean up orphaned journal entries (entries with no lines from failed syncs)
+      setSyncStatus("Cleaning up orphaned entries...");
+      const { data: syncedEntries } = await supabase
+        .from("journal_entries")
+        .select("id, reference")
+        .eq("user_id", user.id)
+        .or("reference.like.TXN:%,reference.like.INV:%,reference.like.BILL:%");
+
+      if (syncedEntries && syncedEntries.length > 0) {
+        const entryIds = syncedEntries.map(e => e.id);
+        // Check which entries have lines
+        const { data: linesExist } = await supabase
+          .from("journal_entry_lines")
+          .select("journal_entry_id")
+          .in("journal_entry_id", entryIds);
+
+        const idsWithLines = new Set((linesExist || []).map(l => l.journal_entry_id));
+        const orphanIds = entryIds.filter(id => !idsWithLines.has(id));
+
+        if (orphanIds.length > 0) {
+          // Delete orphans in batches of 50
+          for (let i = 0; i < orphanIds.length; i += 50) {
+            await supabase.from("journal_entries").delete().in("id", orphanIds.slice(i, i + 50));
+          }
+          console.log(`Cleaned up ${orphanIds.length} orphaned journal entries`);
+        }
+      }
+      setSyncProgress(13);
 
       // Step 3: Find already-synced transactions
       setSyncStatus("Checking for already-synced entries...");
@@ -502,10 +535,10 @@ export function ChartOfAccountsTab() {
                       <TableCell className="text-right font-mono">
                         {a.computed_balance !== 0 ? (
                           <span className={a.computed_balance > 0 ? "text-green-600" : "text-red-600"}>
-                            {a.computed_balance > 0 ? "+" : ""}${Math.abs(a.computed_balance).toFixed(2)}
+                            {a.computed_balance > 0 ? "+" : ""}{fmtBal(a.computed_balance)}
                           </span>
                         ) : (
-                          <span className="text-muted-foreground">$0.00</span>
+                          <span className="text-muted-foreground">{fmtBal(0)}</span>
                         )}
                       </TableCell>
                       <TableCell>

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search } from "lucide-react";
 import type { Transaction } from "@/lib/database";
+import { replaceAedSymbol } from "@/lib/utils";
 
 interface OverviewTabProps {
   transactions: Transaction[];
@@ -26,7 +27,7 @@ const OverviewTab = ({ transactions, currency }: OverviewTabProps) => {
   const [search, setSearch] = useState("");
 
   const fmt = (v: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
+    replaceAedSymbol(new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v), currency);
 
   // Spending by category (expenses only)
   const categoryMap = new Map<string, { total: number; count: number }>();

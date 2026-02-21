@@ -1,6 +1,8 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Users, DollarSign, UserPlus, Layers } from "lucide-react";
 import { BarChart, Bar, ResponsiveContainer } from "recharts";
+import { useCurrency } from "@/hooks/useCurrency";
+import { formatAmount } from "@/lib/utils";
 
 interface VendorInsightsPanelProps {
   vendors: any[];
@@ -37,7 +39,8 @@ export function VendorInsightsPanel({ vendors, bills, quarterLabel, quarterFrom,
   });
   const chartData = Array.from(monthlySpend.entries()).map(([month, amount]) => ({ month, amount }));
 
-  const fmt = (v: number) => `$${v >= 1000 ? (v / 1000).toFixed(1) + "k" : v.toFixed(0)}`;
+  const { currency } = useCurrency();
+  const fmt = (v: number) => formatAmount(v, currency);
 
   return (
     <div className="space-y-4">

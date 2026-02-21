@@ -10,6 +10,7 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from "recharts";
 import type { Transaction } from "@/lib/database";
+import { replaceAedSymbol } from "@/lib/utils";
 
 interface ExpensesTabProps {
   transactions: Transaction[];
@@ -22,7 +23,7 @@ const ExpensesTab = ({ transactions, currency, quarterLabel }: ExpensesTabProps)
   const [search, setSearch] = useState("");
 
   const fmt = (v: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
+    replaceAedSymbol(new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v), currency);
 
   const categoryAnalysis = useMemo(() => {
     const categories = new Map<string, number>();

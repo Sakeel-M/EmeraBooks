@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ChevronDown, ChevronRight, Calendar, TrendingDown } from "lucide-react";
 import type { Transaction } from "@/lib/database";
+import { replaceAedSymbol } from "@/lib/utils";
 
 interface TrendsTabProps {
   transactions: Transaction[];
@@ -13,7 +14,7 @@ const TrendsTab = ({ transactions, currency }: TrendsTabProps) => {
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
 
   const fmt = (amount: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 2 }).format(amount);
+    replaceAedSymbol(new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 2 }).format(amount), currency);
 
   // Group by year
   const yearMap = new Map<string, { total: number; count: number }>();

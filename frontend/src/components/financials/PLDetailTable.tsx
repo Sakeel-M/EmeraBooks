@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { replaceAedSymbol } from "@/lib/utils";
 
 interface PLRow {
   id: string;
@@ -26,7 +27,7 @@ interface PLDetailTableProps {
 
 export function PLDetailTable({ invoices, bills, accounts, quarterLabels, quarterRanges, onRowClick, currency = "USD" }: PLDetailTableProps) {
   const fmt = (v: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
+    replaceAedSymbol(new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v), currency);
   const rows = useMemo(() => {
     const result: PLRow[] = [];
 

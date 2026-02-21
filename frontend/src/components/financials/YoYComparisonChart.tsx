@@ -1,7 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from "recharts";
 import { ArrowUpRight, ArrowDownRight, TrendingUp } from "lucide-react";
-import { CHART_COLORS, formatCurrencyValue } from "@/lib/chartColors";
+import { CHART_COLORS } from "@/lib/chartColors";
+import { formatAmount, formatCompactCurrency } from "@/lib/utils";
 
 interface YoYData {
   month: string;
@@ -14,9 +15,10 @@ interface YoYComparisonChartProps {
   expenseData: YoYData[];
   currentYearLabel?: string;
   previousYearLabel?: string;
+  currency?: string;
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label, currency = "USD" }: any) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-popover/95 backdrop-blur-sm border border-border rounded-lg shadow-xl p-4 animate-in fade-in-0 zoom-in-95">
@@ -32,7 +34,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                 <span className="text-sm text-muted-foreground">{item.name}</span>
               </div>
               <span className="text-sm font-bold text-foreground">
-                {formatCurrencyValue(item.value)}
+                {formatAmount(item.value, currency)}
               </span>
             </div>
           ))}
@@ -72,6 +74,7 @@ export function YoYComparisonChart({
   expenseData,
   currentYearLabel = "2024",
   previousYearLabel = "2023",
+  currency = "USD",
 }: YoYComparisonChartProps) {
   const revenueStats = calculateGrowth(revenueData);
   const expenseStats = calculateGrowth(expenseData);
@@ -96,8 +99,8 @@ export function YoYComparisonChart({
               </div>
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold">{formatCurrencyValue(revenueStats.currentTotal)}</span>
-              <span className="text-sm text-muted-foreground">vs {formatCurrencyValue(revenueStats.previousTotal)}</span>
+              <span className="text-2xl font-bold">{formatAmount(revenueStats.currentTotal, currency)}</span>
+              <span className="text-sm text-muted-foreground">vs {formatAmount(revenueStats.previousTotal, currency)}</span>
             </div>
           </div>
           
@@ -110,8 +113,8 @@ export function YoYComparisonChart({
               </div>
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold">{formatCurrencyValue(expenseStats.currentTotal)}</span>
-              <span className="text-sm text-muted-foreground">vs {formatCurrencyValue(expenseStats.previousTotal)}</span>
+              <span className="text-2xl font-bold">{formatAmount(expenseStats.currentTotal, currency)}</span>
+              <span className="text-sm text-muted-foreground">vs {formatAmount(expenseStats.previousTotal, currency)}</span>
             </div>
           </div>
         </div>
@@ -135,8 +138,8 @@ export function YoYComparisonChart({
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v/1000).toFixed(0)}k`} />
-                <Tooltip content={<CustomTooltip />} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11 }} tickFormatter={(v) => formatCompactCurrency(v, currency)} />
+                <Tooltip content={<CustomTooltip currency={currency} />} />
                 <Bar dataKey="currentYear" name={currentYearLabel} fill="url(#currentRevenue)" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="previousYear" name={previousYearLabel} fill="url(#previousRevenue)" radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -160,8 +163,8 @@ export function YoYComparisonChart({
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v/1000).toFixed(0)}k`} />
-                <Tooltip content={<CustomTooltip />} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11 }} tickFormatter={(v) => formatCompactCurrency(v, currency)} />
+                <Tooltip content={<CustomTooltip currency={currency} />} />
                 <Bar dataKey="currentYear" name={currentYearLabel} fill="url(#currentExpense)" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="previousYear" name={previousYearLabel} fill="url(#previousExpense)" radius={[4, 4, 0, 0]} />
               </BarChart>

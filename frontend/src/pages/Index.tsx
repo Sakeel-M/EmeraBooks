@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { database, type UploadedFile, type Transaction, type AnalysisResult } from "@/lib/database";
 import { api } from "@/lib/api";
 import { exportToCSV } from "@/lib/export";
+import { formatAmount } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
@@ -155,22 +156,33 @@ const Index = () => {
       });
       if (!savedFile) throw new Error("Failed to save file");
       await database.saveTransactions(savedFile.id, data.full_data);
-      const analysis = await api.analyzeData(data.full_data, data.bank_info);
-      await database.saveAnalysis(savedFile.id, { ai_analysis: analysis.ai_analysis, basic_statistics: analysis.basic_statistics, data_overview: analysis.data_overview });
-      // Update UI immediately
+
+      // Phase 1: Update UI immediately with transaction data
       database.setCurrentFile(savedFile.id);
       await loadFiles();
       await loadFileData(savedFile.id);
       setActiveTab("overview");
-      toast({ title: "Analysis Complete!", description: "Your bank statement has been analyzed." });
+      setIsAnalyzing(false);
+      toast({ title: "Data Loaded!", description: "Your transactions are ready. AI insights are being generated..." });
+
+      // Phase 2: Run AI analysis in background (non-blocking)
+      api.analyzeData(data.full_data, data.bank_info)
+        .then(async (analysis) => {
+          await database.saveAnalysis(savedFile.id, { ai_analysis: analysis.ai_analysis, basic_statistics: analysis.basic_statistics, data_overview: analysis.data_overview });
+          await loadFileData(savedFile.id);
+          toast({ title: "AI Insights Ready!", description: "Your financial analysis is now available." });
+        })
+        .catch((err) => {
+          console.warn("AI analysis error:", err);
+          toast({ title: "AI Analysis Pending", description: "You can re-analyze anytime using the Re-analyze button.", variant: "default" });
+        });
 
       // Sync business records in background (non-blocking)
       database.syncBankDataToBusinessRecords(savedFile.id, data.full_data, data.bank_info.currency)
         .catch((err) => console.warn("Business records sync error:", err));
     } catch (error: any) {
-      toast({ title: "Upload Failed", description: error.message || "Could not process your data.", variant: "destructive" });
-    } finally {
       setIsAnalyzing(false);
+      toast({ title: "Upload Failed", description: error.message || "Could not process your data.", variant: "destructive" });
     }
   };
 
@@ -214,7 +226,7 @@ const Index = () => {
   const netSavings = totalIncome - totalExpenses;
   const avgTransaction = filteredTransactions.length > 0 ? filteredTransactions.reduce((s, t) => s + Math.abs(t.amount), 0) / filteredTransactions.length : 0;
   const currency = bankInfo?.currency || "USD";
-  const fmtCur = (v: number) => new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 0 }).format(v);
+  const fmtCur = (v: number) => formatAmount(v, currency);
 
   const hasData = transactions.length > 0;
 

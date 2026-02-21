@@ -146,8 +146,10 @@ export function isOverdue(dueDate?: string): boolean {
 
 // Format currency
 export function formatCurrency(amount: number, currency: string = 'USD'): string {
-  return new Intl.NumberFormat('en-US', {
+  const formatted = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency,
   }).format(amount);
+  if (currency !== 'AED') return formatted;
+  return formatted.replace(/AED|د\.إ\.?\s?/g, 'Đ');
 }

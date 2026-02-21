@@ -9,6 +9,8 @@ import {
   Copy,
   TrendingUp
 } from "lucide-react";
+import { useCurrency } from "@/hooks/useCurrency";
+import { formatAmount } from "@/lib/utils";
 
 interface ReconciliationSummaryProps {
   matchRate: number;
@@ -31,6 +33,7 @@ export function ReconciliationSummary({
   duplicates,
   totalDiscrepancy
 }: ReconciliationSummaryProps) {
+  const { currency } = useCurrency();
   const categories = [
     {
       label: "Matched",
@@ -135,7 +138,7 @@ export function ReconciliationSummary({
         <Alert className="bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800">
           <AlertTriangle className="h-4 w-4 text-yellow-600" />
           <AlertDescription className="text-yellow-700 dark:text-yellow-300">
-            <span className="font-medium">Total Discrepancy Found:</span> ${totalDiscrepancy.toFixed(2)} - 
+            <span className="font-medium">Total Discrepancy Found:</span> {formatAmount(totalDiscrepancy, currency)} - 
             Review the details below and correct any discrepancies.
           </AlertDescription>
         </Alert>

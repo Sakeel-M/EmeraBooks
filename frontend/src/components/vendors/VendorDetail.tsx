@@ -5,6 +5,8 @@ import { Mail, Phone, MapPin, FileText, ArrowDownRight, ArrowUpRight } from "luc
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useCurrency } from "@/hooks/useCurrency";
+import { formatAmount } from "@/lib/utils";
 
 interface VendorDetailProps {
   open: boolean;
@@ -75,6 +77,9 @@ export function VendorDetail({ open, onOpenChange, vendorId }: VendorDetailProps
     );
   }
 
+  const { currency } = useCurrency();
+  const fmt = (v: number) => formatAmount(v, currency);
+
   if (!vendor) return null;
 
   const outstandingBalance = vendor.balance || 0;
@@ -98,14 +103,14 @@ export function VendorDetail({ open, onOpenChange, vendorId }: VendorDetailProps
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-lg border bg-card p-4">
               <p className="text-xs text-muted-foreground">Outstanding Balance</p>
-              <p className="text-xl font-bold">${outstandingBalance.toFixed(2)}</p>
+              <p className="text-xl font-bold">{fmt(outstandingBalance)}</p>
               <Badge variant={outstandingBalance > 0 ? "destructive" : "default"} className="mt-1">
                 {outstandingBalance > 0 ? "Amount Due" : "Paid"}
               </Badge>
             </div>
             <div className="rounded-lg border bg-card p-4">
               <p className="text-xs text-muted-foreground">Unpaid Bills</p>
-              <p className="text-xl font-bold">${totalUnpaid.toFixed(2)}</p>
+              <p className="text-xl font-bold">{fmt(totalUnpaid)}</p>
               <p className="text-xs text-muted-foreground mt-1">{unpaidBills.length} bills</p>
             </div>
           </div>
@@ -122,7 +127,7 @@ export function VendorDetail({ open, onOpenChange, vendorId }: VendorDetailProps
                       <ArrowUpRight className="h-4 w-4 text-destructive" />
                       <p className="text-xs text-muted-foreground">You Owe</p>
                     </div>
-                    <p className="text-lg font-bold text-destructive">${totalPayables.toFixed(2)}</p>
+                    <p className="text-lg font-bold text-destructive">{fmt(totalPayables)}</p>
                     <p className="text-xs text-muted-foreground">{payables.length} items</p>
                   </div>
                   <div className="rounded-lg border bg-primary/5 p-3">
@@ -130,7 +135,7 @@ export function VendorDetail({ open, onOpenChange, vendorId }: VendorDetailProps
                       <ArrowDownRight className="h-4 w-4 text-primary" />
                       <p className="text-xs text-muted-foreground">They Owe You</p>
                     </div>
-                    <p className="text-lg font-bold text-primary">${totalReceivables.toFixed(2)}</p>
+                    <p className="text-lg font-bold text-primary">{fmt(totalReceivables)}</p>
                     <p className="text-xs text-muted-foreground">{receivables.length} items</p>
                   </div>
                 </div>
@@ -148,7 +153,7 @@ export function VendorDetail({ open, onOpenChange, vendorId }: VendorDetailProps
                         </div>
                         <div className="text-right">
                           <span className={`font-medium ${pr.type === "payable" ? "text-destructive" : "text-primary"}`}>
-                            ${Number(pr.amount).toFixed(2)}
+                            {fmt(Number(pr.amount))}
                           </span>
                           {pr.due_date && (
                             <p className="text-xs text-muted-foreground">{new Date(pr.due_date).toLocaleDateString()}</p>
@@ -229,7 +234,7 @@ export function VendorDetail({ open, onOpenChange, vendorId }: VendorDetailProps
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-medium">${bill.total_amount.toFixed(2)}</p>
+                      <p className="text-sm font-medium">{fmt(bill.total_amount)}</p>
                       <Badge variant={bill.status === "paid" ? "default" : "secondary"} className="text-xs">
                         {bill.status}
                       </Badge>

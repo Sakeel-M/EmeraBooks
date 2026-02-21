@@ -12,7 +12,8 @@ import {
   Legend,
 } from "recharts";
 import { TrendingUp, ArrowUpRight, ArrowDownRight } from "lucide-react";
-import { CHART_COLORS, formatCurrencyValue } from "@/lib/chartColors";
+import { CHART_COLORS } from "@/lib/chartColors";
+import { formatAmount, formatCompactCurrency } from "@/lib/utils";
 
 interface TrendData {
   month: string;
@@ -23,10 +24,11 @@ interface TrendData {
 
 interface RevenueExpenseTrendProps {
   data: TrendData[];
+  currency?: string;
   onStatClick?: (type: "revenue" | "expenses" | "net-income") => void;
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label, currency = "USD" }: any) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-popover/95 backdrop-blur-sm border border-border rounded-lg shadow-xl p-4 animate-in fade-in-0 zoom-in-95">
@@ -42,7 +44,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                 <span className="text-sm text-muted-foreground">{item.name}</span>
               </div>
               <span className="text-sm font-bold text-foreground">
-                {formatCurrencyValue(item.value)}
+                {formatAmount(item.value, currency)}
               </span>
             </div>
           ))}
@@ -53,7 +55,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-export function RevenueExpenseTrend({ data, onStatClick }: RevenueExpenseTrendProps) {
+export function RevenueExpenseTrend({ data, currency = "USD", onStatClick }: RevenueExpenseTrendProps) {
   const totalRevenue = data.reduce((sum, d) => sum + d.revenue, 0);
   const totalExpenses = data.reduce((sum, d) => sum + d.expenses, 0);
   const totalNetIncome = data.reduce((sum, d) => sum + d.netIncome, 0);
@@ -84,7 +86,7 @@ export function RevenueExpenseTrend({ data, onStatClick }: RevenueExpenseTrendPr
             title={onStatClick ? "Click for revenue details" : undefined}
           >
             <p className="text-xs text-muted-foreground mb-1">Total Revenue</p>
-            <p className="text-lg font-bold text-green-600">{formatCurrencyValue(totalRevenue)}</p>
+            <p className="text-lg font-bold text-green-600">{formatAmount(totalRevenue, currency)}</p>
           </div>
           <div
             className={`text-center p-3 rounded-lg bg-muted/30 transition-all ${onStatClick ? "cursor-pointer hover:ring-1 hover:ring-primary/30 hover:bg-muted/50" : ""}`}
@@ -92,7 +94,7 @@ export function RevenueExpenseTrend({ data, onStatClick }: RevenueExpenseTrendPr
             title={onStatClick ? "Click for expenses details" : undefined}
           >
             <p className="text-xs text-muted-foreground mb-1">Total Expenses</p>
-            <p className="text-lg font-bold text-red-500">{formatCurrencyValue(totalExpenses)}</p>
+            <p className="text-lg font-bold text-red-500">{formatAmount(totalExpenses, currency)}</p>
           </div>
           <div
             className={`text-center p-3 rounded-lg bg-muted/30 transition-all ${onStatClick ? "cursor-pointer hover:ring-1 hover:ring-primary/30 hover:bg-muted/50" : ""}`}
@@ -101,7 +103,7 @@ export function RevenueExpenseTrend({ data, onStatClick }: RevenueExpenseTrendPr
           >
             <p className="text-xs text-muted-foreground mb-1">Net Income</p>
             <p className={`text-lg font-bold ${totalNetIncome >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
-              {formatCurrencyValue(totalNetIncome)}
+              {formatAmount(totalNetIncome, currency)}
             </p>
           </div>
           <div className="text-center p-3 rounded-lg bg-muted/30">
@@ -137,9 +139,9 @@ export function RevenueExpenseTrend({ data, onStatClick }: RevenueExpenseTrendPr
               axisLine={false}
               tickLine={false}
               tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-              tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+              tickFormatter={(value) => formatCompactCurrency(value, currency)}
             />
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={<CustomTooltip currency={currency} />} />
             <Legend
               wrapperStyle={{ paddingTop: 20 }}
               formatter={(value) => (

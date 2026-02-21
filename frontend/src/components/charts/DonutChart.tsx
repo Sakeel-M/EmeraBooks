@@ -1,5 +1,6 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { CHART_COLORS, formatCurrencyValue } from "@/lib/chartColors";
+import { CHART_COLORS } from "@/lib/chartColors";
+import { formatAmount } from "@/lib/utils";
 
 interface DonutChartProps {
   data: Array<{ name: string; value: number; color?: string }>;
@@ -8,17 +9,18 @@ interface DonutChartProps {
   height?: number;
   showLegend?: boolean;
   isCurrency?: boolean;
+  currency?: string;
   onSliceClick?: (item: { name: string; value: number }) => void;
 }
 
-const CustomTooltip = ({ active, payload, isCurrency }: any) => {
+const CustomTooltip = ({ active, payload, isCurrency, currency = "USD" }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0];
     return (
       <div className="bg-popover/95 backdrop-blur-sm border border-border rounded-lg shadow-xl p-3 animate-in fade-in-0 zoom-in-95">
         <p className="text-sm font-medium text-foreground">{data.name}</p>
         <p className="text-lg font-bold" style={{ color: data.payload.color }}>
-          {isCurrency ? formatCurrencyValue(data.value) : data.value.toLocaleString()}
+          {isCurrency ? formatAmount(data.value, currency) : data.value.toLocaleString()}
         </p>
       </div>
     );
@@ -33,6 +35,7 @@ export function DonutChart({
   height = 200,
   showLegend = true,
   isCurrency = false,
+  currency = "USD",
   onSliceClick,
 }: DonutChartProps) {
   const dataWithColors = data.map((item, index) => ({
@@ -70,16 +73,16 @@ export function DonutChart({
                 />
               ))}
             </Pie>
-            <Tooltip content={<CustomTooltip isCurrency={isCurrency} />} />
+            <Tooltip content={<CustomTooltip isCurrency={isCurrency} currency={currency} />} />
           </PieChart>
         </ResponsiveContainer>
         {(centerLabel || centerValue) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
             {centerValue && (
               <span className="text-2xl font-bold text-foreground">
-                {typeof centerValue === "number"
+              {typeof centerValue === "number"
                   ? isCurrency
-                    ? formatCurrencyValue(centerValue)
+                    ? formatAmount(centerValue, currency)
                     : centerValue.toLocaleString()
                   : centerValue}
               </span>

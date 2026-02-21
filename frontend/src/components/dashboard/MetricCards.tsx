@@ -1,6 +1,7 @@
 import { TrendingUp, TrendingDown, PiggyBank, Calculator } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { replaceAedSymbol } from "@/lib/utils";
 
 interface MetricCardsProps {
   totalIncome: number;
@@ -20,13 +21,16 @@ const MetricCards = ({
   incomeCount, expenseCount, savingsRate, totalCount, currency, onCardClick,
 }: MetricCardsProps) => {
   const fmt = (amount: number) =>
-    new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: amount >= 1000 ? 1 : 2,
-      notation: amount >= 10000 ? "compact" : "standard",
-    }).format(amount);
+    replaceAedSymbol(
+      new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: amount >= 1000 ? 1 : 2,
+        notation: amount >= 10000 ? "compact" : "standard",
+      }).format(amount),
+      currency
+    );
 
   const cards = [
     {

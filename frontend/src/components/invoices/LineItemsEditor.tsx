@@ -76,11 +76,14 @@ export function LineItemsEditor({ form }: LineItemsEditorProps) {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+    const cur = form.watch("currency") || "USD";
+    const formatted = new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: form.watch("currency") || "USD",
+      currency: cur,
       minimumFractionDigits: 2,
     }).format(amount);
+    if (cur !== "AED") return formatted;
+    return formatted.replace(/AED|د\.إ\.?\s?/g, "Đ");
   };
 
   return (

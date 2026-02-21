@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { AnalysisData } from "@/pages/Index";
+import { replaceAedSymbol } from "@/lib/utils";
 
 interface SpendingChartsProps {
   analysisData: AnalysisData;
@@ -26,12 +27,15 @@ const SpendingCharts = ({ analysisData }: SpendingChartsProps) => {
   }));
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
+    return replaceAedSymbol(
+      new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currency,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }).format(value),
+      currency
+    );
   };
 
   return (

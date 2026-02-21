@@ -2,6 +2,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { RadialGauge } from "@/components/charts/RadialGauge";
+import { replaceAedSymbol } from "@/lib/utils";
 import {
   CheckCircle2,
   AlertTriangle,
@@ -36,13 +37,14 @@ interface RatioDetailSheetProps {
   totalAssets: number;
   totalLiabilities: number;
   equity: number;
+  currency?: string;
 }
 
 const fmt = (n: number, decimals = 2) =>
   n.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 
-const fmtCurrency = (n: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
+const fmtCurrency = (n: number, currency: string = "USD") =>
+  replaceAedSymbol(new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(n), currency);
 
 type StatusLevel = "green" | "amber" | "red";
 
@@ -418,6 +420,7 @@ export function RatioDetailSheet({
   totalAssets,
   totalLiabilities,
   equity,
+  currency = "USD",
 }: RatioDetailSheetProps) {
   if (!ratio) return null;
 

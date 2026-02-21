@@ -10,6 +10,7 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from "recharts";
 import type { Transaction } from "@/lib/database";
+import { replaceAedSymbol } from "@/lib/utils";
 
 interface RevenueTabProps {
   transactions: Transaction[];
@@ -22,7 +23,7 @@ const RevenueTab = ({ transactions, currency, quarterLabel }: RevenueTabProps) =
   const [search, setSearch] = useState("");
 
   const fmt = (v: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
+    replaceAedSymbol(new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v), currency);
 
   const incomeTransactions = transactions.filter(t => t.amount > 0);
   const totalRevenue = incomeTransactions.reduce((s, t) => s + t.amount, 0);

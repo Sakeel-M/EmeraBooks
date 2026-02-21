@@ -47,8 +47,16 @@ export default function IntegrationCallback() {
           },
         });
 
-        if (response.error || response.data.error) {
-          throw new Error(response.error?.message || response.data.error);
+        if (response.error) {
+          let errorMsg = response.error.message;
+          try {
+            const errorData = await response.error.context?.json();
+            if (errorData?.error) errorMsg = errorData.error;
+          } catch {}
+          throw new Error(errorMsg);
+        }
+        if (response.data?.error) {
+          throw new Error(response.data.error);
         }
       } else if (provider === 'quickbooks') {
         const storedCredentials = localStorage.getItem('quickbooks_pending_credentials');
@@ -68,8 +76,16 @@ export default function IntegrationCallback() {
           },
         });
 
-        if (response.error || response.data.error) {
-          throw new Error(response.error?.message || response.data.error);
+        if (response.error) {
+          let errorMsg = response.error.message;
+          try {
+            const errorData = await response.error.context?.json();
+            if (errorData?.error) errorMsg = errorData.error;
+          } catch {}
+          throw new Error(errorMsg);
+        }
+        if (response.data?.error) {
+          throw new Error(response.data.error);
         }
       }
 

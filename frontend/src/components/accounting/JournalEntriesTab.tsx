@@ -11,12 +11,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { useCurrency } from "@/hooks/useCurrency";
+import { formatAmount } from "@/lib/utils";
 
 export function JournalEntriesTab() {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const { currency } = useCurrency();
+  const fmt = (v: number) => formatAmount(v, currency);
 
   const { data: accounts = [] } = useQuery({
     queryKey: ["accounts-active"],
@@ -133,8 +137,8 @@ export function JournalEntriesTab() {
                         <TableCell>{format(new Date(e.entry_date), "MMM d, yyyy")}</TableCell>
                         <TableCell className="font-medium">{e.description}</TableCell>
                         <TableCell className="text-muted-foreground">{e.reference || "—"}</TableCell>
-                        <TableCell className="text-right font-mono">${(e.totalDebit || 0).toFixed(2)}</TableCell>
-                        <TableCell className="text-right font-mono">${(e.totalCredit || 0).toFixed(2)}</TableCell>
+                        <TableCell className="text-right font-mono">{fmt(e.totalDebit || 0)}</TableCell>
+                        <TableCell className="text-right font-mono">{fmt(e.totalCredit || 0)}</TableCell>
                         <TableCell className="text-right">
               {isBalanced ? (
                             <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 gap-1 text-xs">
@@ -181,10 +185,10 @@ export function JournalEntriesTab() {
                                         </td>
                                         <td className="py-1 text-muted-foreground">{line.description || "—"}</td>
                                         <td className="py-1 text-right font-mono">
-                                          {(line.debit_amount || 0) > 0 ? `$${line.debit_amount.toFixed(2)}` : "—"}
+                                          {(line.debit_amount || 0) > 0 ? fmt(line.debit_amount) : "—"}
                                         </td>
                                         <td className="py-1 text-right font-mono">
-                                          {(line.credit_amount || 0) > 0 ? `$${line.credit_amount.toFixed(2)}` : "—"}
+                                          {(line.credit_amount || 0) > 0 ? fmt(line.credit_amount) : "—"}
                                         </td>
                                       </tr>
                                     );
@@ -193,8 +197,8 @@ export function JournalEntriesTab() {
                                 <tfoot>
                                   <tr className="border-t-2 border-border font-semibold text-xs">
                                     <td colSpan={2} className="pt-1 text-right text-muted-foreground">Totals</td>
-                                    <td className="pt-1 text-right font-mono">${e.totalDebit.toFixed(2)}</td>
-                                    <td className="pt-1 text-right font-mono">${e.totalCredit.toFixed(2)}</td>
+                                    <td className="pt-1 text-right font-mono">{fmt(e.totalDebit)}</td>
+                                    <td className="pt-1 text-right font-mono">{fmt(e.totalCredit)}</td>
                                   </tr>
                                 </tfoot>
                               </table>

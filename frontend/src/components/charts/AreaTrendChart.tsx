@@ -8,7 +8,8 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-import { CHART_COLORS, formatCurrencyValue } from "@/lib/chartColors";
+import { CHART_COLORS } from "@/lib/chartColors";
+import { formatAmount, formatCompactCurrency } from "@/lib/utils";
 
 interface AreaTrendChartProps {
   data: Array<Record<string, any>>;
@@ -20,9 +21,10 @@ interface AreaTrendChartProps {
   }>;
   height?: number;
   isCurrency?: boolean;
+  currency?: string;
 }
 
-const CustomTooltip = ({ active, payload, label, isCurrency }: any) => {
+const CustomTooltip = ({ active, payload, label, isCurrency, currency = "USD" }: any) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-popover/95 backdrop-blur-sm border border-border rounded-lg shadow-xl p-4 animate-in fade-in-0 zoom-in-95">
@@ -38,7 +40,7 @@ const CustomTooltip = ({ active, payload, label, isCurrency }: any) => {
                 <span className="text-sm text-muted-foreground">{item.name}</span>
               </div>
               <span className="text-sm font-bold" style={{ color: item.color }}>
-                {isCurrency ? formatCurrencyValue(item.value) : item.value.toLocaleString()}
+                {isCurrency ? formatAmount(item.value, currency) : item.value.toLocaleString()}
               </span>
             </div>
           ))}
@@ -54,6 +56,7 @@ export function AreaTrendChart({
   areas,
   height = 300,
   isCurrency = true,
+  currency = "USD",
 }: AreaTrendChartProps) {
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -85,10 +88,10 @@ export function AreaTrendChart({
           tickLine={false}
           tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
           tickFormatter={(value) =>
-            isCurrency ? `$${(value / 1000).toFixed(0)}k` : value.toLocaleString()
+            isCurrency ? formatCompactCurrency(value, currency) : value.toLocaleString()
           }
         />
-        <Tooltip content={<CustomTooltip isCurrency={isCurrency} />} />
+        <Tooltip content={<CustomTooltip isCurrency={isCurrency} currency={currency} />} />
         <Legend
           wrapperStyle={{ paddingTop: 20 }}
           formatter={(value) => (

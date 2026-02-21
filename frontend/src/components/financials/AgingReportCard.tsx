@@ -3,7 +3,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Clock, AlertTriangle, CheckCircle2, AlertCircle } from "lucide-react";
-import { CHART_COLORS, formatCurrencyValue } from "@/lib/chartColors";
+import { CHART_COLORS } from "@/lib/chartColors";
+import { formatAmount } from "@/lib/utils";
 import { differenceInDays } from "date-fns";
 
 interface AgingItem {
@@ -18,6 +19,7 @@ interface AgingItem {
 interface AgingReportCardProps {
   invoices: AgingItem[];
   bills: AgingItem[];
+  currency?: string;
 }
 
 function getAgingBucket(dueDate: string) {
@@ -30,7 +32,7 @@ function getAgingBucket(dueDate: string) {
   return { bucket: "90+ days", color: CHART_COLORS.aging.days90, severity: 4 };
 }
 
-function AgingBar({ items, title, type }: { items: AgingItem[]; title: string; type: "invoice" | "bill" }) {
+function AgingBar({ items, title, type, currency = "USD" }: { items: AgingItem[]; title: string; type: "invoice" | "bill"; currency?: string }) {
   const buckets = [
     { label: "Current", min: -Infinity, max: 0, color: CHART_COLORS.aging.current },
     { label: "1-30", min: 1, max: 30, color: CHART_COLORS.aging.current },
@@ -55,7 +57,7 @@ function AgingBar({ items, title, type }: { items: AgingItem[]; title: string; t
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h4 className="font-medium text-sm">{title}</h4>
-        <span className="text-sm font-bold">{formatCurrencyValue(grandTotal)}</span>
+        <span className="text-sm font-bold">{formatAmount(grandTotal, currency)}</span>
       </div>
       <div className="flex h-8 rounded-lg overflow-hidden shadow-inner bg-muted/50">
         {bucketTotals.map((bucket, index) => {
@@ -70,9 +72,9 @@ function AgingBar({ items, title, type }: { items: AgingItem[]; title: string; t
                 backgroundColor: bucket.color,
                 minWidth: percentage > 0 ? "40px" : 0,
               }}
-              title={`${bucket.label}: ${formatCurrencyValue(bucket.total)}`}
+              title={`${bucket.label}: ${formatAmount(bucket.total, currency)}`}
             >
-              {percentage > 15 && formatCurrencyValue(bucket.total)}
+              {percentage > 15 && formatAmount(bucket.total, currency)}
             </div>
           );
         })}
@@ -92,7 +94,7 @@ function AgingBar({ items, title, type }: { items: AgingItem[]; title: string; t
   );
 }
 
-export function AgingReportCard({ invoices, bills }: AgingReportCardProps) {
+export function AgingReportCard({ invoices, bills, currency = "USD" }: AgingReportCardProps) {
   const allItems = [
     ...invoices.map((i) => ({ ...i, type: "invoice" as const })),
     ...bills.map((b) => ({ ...b, type: "bill" as const })),
@@ -117,8 +119,8 @@ export function AgingReportCard({ invoices, bills }: AgingReportCardProps) {
       <CardContent className="pt-6 space-y-6">
         {/* Aging Bars */}
         <div className="grid md:grid-cols-2 gap-6">
-          <AgingBar items={invoices} title="Accounts Receivable" type="invoice" />
-          <AgingBar items={bills} title="Accounts Payable" type="bill" />
+          <AgingBar items={invoices} title="Accounts Receivable" type="invoice" currency={currency} />
+          <AgingBar items={bills} title="Accounts Payable" type="bill" currency={currency} />
         </div>
 
         {/* Overdue Items Table */}
@@ -152,7 +154,7 @@ export function AgingReportCard({ invoices, bills }: AgingReportCardProps) {
                         </TableCell>
                         <TableCell className="font-mono text-sm">{item.number}</TableCell>
                         <TableCell className="font-medium">{item.name}</TableCell>
-                        <TableCell className="font-bold">{formatCurrencyValue(item.amount)}</TableCell>
+                        <TableCell className="font-bold">{formatAmount(item.amount, currency)}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Badge

@@ -9,6 +9,8 @@ import { GitCompareArrows, Plus, CheckCircle, Clock, AlertCircle, FileText, PenL
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { useCurrency } from "@/hooks/useCurrency";
+import { formatAmount } from "@/lib/utils";
 
 interface UploadedFile {
   id: string;
@@ -39,6 +41,7 @@ interface Props {
 }
 
 export function ReconciliationDashboard({ uploadedFiles, reconciliations, isLoading, onSelectReconciliation, onRefresh }: Props) {
+  const { currency } = useCurrency();
   const [statementSource, setStatementSource] = useState<"file" | "manual">("file");
   const [selectedFileId, setSelectedFileId] = useState<string>("");
   const [ledgerSource, setLedgerSource] = useState<"journal" | "invoices_bills">("journal");
@@ -281,7 +284,7 @@ export function ReconciliationDashboard({ uploadedFiles, reconciliations, isLoad
                   <div className="flex items-center gap-4">
                     {r.unreconciled_difference !== 0 && (
                       <span className="text-sm font-medium text-destructive flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" />${Math.abs(r.unreconciled_difference).toFixed(2)}
+                        <AlertCircle className="w-3 h-3" />{formatAmount(Math.abs(r.unreconciled_difference), currency)}
                       </span>
                     )}
                     {getStatusBadge(r.status)}

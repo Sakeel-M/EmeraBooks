@@ -154,13 +154,16 @@ export default function Customers() {
     }
   };
 
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("en-US", {
+  const formatCurrency = (amount: number) => {
+    const formatted = new Intl.NumberFormat("en-US", {
       style: "currency",
       currency,
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
+    if (currency !== "AED") return formatted;
+    return formatted.replace(/AED|د\.إ\.?\s?/g, "Đ");
+  };
 
   const columns: ColumnDef<Customer>[] = [
     {

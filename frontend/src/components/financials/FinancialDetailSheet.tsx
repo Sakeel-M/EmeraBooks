@@ -13,6 +13,8 @@ import {
   Scale, Banknote, Receipt,
 } from "lucide-react";
 import { formatCurrencyValue } from "@/lib/chartColors";
+import { formatCompactCurrency } from "@/lib/utils";
+import { formatAmount } from "@/lib/utils";
 import { format } from "date-fns";
 
 export type FinancialDetailType =
@@ -150,25 +152,26 @@ const STATUS_COLORS = {
   Critical: "bg-red-500/10 text-red-600 border-red-500/20",
 };
 
-function getNarrative(type: FinancialDetailType, invoices: Invoice[], bills: Bill[], totalRevenue: number, totalExpenses: number, netIncome: number, profitMargin: number): string {
+function getNarrative(type: FinancialDetailType, invoices: Invoice[], bills: Bill[], totalRevenue: number, totalExpenses: number, netIncome: number, profitMargin: number, currency: string = "USD"): string {
   const paidInvoices = invoices.filter(i => i.status === "paid");
   const unpaidInvoices = invoices.filter(i => i.status !== "paid");
   const paidBills = bills.filter(b => b.status === "paid");
   const unpaidBills = bills.filter(b => b.status !== "paid");
+  const fmt = (v: number) => formatAmount(v, currency);
 
   switch (type) {
     case "revenue":
-      return `You earned ${formatCurrencyValue(totalRevenue)} from ${invoices.length} invoice${invoices.length !== 1 ? "s" : ""} in this period. ${paidInvoices.length} invoice${paidInvoices.length !== 1 ? "s" : ""} ${paidInvoices.length !== 1 ? "have" : "has"} been paid.`;
+      return `You earned ${fmt(totalRevenue)} from ${invoices.length} invoice${invoices.length !== 1 ? "s" : ""} in this period. ${paidInvoices.length} invoice${paidInvoices.length !== 1 ? "s" : ""} ${paidInvoices.length !== 1 ? "have" : "has"} been paid.`;
     case "expenses":
-      return `You spent ${formatCurrencyValue(totalExpenses)} across ${bills.length} bill${bills.length !== 1 ? "s" : ""} in this period. ${paidBills.length} bill${paidBills.length !== 1 ? "s" : ""} ${paidBills.length !== 1 ? "have" : "has"} been paid.`;
+      return `You spent ${fmt(totalExpenses)} across ${bills.length} bill${bills.length !== 1 ? "s" : ""} in this period. ${paidBills.length} bill${paidBills.length !== 1 ? "s" : ""} ${paidBills.length !== 1 ? "have" : "has"} been paid.`;
     case "net-income":
-      return `Your profit after expenses is ${formatCurrencyValue(netIncome)} (${profitMargin.toFixed(1)}% margin). ${netIncome >= 0 ? "The business is profitable this period." : "Expenses exceed revenue this period."}`;
+      return `Your profit after expenses is ${fmt(netIncome)} (${profitMargin.toFixed(1)}% margin). ${netIncome >= 0 ? "The business is profitable this period." : "Expenses exceed revenue this period."}`;
     case "profit-margin":
-      return `For every $1 of revenue, you keep $${(profitMargin / 100).toFixed(2)}. A ${profitMargin >= 20 ? "healthy" : profitMargin >= 10 ? "moderate" : "low"} profit margin of ${profitMargin.toFixed(1)}%.`;
+      return `For every unit of revenue, you keep ${(profitMargin / 100).toFixed(2)}. A ${profitMargin >= 20 ? "healthy" : profitMargin >= 10 ? "moderate" : "low"} profit margin of ${profitMargin.toFixed(1)}%.`;
     case "assets":
-      return `Estimated ${formatCurrencyValue(unpaidInvoices.reduce((s, i) => s + Number(i.total_amount || 0), 0))} in outstanding receivables across ${unpaidInvoices.length} unpaid invoice${unpaidInvoices.length !== 1 ? "s" : ""}.`;
+      return `Estimated ${fmt(unpaidInvoices.reduce((s, i) => s + Number(i.total_amount || 0), 0))} in outstanding receivables across ${unpaidInvoices.length} unpaid invoice${unpaidInvoices.length !== 1 ? "s" : ""}.`;
     case "liabilities":
-      return `You owe ${formatCurrencyValue(unpaidBills.reduce((s, b) => s + Number(b.total_amount || 0), 0))} across ${unpaidBills.length} outstanding bill${unpaidBills.length !== 1 ? "s" : ""} to vendors.`;
+      return `You owe ${fmt(unpaidBills.reduce((s, b) => s + Number(b.total_amount || 0), 0))} across ${unpaidBills.length} outstanding bill${unpaidBills.length !== 1 ? "s" : ""} to vendors.`;
     case "equity":
       return `Net worth equals assets minus liabilities. A positive equity indicates the business owns more than it owes.`;
     case "operating":
@@ -178,19 +181,20 @@ function getNarrative(type: FinancialDetailType, invoices: Invoice[], bills: Bil
   }
 }
 
-function MonthlyMiniChart({ data, color }: { data: { month: string; value: number }[]; color: string }) {
+function MonthlyMiniChart({ data, color, currency = "USD" }: { data: { month: string; value: number }[]; color: string; currency?: string }) {
   if (!data.length) return <p className="text-sm text-muted-foreground text-center py-8">No monthly data available.</p>;
+  const tickFmt = (v: number) => formatCompactCurrency(v, currency);
   return (
     <ResponsiveContainer width="100%" height={180}>
       <BarChart data={data} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
         <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
-        <YAxis axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+        <YAxis axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} tickFormatter={tickFmt} />
         <Tooltip
           content={({ active, payload, label }) => active && payload?.length ? (
             <div className="bg-popover border border-border rounded-lg shadow-lg p-2">
               <p className="text-xs text-muted-foreground">{label}</p>
-              <p className="text-sm font-bold text-foreground">{formatCurrencyValue(payload[0].value as number)}</p>
+              <p className="text-sm font-bold text-foreground">{formatAmount(payload[0].value as number, currency)}</p>
             </div>
           ) : null}
         />
@@ -353,7 +357,7 @@ export function FinancialDetailSheet({
       ];
       case "profit-margin": return [
         { label: "Margin", value: `${profitMargin.toFixed(1)}%` },
-        { label: "Per $1 revenue", value: `$${(profitMargin / 100).toFixed(2)}` },
+        { label: "Per unit revenue", value: `${(profitMargin / 100).toFixed(2)}` },
         { label: "Revenue", value: formatCurrencyValue(totalRevenue, currency) },
         { label: "Net Income", value: formatCurrencyValue(netIncome, currency) },
       ];
@@ -388,7 +392,7 @@ export function FinancialDetailSheet({
 
   if (!type || !config) return null;
 
-  const narrative = getNarrative(type, invoices, bills, totalRevenue, totalExpenses, netIncome, profitMargin);
+  const narrative = getNarrative(type, invoices, bills, totalRevenue, totalExpenses, netIncome, profitMargin, currency);
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
@@ -436,7 +440,7 @@ export function FinancialDetailSheet({
               {/* Mini chart */}
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Monthly Distribution</p>
-                <MonthlyMiniChart data={miniChartData} color={chartColor} />
+                <MonthlyMiniChart data={miniChartData} color={chartColor} currency={currency} />
               </div>
             </TabsContent>
 
@@ -466,9 +470,9 @@ export function FinancialDetailSheet({
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Top Categories by Amount</p>
                   {categoryBreakdown.map((cat, i) => (
                     <div key={i} className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-foreground font-medium truncate max-w-[60%]">{cat.name}</span>
-                        <div className="text-right">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-foreground font-medium truncate min-w-0">{cat.name}</span>
+                        <div className="text-right shrink-0 whitespace-nowrap">
                           <span className="text-sm font-bold text-foreground">{formatCurrencyValue(cat.value, currency)}</span>
                           <span className="text-xs text-muted-foreground ml-2">{cat.pct.toFixed(1)}%</span>
                         </div>

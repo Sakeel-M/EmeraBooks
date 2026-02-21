@@ -4,6 +4,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import type { FlaggedItem } from "@/lib/reconciliation";
+import { useCurrency } from "@/hooks/useCurrency";
+import { formatAmount } from "@/lib/utils";
 
 interface Props {
   flag: FlaggedItem | null;
@@ -55,15 +57,15 @@ function getExplanation(flag: FlaggedItem): { why: string; action: string } {
       };
     case "amount_mismatch":
       return {
-        why: `The bank statement shows $${flag.amount.toFixed(2)}, but the ledger records $${
+        why: `The bank statement shows ${flag.amount.toFixed(2)}, but the ledger records ${
           flag.ledgerAmount?.toFixed(2) ?? "—"
-        }. The difference is $${Math.abs(flag.difference ?? 0).toFixed(2)}. This was within your tolerance setting and flagged as a near-match.`,
+        }. The difference is ${Math.abs(flag.difference ?? 0).toFixed(2)}. This was within your tolerance setting and flagged as a near-match.`,
         action:
           "Check for rounding errors, partial payments, or fees. Correct the ledger entry amount if there is a genuine discrepancy.",
       };
     case "missing_in_ledger":
       return {
-        why: `This transaction was found in the bank statement on ${formatDate(flag.date)} for $${flag.amount.toFixed(
+        why: `This transaction was found in the bank statement on ${formatDate(flag.date)} for ${flag.amount.toFixed(
           2
         )}, but no matching entry exists in the ledger for this period.`,
         action:
@@ -71,7 +73,7 @@ function getExplanation(flag: FlaggedItem): { why: string; action: string } {
       };
     case "missing_in_statement":
       return {
-        why: `This entry exists in the ledger (recorded on ${formatDate(flag.date)} for $${flag.amount.toFixed(
+        why: `This entry exists in the ledger (recorded on ${formatDate(flag.date)} for ${flag.amount.toFixed(
           2
         )}) but was not found in the bank statement for this period.`,
         action:
@@ -79,7 +81,7 @@ function getExplanation(flag: FlaggedItem): { why: string; action: string } {
       };
     case "duplicate":
       return {
-        why: `This transaction appears ${flag.occurrences} times in the bank statement with the same date, amount ($${flag.amount.toFixed(
+        why: `This transaction appears ${flag.occurrences} times in the bank statement with the same date, amount (${flag.amount.toFixed(
           2
         )}), and description. This could indicate duplicate imports or genuinely separate transactions.`,
         action:
@@ -91,6 +93,8 @@ function getExplanation(flag: FlaggedItem): { why: string; action: string } {
 }
 
 export function FlagDetailSheet({ flag, onClose }: Props) {
+  const { currency } = useCurrency();
+
   if (!flag) return null;
 
   const config = flagConfig[flag.flagType] ?? flagConfig.missing_in_ledger;
@@ -139,7 +143,7 @@ export function FlagDetailSheet({ flag, onClose }: Props) {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Amount</p>
-                  <p className="text-sm font-medium">${statementAmount.toFixed(2)}</p>
+                  <p className="text-sm font-medium">{formatAmount(statementAmount, currency)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Description</p>
@@ -163,7 +167,7 @@ export function FlagDetailSheet({ flag, onClose }: Props) {
                     <div>
                       <p className="text-xs text-muted-foreground">Amount</p>
                       <p className={`text-sm font-medium ${flag.flagType === "amount_mismatch" ? "text-destructive" : ""}`}>
-                        ${ledgerAmount?.toFixed(2) ?? "—"}
+                        {ledgerAmount != null ? formatAmount(ledgerAmount, currency) : "—"}
                       </p>
                     </div>
                     <div>
@@ -182,7 +186,7 @@ export function FlagDetailSheet({ flag, onClose }: Props) {
               <div className="border-t border-border bg-destructive/5 px-4 py-2 flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">Difference</span>
                 <span className="text-sm font-semibold text-destructive">
-                  ${Math.abs(flag.difference).toFixed(2)}
+                  {formatAmount(Math.abs(flag.difference), currency)}
                 </span>
               </div>
             )}

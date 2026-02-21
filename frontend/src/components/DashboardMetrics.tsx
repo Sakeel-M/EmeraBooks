@@ -3,6 +3,7 @@ import { TrendingUp, TrendingDown, Users, Building2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrency } from "@/hooks/useCurrency";
+import { replaceAedSymbol } from "@/lib/utils";
 
 interface MetricData {
   value: number;
@@ -173,12 +174,15 @@ const DashboardMetrics = () => {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
+    return replaceAedSymbol(
+      new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currency,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }).format(amount),
+      currency
+    );
   };
 
   const MetricCard = ({ 

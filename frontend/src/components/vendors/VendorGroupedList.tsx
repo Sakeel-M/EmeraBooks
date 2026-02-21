@@ -11,6 +11,8 @@ import { guessCategory } from "@/lib/sectorMapping";
 import { PREDEFINED_SECTORS } from "@/lib/predefinedSectors";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useCurrency } from "@/hooks/useCurrency";
+import { formatAmount } from "@/lib/utils";
 
 interface VendorGroupedListProps {
   vendors: any[];
@@ -35,7 +37,8 @@ interface ConsolidatedVendor {
 }
 
 export function VendorGroupedList({ vendors, bills, onEdit, onView, onDelete, onRefresh, searchQuery = "" }: VendorGroupedListProps) {
-  const fmt = (v: number) => `$${v.toFixed(2)}`;
+  const { currency } = useCurrency();
+  const fmt = (v: number) => formatAmount(v, currency);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkCategory, setBulkCategory] = useState("");
   const [applying, setApplying] = useState(false);

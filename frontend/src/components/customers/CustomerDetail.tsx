@@ -92,13 +92,16 @@ export function CustomerDetail({ open, onOpenChange, customerId, onEditCustomer 
   const unpaidInvoices = invoices.filter((inv) => inv.status === "sent" || inv.status === "overdue");
   const paidInvoices = invoices.filter((inv) => inv.status === "paid");
 
-  const formatCurrency = (amount: number, currency: string = "USD") =>
-    new Intl.NumberFormat("en-US", {
+  const formatCurrency = (amount: number, cur: string = "USD") => {
+    const formatted = new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency,
+      currency: cur,
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
+    if (cur !== "AED") return formatted;
+    return formatted.replace(/AED|د\.إ\.?\s?/g, "Đ");
+  };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

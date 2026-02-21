@@ -1,4 +1,5 @@
 // Export utilities for CSV, PDF, and Excel formats
+import { replaceAedSymbol } from "@/lib/utils";
 
 export function exportToCSV(data: any[], filename: string) {
   if (!data || data.length === 0) {
@@ -42,10 +43,13 @@ function downloadFile(content: string, filename: string, mimeType: string) {
 }
 
 export function formatCurrency(amount: number, currency: string = 'USD'): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency,
-  }).format(amount);
+  return replaceAedSymbol(
+    new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency,
+    }).format(amount),
+    currency
+  );
 }
 
 export function formatDate(date: string | Date): string {

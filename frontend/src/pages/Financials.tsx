@@ -25,6 +25,23 @@ import { CHART_COLORS, formatCurrencyValue } from "@/lib/chartColors";
 import { startOfMonth, endOfMonth, format, subMonths, getMonth, getYear } from "date-fns";
 import { useCurrency } from "@/hooks/useCurrency";
 
+// Paginate through all rows to avoid the 1000-row default limit
+async function fetchAllRows<T>(
+  buildQuery: (from: number, to: number) => any,
+  batchSize = 1000
+): Promise<T[]> {
+  const allData: T[] = [];
+  let offset = 0;
+  while (true) {
+    const { data, error } = await buildQuery(offset, offset + batchSize - 1);
+    if (error) throw error;
+    if (data) allData.push(...data);
+    if (!data || data.length < batchSize) break;
+    offset += batchSize;
+  }
+  return allData;
+}
+
 export default function Financials() {
   const { currency } = useCurrency();
   const [dateRange, setDateRange] = useState({
@@ -49,28 +66,26 @@ export default function Financials() {
 
   const { data: invoices = [] } = useQuery({
     queryKey: ["invoices", dateRange],
-    queryFn: async () => {
-      const { data, error } = await supabase
+    queryFn: () => fetchAllRows<any>((from, to) =>
+      supabase
         .from("invoices")
         .select("*, customers(name)")
         .gte("invoice_date", format(dateRange.from, "yyyy-MM-dd"))
-        .lte("invoice_date", format(dateRange.to, "yyyy-MM-dd"));
-      if (error) throw error;
-      return data || [];
-    },
+        .lte("invoice_date", format(dateRange.to, "yyyy-MM-dd"))
+        .range(from, to)
+    ),
   });
 
   const { data: bills = [] } = useQuery({
     queryKey: ["bills", dateRange],
-    queryFn: async () => {
-      const { data, error } = await supabase
+    queryFn: () => fetchAllRows<any>((from, to) =>
+      supabase
         .from("bills")
         .select("*, vendors(name)")
         .gte("bill_date", format(dateRange.from, "yyyy-MM-dd"))
-        .lte("bill_date", format(dateRange.to, "yyyy-MM-dd"));
-      if (error) throw error;
-      return data || [];
-    },
+        .lte("bill_date", format(dateRange.to, "yyyy-MM-dd"))
+        .range(from, to)
+    ),
   });
 
   const { data: accounts = [] } = useQuery({
@@ -87,24 +102,22 @@ export default function Financials() {
   // Fetch all invoices/bills (no date filter) for YoY
   const { data: allInvoices = [] } = useQuery({
     queryKey: ["all-invoices-yoy"],
-    queryFn: async () => {
-      const { data, error } = await supabase
+    queryFn: () => fetchAllRows<any>((from, to) =>
+      supabase
         .from("invoices")
-        .select("invoice_date, total_amount, category, customers(name)");
-      if (error) throw error;
-      return data || [];
-    },
+        .select("invoice_date, total_amount, category, customers(name)")
+        .range(from, to)
+    ),
   });
 
   const { data: allBills = [] } = useQuery({
     queryKey: ["all-bills-yoy"],
-    queryFn: async () => {
-      const { data, error } = await supabase
+    queryFn: () => fetchAllRows<any>((from, to) =>
+      supabase
         .from("bills")
-        .select("bill_date, total_amount, category, vendors(name)");
-      if (error) throw error;
-      return data || [];
-    },
+        .select("bill_date, total_amount, category, vendors(name)")
+        .range(from, to)
+    ),
   });
 
   const hasData = invoices.length > 0 || bills.length > 0;
@@ -420,7 +433,7 @@ export default function Financials() {
                   />
                 </div>
 
-                <RevenueExpenseTrend data={monthlyTrendData} onStatClick={openDetail} />
+                <RevenueExpenseTrend data={monthlyTrendData} currency={currency} onStatClick={openDetail} />
 
                 <FinancialRatiosCard
                   totalRevenue={totalRevenue}
@@ -449,12 +462,12 @@ export default function Financials() {
                 <div className="grid md:grid-cols-2 gap-6">
                   <Card className="chart-enter">
                     <CardHeader><CardTitle className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-primary" />Profit & Loss Breakdown</CardTitle></CardHeader>
-                    <CardContent><GradientBarChart data={plData} height={300} isCurrency={true} onBarClick={(item) => openDetail(item.name.toLowerCase().replace(/ /g, "-") as FinancialDetailType)} /></CardContent>
+                    <CardContent><GradientBarChart data={plData} height={300} isCurrency={true} currency={currency} onBarClick={(item) => openDetail(item.name.toLowerCase().replace(/ /g, "-") as FinancialDetailType)} /></CardContent>
                   </Card>
                   <Card className="chart-enter">
                     <CardHeader><CardTitle className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-primary" />Revenue Distribution</CardTitle></CardHeader>
                     <CardContent className="flex items-center justify-center">
-                      <DonutChart data={plData} centerValue={totalRevenue} centerLabel="Total" height={280} isCurrency={true} onSliceClick={(item) => openDetail(item.name.toLowerCase().replace(/ /g, "-") as FinancialDetailType)} />
+                      <DonutChart data={plData} centerValue={totalRevenue} centerLabel="Total" height={280} isCurrency={true} currency={currency} onSliceClick={(item) => openDetail(item.name.toLowerCase().replace(/ /g, "-") as FinancialDetailType)} />
                     </CardContent>
                   </Card>
                 </div>
@@ -477,12 +490,12 @@ export default function Financials() {
                 <div className="grid md:grid-cols-2 gap-6">
                   <Card className="chart-enter">
                     <CardHeader><CardTitle className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-primary" />Balance Sheet Overview</CardTitle></CardHeader>
-                    <CardContent><GradientBarChart data={balanceData} height={300} isCurrency={true} onBarClick={(item) => openDetail(item.name.toLowerCase() as FinancialDetailType)} /></CardContent>
+                    <CardContent><GradientBarChart data={balanceData} height={300} isCurrency={true} currency={currency} onBarClick={(item) => openDetail(item.name.toLowerCase() as FinancialDetailType)} /></CardContent>
                   </Card>
                   <Card className="chart-enter">
                     <CardHeader><CardTitle className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-primary" />Asset Composition</CardTitle></CardHeader>
                     <CardContent className="flex items-center justify-center">
-                      <DonutChart data={balanceData} centerValue={totalAssets} centerLabel="Total Assets" height={280} isCurrency={true} onSliceClick={(item) => openDetail(item.name.toLowerCase() as FinancialDetailType)} />
+                      <DonutChart data={balanceData} centerValue={totalAssets} centerLabel="Total Assets" height={280} isCurrency={true} currency={currency} onSliceClick={(item) => openDetail(item.name.toLowerCase() as FinancialDetailType)} />
                     </CardContent>
                   </Card>
                 </div>
@@ -505,12 +518,12 @@ export default function Financials() {
                 <div className="grid md:grid-cols-2 gap-6">
                   <Card className="chart-enter">
                     <CardHeader><CardTitle className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-primary" />Cash Flow Statement</CardTitle></CardHeader>
-                    <CardContent><GradientBarChart data={cashFlowData} height={300} isCurrency={true} onBarClick={(item) => openDetail(item.name.toLowerCase() as FinancialDetailType)} /></CardContent>
+                    <CardContent><GradientBarChart data={cashFlowData} height={300} isCurrency={true} currency={currency} onBarClick={(item) => openDetail(item.name.toLowerCase() as FinancialDetailType)} /></CardContent>
                   </Card>
                   <Card className="chart-enter">
                     <CardHeader><CardTitle className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-primary" />Cash Flow Distribution</CardTitle></CardHeader>
                     <CardContent className="flex items-center justify-center">
-                      <DonutChart data={cashFlowData} centerValue={cashFromOperations + cashFromInvesting + cashFromFinancing} centerLabel="Net Cash" height={280} isCurrency={true} onSliceClick={(item) => openDetail(item.name.toLowerCase() as FinancialDetailType)} />
+                      <DonutChart data={cashFlowData} centerValue={cashFromOperations + cashFromInvesting + cashFromFinancing} centerLabel="Net Cash" height={280} isCurrency={true} currency={currency} onSliceClick={(item) => openDetail(item.name.toLowerCase() as FinancialDetailType)} />
                     </CardContent>
                   </Card>
                 </div>
@@ -565,13 +578,15 @@ export default function Financials() {
                 totalExpenses={totalExpenses}
                 netIncome={netIncome}
                 currency={currency}
+                invoices={invoices}
+                bills={bills}
               />
             )}
           </TabsContent>
 
           {/* Aging Tab */}
           <TabsContent value="aging" className="space-y-6 mt-6">
-            <AgingReportCard invoices={agingInvoices} bills={agingBills} />
+            <AgingReportCard invoices={agingInvoices} bills={agingBills} currency={currency} />
           </TabsContent>
 
           {/* YoY Tab */}
@@ -584,6 +599,7 @@ export default function Financials() {
                 expenseData={yoyExpenseData}
                 currentYearLabel={String(currentYear)}
                 previousYearLabel={String(previousYear)}
+                currency={currency}
               />
             )}
           </TabsContent>

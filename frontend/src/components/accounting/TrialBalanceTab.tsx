@@ -9,6 +9,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { EnhancedDateRangePicker } from "@/components/shared/EnhancedDateRangePicker";
 import { startOfYear, endOfYear, format } from "date-fns";
+import { useCurrency } from "@/hooks/useCurrency";
+import { formatAmount } from "@/lib/utils";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 
 const TYPE_ORDER = ["asset", "liability", "equity", "revenue", "expense"];
 const TYPE_LABELS: Record<string, string> = {
@@ -29,6 +32,8 @@ const typeColors: Record<string, string> = {
 export function TrialBalanceTab() {
   const [dateFrom, setDateFrom] = useState<Date>(startOfYear(new Date()));
   const [dateTo, setDateTo] = useState<Date>(endOfYear(new Date()));
+  const { currency } = useCurrency();
+  const fmtVal = (v: number) => formatAmount(v, currency);
 
   const { data: result = { accounts: [], hasAccounts: false }, isLoading } = useQuery({
     queryKey: ["trial-balance", dateFrom.toISOString(), dateTo.toISOString()],
@@ -45,33 +50,35 @@ export function TrialBalanceTab() {
       const fromStr = format(dateFrom, "yyyy-MM-dd");
       const toStr = format(dateTo, "yyyy-MM-dd");
 
-      // Fetch all journal entries in date range
-      const { data: entries } = await supabase
-        .from("journal_entries")
-        .select("id")
-        .gte("entry_date", fromStr)
-        .lte("entry_date", toStr);
+      // Fetch all journal entries in date range (paginated to bypass 1000-row limit)
+      const entries = await fetchAllRows(
+        supabase
+          .from("journal_entries")
+          .select("id")
+          .gte("entry_date", fromStr)
+          .lte("entry_date", toStr)
+      );
 
-      const entryIds = (entries || []).map(e => e.id);
+      const entryIds = entries.map((e: any) => e.id);
       let linesByAccount: Record<string, { debit: number; credit: number }> = {};
 
       if (entryIds.length > 0) {
-        // Fetch in batches of 500 to avoid URL length limits
-        for (let i = 0; i < entryIds.length; i += 500) {
-          const batch = entryIds.slice(i, i + 500);
-          const { data: lines } = await supabase
-            .from("journal_entry_lines")
-            .select("account_id, debit_amount, credit_amount")
-            .in("journal_entry_id", batch);
+        // Fetch in batches of 200 entry IDs, each batch paginated
+        for (let i = 0; i < entryIds.length; i += 200) {
+          const batch = entryIds.slice(i, i + 200);
+          const lines = await fetchAllRows(
+            supabase
+              .from("journal_entry_lines")
+              .select("account_id, debit_amount, credit_amount")
+              .in("journal_entry_id", batch)
+          );
 
-          if (lines) {
-            for (const line of lines) {
-              if (!linesByAccount[line.account_id]) {
-                linesByAccount[line.account_id] = { debit: 0, credit: 0 };
-              }
-              linesByAccount[line.account_id].debit += line.debit_amount || 0;
-              linesByAccount[line.account_id].credit += line.credit_amount || 0;
+          for (const line of lines as any[]) {
+            if (!linesByAccount[line.account_id]) {
+              linesByAccount[line.account_id] = { debit: 0, credit: 0 };
             }
+            linesByAccount[line.account_id].debit += line.debit_amount || 0;
+            linesByAccount[line.account_id].credit += line.credit_amount || 0;
           }
         }
       }
@@ -198,7 +205,7 @@ export function TrialBalanceTab() {
               ) : (
                 <Badge variant="destructive" className="gap-1">
                   <AlertTriangle className="w-3 h-3" />
-                  Out of balance by ${Math.abs(totalDebit - totalCredit).toFixed(2)}
+                  Out of balance by {fmtVal(Math.abs(totalDebit - totalCredit))}
                 </Badge>
               )}
               {hasActivity && (
@@ -238,10 +245,10 @@ export function TrialBalanceTab() {
                           <TableCell className="font-mono text-sm pl-6">{a.account_number}</TableCell>
                           <TableCell className="text-sm">{a.account_name}</TableCell>
                           <TableCell className="text-right font-mono text-sm">
-                            {a.computed_debit > 0 ? `$${a.computed_debit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                            {a.computed_debit > 0 ? fmtVal(a.computed_debit) : "—"}
                           </TableCell>
                           <TableCell className="text-right font-mono text-sm">
-                            {a.computed_credit > 0 ? `$${a.computed_credit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                            {a.computed_credit > 0 ? fmtVal(a.computed_credit) : "—"}
                           </TableCell>
                         </TableRow>
                       )),
@@ -251,10 +258,10 @@ export function TrialBalanceTab() {
                           Subtotal {TYPE_LABELS[type]}
                         </TableCell>
                         <TableCell className="text-right font-mono text-sm">
-                          {sub.debit > 0 ? `$${sub.debit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                          {sub.debit > 0 ? fmtVal(sub.debit) : "—"}
                         </TableCell>
                         <TableCell className="text-right font-mono text-sm">
-                          {sub.credit > 0 ? `$${sub.credit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                          {sub.credit > 0 ? fmtVal(sub.credit) : "—"}
                         </TableCell>
                       </TableRow>,
                     ];
@@ -267,12 +274,12 @@ export function TrialBalanceTab() {
                         Net Income (Revenue − Expenses)
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm font-semibold">
-                        {netIncome < 0 ? `$${Math.abs(netIncome).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                        {netIncome < 0 ? fmtVal(Math.abs(netIncome)) : "—"}
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm font-semibold">
                         {netIncome >= 0 ? (
                           <span className="text-green-600">
-                            ${netIncome.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            {fmtVal(netIncome)}
                           </span>
                         ) : "—"}
                       </TableCell>
@@ -285,10 +292,10 @@ export function TrialBalanceTab() {
                       Grand Total
                     </TableCell>
                     <TableCell className="text-right font-mono">
-                      ${totalDebit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {fmtVal(totalDebit)}
                     </TableCell>
                     <TableCell className="text-right font-mono">
-                      ${totalCredit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {fmtVal(totalCredit)}
                     </TableCell>
                   </TableRow>
                 </TableBody>

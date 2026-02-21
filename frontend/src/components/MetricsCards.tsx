@@ -1,6 +1,7 @@
 import { TrendingUp, TrendingDown, PiggyBank, CreditCard } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { AnalysisData } from "@/pages/Index";
+import { replaceAedSymbol } from "@/lib/utils";
 
 interface MetricsCardsProps {
   analysisData: AnalysisData;
@@ -13,12 +14,15 @@ const MetricsCards = ({ analysisData }: MetricsCardsProps) => {
   const healthScore = ai_analysis.financial_health?.score || 75;
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
+    return replaceAedSymbol(
+      new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currency,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }).format(amount),
+      currency
+    );
   };
 
   return (

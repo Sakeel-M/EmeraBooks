@@ -8,6 +8,7 @@ import { Calculator, BookOpen, Calendar, CheckCircle, AlertTriangle } from "luci
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 
 function StatCard({ title, value, sub, icon: Icon }: { title: string; value: string; sub?: string; icon: any }) {
   return (
@@ -31,22 +32,34 @@ export default function Accounting() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
 
-      const [{ count: accountCount }, { data: lastEntry }, { data: allEntries }] = await Promise.all([
+      const [{ count: accountCount }, { data: lastEntry }] = await Promise.all([
         supabase.from("accounts").select("*", { count: "exact", head: true }).eq("is_active", true).eq("user_id", user.id),
         supabase.from("journal_entries").select("entry_date").eq("user_id", user.id).order("entry_date", { ascending: false }).limit(1),
-        supabase.from("journal_entries").select("id", { count: "exact", head: false }).eq("user_id", user.id),
       ]);
 
-      // Check if trial balance is balanced
+      const allEntries = await fetchAllRows(
+        supabase.from("journal_entries").select("id").eq("user_id", user.id)
+      );
+
+      // Check if trial balance is balanced (paginated to bypass 1000-row limit)
       let isBalanced = true;
       if (allEntries && allEntries.length > 0) {
         const ids = allEntries.map(e => e.id);
-        const { data: lines } = await supabase
-          .from("journal_entry_lines")
-          .select("debit_amount, credit_amount")
-          .in("journal_entry_id", ids);
-        const totalDebit = (lines || []).reduce((s, l) => s + (l.debit_amount || 0), 0);
-        const totalCredit = (lines || []).reduce((s, l) => s + (l.credit_amount || 0), 0);
+        let totalDebit = 0;
+        let totalCredit = 0;
+        for (let i = 0; i < ids.length; i += 200) {
+          const batch = ids.slice(i, i + 200);
+          const lines = await fetchAllRows(
+            supabase
+              .from("journal_entry_lines")
+              .select("debit_amount, credit_amount")
+              .in("journal_entry_id", batch)
+          );
+          for (const l of lines as any[]) {
+            totalDebit += l.debit_amount || 0;
+            totalCredit += l.credit_amount || 0;
+          }
+        }
         isBalanced = Math.abs(totalDebit - totalCredit) < 0.01;
       }
 

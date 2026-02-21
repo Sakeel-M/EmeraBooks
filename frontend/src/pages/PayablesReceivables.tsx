@@ -123,6 +123,7 @@ export default function PayablesReceivables() {
           receivableCount={totals.receivableCount}
           overduePayables={totals.overduePayables}
           overdueReceivables={totals.overdueReceivables}
+          currency={currency}
         />
 
         {/* Tabs */}

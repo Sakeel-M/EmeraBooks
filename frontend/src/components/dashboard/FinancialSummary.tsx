@@ -92,13 +92,16 @@ export function FinancialSummary() {
     };
 
     fetchMetrics();
-  }, []);
+  }, [userCurrency]);
 
-  const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('en-US', {
+  const formatCurrency = (amount: number, cur: string) => {
+    const code = cur || 'USD';
+    const formatted = new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: currency || 'USD',
+      currency: code,
     }).format(amount);
+    if (code !== 'AED') return formatted;
+    return formatted.replace(/AED|د\.إ\.?\s?/g, 'Đ');
   };
 
   if (loading) {

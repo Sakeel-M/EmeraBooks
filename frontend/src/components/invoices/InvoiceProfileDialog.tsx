@@ -83,7 +83,19 @@ export function InvoiceProfileDialog({ open, onOpenChange }: InvoiceProfileDialo
       if (!user) throw new Error("Not authenticated");
 
       const ext = file.name.split(".").pop();
-      const path = `${user.id}/logo.${ext}`;
+      const timestamp = Date.now();
+      const path = `${user.id}/logo-${timestamp}.${ext}`;
+
+      // Try to remove old logo file if it exists
+      if (prefs?.company_logo_url) {
+        try {
+          const oldUrl = prefs.company_logo_url.split("?")[0];
+          const oldPath = oldUrl.split("/company-logos/")[1];
+          if (oldPath) {
+            await supabase.storage.from("company-logos").remove([decodeURIComponent(oldPath)]);
+          }
+        } catch { /* ignore cleanup errors */ }
+      }
 
       const { error: uploadError } = await supabase.storage
         .from("company-logos")
@@ -94,14 +106,14 @@ export function InvoiceProfileDialog({ open, onOpenChange }: InvoiceProfileDialo
         .from("company-logos")
         .getPublicUrl(path);
 
-      // Save URL to user_preferences
+      // Save unique URL to user_preferences
       if (prefs) {
         await supabase.from("user_preferences").update({ company_logo_url: publicUrl }).eq("user_id", user.id);
       } else {
         await supabase.from("user_preferences").insert({ user_id: user.id, company_logo_url: publicUrl });
       }
 
-      setLogoUrl(publicUrl + "?t=" + Date.now());
+      setLogoUrl(publicUrl);
       queryClient.invalidateQueries({ queryKey: ["user-preferences-profile"] });
       toast.success("Logo uploaded");
     } catch (err: any) {

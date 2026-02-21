@@ -8,7 +8,8 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
-import { CHART_COLORS, formatCurrencyValue } from "@/lib/chartColors";
+import { CHART_COLORS } from "@/lib/chartColors";
+import { formatAmount, formatCompactCurrency } from "@/lib/utils";
 
 interface GradientBarChartProps {
   data: Array<{ name: string; value: number; color?: string }>;
@@ -17,16 +18,17 @@ interface GradientBarChartProps {
   isCurrency?: boolean;
   gradientId?: string;
   barRadius?: number;
+  currency?: string;
   onBarClick?: (item: { name: string; value: number }) => void;
 }
 
-const CustomTooltip = ({ active, payload, label, isCurrency }: any) => {
+const CustomTooltip = ({ active, payload, label, isCurrency, currency = "USD" }: any) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-popover/95 backdrop-blur-sm border border-border rounded-lg shadow-xl p-3 animate-in fade-in-0 zoom-in-95">
         <p className="text-sm font-medium text-muted-foreground mb-1">{label}</p>
         <p className="text-lg font-bold text-foreground">
-          {isCurrency ? formatCurrencyValue(payload[0].value) : payload[0].value.toLocaleString()}
+          {isCurrency ? formatAmount(payload[0].value, currency) : payload[0].value.toLocaleString()}
         </p>
       </div>
     );
@@ -41,6 +43,7 @@ export function GradientBarChart({
   isCurrency = true,
   gradientId = "barGradient",
   barRadius = 8,
+  currency = "USD",
   onBarClick,
 }: GradientBarChartProps) {
   const dataWithColors = data.map((item, index) => ({
@@ -84,10 +87,10 @@ export function GradientBarChart({
           tickLine={false}
           tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
           tickFormatter={(value) =>
-            isCurrency ? `$${(value / 1000).toFixed(0)}k` : value.toLocaleString()
+            isCurrency ? formatCompactCurrency(value, currency) : value.toLocaleString()
           }
         />
-        <Tooltip content={<CustomTooltip isCurrency={isCurrency} />} cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }} />
+        <Tooltip content={<CustomTooltip isCurrency={isCurrency} currency={currency} />} cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }} />
         <Bar
           dataKey="value"
           radius={[barRadius, barRadius, 0, 0]}

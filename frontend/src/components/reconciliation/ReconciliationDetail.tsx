@@ -19,6 +19,8 @@ import {
   type FlaggedItem,
 } from "@/lib/reconciliation";
 import { format } from "date-fns";
+import { useCurrency } from "@/hooks/useCurrency";
+import { formatAmount } from "@/lib/utils";
 
 interface UploadedFile {
   id: string;
@@ -36,6 +38,8 @@ interface Props {
 }
 
 export function ReconciliationDetail({ reconciliationId, uploadedFiles, onBack }: Props) {
+  const { currency } = useCurrency();
+  const fmtCur = (v: number) => formatAmount(v, currency);
   const [recon, setRecon] = useState<any>(null);
   const [results, setResults] = useState<ReconciliationResults | null>(null);
   const [settings, setSettings] = useState<SettingsType>(defaultSettings);
@@ -198,7 +202,7 @@ export function ReconciliationDetail({ reconciliationId, uploadedFiles, onBack }
 
   const handleFinalize = async () => {
     if (!results || results.unreconciledDifference !== 0) {
-      toast.error("Unreconciled difference must be $0.00 to finalize");
+      toast.error("Unreconciled difference must be 0.00 to finalize");
       return;
     }
     const { error } = await supabase.from("reconciliations").update({
@@ -393,7 +397,7 @@ export function ReconciliationDetail({ reconciliationId, uploadedFiles, onBack }
             <Card>
               <CardContent className="pt-6 text-center">
                 <div className={`text-3xl font-bold ${results.unreconciledDifference === 0 ? 'text-green-600' : 'text-destructive'}`}>
-                  ${Math.abs(results.unreconciledDifference).toFixed(2)}
+                  {fmtCur(Math.abs(results.unreconciledDifference))}
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">Unreconciled</p>
               </CardContent>
@@ -428,7 +432,7 @@ export function ReconciliationDetail({ reconciliationId, uploadedFiles, onBack }
                             <TableCell>{format(new Date(m.statementDate), "MMM d, yyyy")}</TableCell>
                             <TableCell>{m.statementDescription}</TableCell>
                             <TableCell>{m.ledgerDescription}</TableCell>
-                            <TableCell className="text-right">${m.statementAmount.toFixed(2)}</TableCell>
+                            <TableCell className="text-right">{fmtCur(m.statementAmount)}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -474,7 +478,7 @@ export function ReconciliationDetail({ reconciliationId, uploadedFiles, onBack }
                               </TableCell>
                               <TableCell>{format(new Date(f.date), "MMM d, yyyy")}</TableCell>
                               <TableCell>{f.description}</TableCell>
-                              <TableCell className="text-right">${f.amount.toFixed(2)}</TableCell>
+                              <TableCell className="text-right">{fmtCur(f.amount)}</TableCell>
                               <TableCell>
                                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
                               </TableCell>
