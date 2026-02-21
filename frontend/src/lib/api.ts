@@ -1,4 +1,4 @@
-const API_BASE_URL = "https://financial-bakcend.onrender.com/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://72.60.222.167/api";
 export interface UploadResponse {
   message: string;
   data: any[];

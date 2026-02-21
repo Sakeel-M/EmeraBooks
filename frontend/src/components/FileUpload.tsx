@@ -59,7 +59,7 @@ const FileUpload = ({ onUploadSuccess }: FileUploadProps) => {
       formData.append('file', file);
 
       console.log("📤 Uploading file to backend...");
-      const response = await fetch('https://financial-bakcend.onrender.com/api/upload', {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://72.60.222.167/api'}/upload`, {
         method: 'POST',
         body: formData,
       });
