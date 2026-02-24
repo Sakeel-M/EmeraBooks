@@ -10,6 +10,11 @@ const SECTOR_KEYWORDS: { sector: string; keywords: RegExp }[] = [
     keywords: /\b(internal transfer|own account|ibft|mobn|mobile transfer|neft|rtgs|imps|upi transfer|self transfer|acc transfer|account transfer|between accounts|online transfer|internet banking transfer|e-transfer|wire transfer|wire to|wire from|ach transfer|bank transfer|zelle transfer)\b|^[0-9a-f]{8,}[\s\-]*[a-z]{0,3}$/i,
   },
   {
+    // ATM cash deposits / CCDM machines — income-side of cash transactions
+    sector: "ATM & Cash Deposits",
+    keywords: /\b(ccdm|cdm\s*deposit|atm\s*deposit|cash\s*deposit|deposit\s*machine|atm\s*cash|cash\s*in\s*atm)\b/i,
+  },
+  {
     sector: "Salary & Income",
     keywords: /\b(salary|payroll|wages|paycheck|direct deposit|stipend|commission payment|bonus credit|income credit|reimbursement|refund credit|dividend|profit share|allowance)\b/i,
   },
@@ -236,4 +241,64 @@ export function resolveCategory(
     if (guessed) return guessed;
   }
   return rawCategory || "Other";
+}
+
+/**
+ * Categorize an INCOME transaction for invoice generation.
+ * Uses income-specific logic — does NOT apply expense-oriented categories
+ * (Food & Beverage, Technology, Retail & Shopping, etc.) to income transactions.
+ */
+
+// Sectors that are valid for income invoices
+const INCOME_SAFE_SECTORS = new Set([
+  "Internal Transfer", "ATM & Cash Deposits", "Salary & Income",
+  "Finance & Banking", "Business Income", "Real Estate",
+  "Professional Services", "Technology", "Transportation & Logistics",
+  "Utilities", "Education", "Healthcare", "Travel & Tourism",
+]);
+
+// Raw category values that map to Internal Transfer for income
+const INCOME_TRANSFER_RAW = new Set([
+  "internal transfer", "inter-account transfer", "own transfer",
+  "bank transfer", "wire transfer", "ibft", "mobn", "mobn transfer",
+  "online transfer", "mobile transfer", "transfer between accounts",
+]);
+
+export function resolveIncomeCategory(
+  rawCategory: string | null | undefined,
+  description: string | null | undefined
+): string {
+  const desc = (description || "").toLowerCase();
+  const raw  = (rawCategory  || "").toLowerCase().trim();
+
+  // 1. ATM / CCDM cash deposits
+  if (/\b(ccdm|cdm\s*deposit|atm\s*deposit|cash\s*deposit|deposit\s*machine)\b/i.test(desc)) {
+    return "ATM & Cash Deposits";
+  }
+
+  // 2. Internal transfer / IBFT / MOBN
+  if (/\b(ibft|mobn|rtgs|imps|neft|inter.?account|own\s*transfer|self\s*transfer|inward\s*transfer|online\s*transfer)\b/i.test(desc)
+    || INCOME_TRANSFER_RAW.has(raw)) {
+    return "Internal Transfer";
+  }
+
+  // 3. Salary / WPS wages
+  if (/\b(salary|payroll|wage|wps|stipend|allowance|bonus\s*pay|direct\s*deposit)\b/i.test(desc)) {
+    return "Salary & Income";
+  }
+
+  // 4. Bank interest / refund / cashback
+  if (/\b(interest|dividend|profit\s*share|cashback|refund)\b/i.test(desc)) {
+    return "Finance & Banking";
+  }
+
+  // 5. rawCategory is already an income-safe sector → keep it
+  if (rawCategory && INCOME_SAFE_SECTORS.has(rawCategory)) return rawCategory;
+
+  // 6. rawCategory maps to an income-safe sector via RAW_CATEGORY_MAP
+  const mapped = mapRawBankCategory(rawCategory);
+  if (mapped && INCOME_SAFE_SECTORS.has(mapped)) return mapped;
+
+  // 7. Default for unclassified income
+  return "Business Income";
 }

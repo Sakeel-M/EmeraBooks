@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { mapRawBankCategory, resolveCategory, guessCategory } from "@/lib/sectorMapping";
+import { mapRawBankCategory, resolveCategory, resolveIncomeCategory, guessCategory } from "@/lib/sectorMapping";
 
 // Helper to get current authenticated user ID
 const getCurrentUserId = async (): Promise<string> => {
@@ -559,7 +559,11 @@ export const database = {
       if (Math.abs(rawAmt) === 0) continue;
       const rawCat = (t.Category || t.category || "Uncategorized");
       const description = t.Description || t.description || "";
-      const category = resolveCategory(rawCat, description);
+      // Income uses income-specific categorization (prevents food/tech/retail on invoices)
+      // Expenses use the standard expense categorization
+      const category = rawAmt >= 0
+        ? resolveIncomeCategory(rawCat, description)
+        : resolveCategory(rawCat, description);
       // Only skip NON_BUSINESS for expenses — income transactions (all categories) become invoices
       if (rawAmt < 0 && (NON_BUSINESS.has(rawCat.toLowerCase().trim()) || NON_BUSINESS.has(category.toLowerCase()))) continue;
 
