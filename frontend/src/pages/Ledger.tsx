@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { BookOpen, Search, Loader2, FileText, ArrowUpRight, ArrowDownLeft, TrendingUp, TrendingDown } from "lucide-react";
 import { getSectorStyle } from "@/lib/sectorStyles";
 import { resolveCategory } from "@/lib/sectorMapping";
+import { database } from "@/lib/database";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { useCurrency } from "@/hooks/useCurrency";
@@ -48,13 +49,18 @@ export default function Ledger() {
   const fetchLedger = async () => {
     setIsLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) { setIsLoading(false); return; }
 
-    const { data: accts } = await supabase.from("accounts").select("id, account_name").eq("user_id", user.id);
+    // Only show transactions for the currently selected file — matches Home page
+    const currentFileId = database.getCurrentFile();
+    let query = supabase
+      .from("transactions")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("transaction_date", { ascending: false });
+    if (currentFileId) query = query.eq("file_id", currentFileId);
 
-    const ledgerRows: LedgerRow[] = [];
-
-    const { data: txns } = await supabase.from("transactions").select("*").eq("user_id", user.id).order("transaction_date", { ascending: false });
+    const { data: txns } = await query;
 
     // Auto-detect most recent transaction year on first load
     if (txns && txns.length > 0 && !yearInitialized) {
@@ -66,37 +72,15 @@ export default function Ledger() {
       setYearInitialized(true);
     }
 
-    if (txns) {
-      for (const t of txns) {
-        const rawAccount = t.category || "";
-        const mappedAccount = resolveCategory(rawAccount, t.description) || "Other";
-        ledgerRows.push({
-          id: `txn-${t.id}`, date: t.transaction_date, account: mappedAccount,
-          description: t.description, reference: "",
-          debit: t.amount < 0 ? Math.abs(t.amount) : 0,
-          credit: t.amount > 0 ? t.amount : 0, source: 'transaction',
-        });
-      }
-    }
-
-    const { data: entries } = await supabase.from("journal_entries").select("*").eq("user_id", user.id);
-    if (entries && entries.length > 0) {
-      const entryIds = entries.map(e => e.id);
-      const { data: lines } = await supabase.from("journal_entry_lines").select("*").in("journal_entry_id", entryIds);
-      if (lines) {
-        const accountMap = new Map((accts || []).map(a => [a.id, a.account_name]));
-        for (const line of lines) {
-          const entry = entries.find(e => e.id === line.journal_entry_id);
-          const rawAccount = accountMap.get(line.account_id) || "Unknown";
-          const mappedAccount = resolveCategory(rawAccount, line.description || entry?.description) || rawAccount;
-          ledgerRows.push({
-            id: `jel-${line.id}`, date: entry?.entry_date || "", account: mappedAccount,
-            description: line.description || entry?.description || "", reference: entry?.reference || entry?.entry_number || "",
-            debit: line.debit_amount || 0, credit: line.credit_amount || 0, source: 'journal',
-          });
-        }
-      }
-    }
+    const ledgerRows: LedgerRow[] = (txns || []).map((t) => {
+      const mappedAccount = resolveCategory(t.category || "", t.description) || "Other";
+      return {
+        id: `txn-${t.id}`, date: t.transaction_date, account: mappedAccount,
+        description: t.description, reference: "",
+        debit: t.amount < 0 ? Math.abs(t.amount) : 0,
+        credit: t.amount > 0 ? t.amount : 0, source: 'transaction',
+      };
+    });
 
     ledgerRows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     setRows(ledgerRows);
