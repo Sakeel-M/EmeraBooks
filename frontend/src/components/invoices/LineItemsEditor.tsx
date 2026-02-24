@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { replaceAedSymbol } from "@/lib/utils";
 import { UseFormReturn } from "react-hook-form";
 import { Plus, Trash2, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -82,8 +83,7 @@ export function LineItemsEditor({ form }: LineItemsEditorProps) {
       currency: cur,
       minimumFractionDigits: 2,
     }).format(amount);
-    if (cur !== "AED") return formatted;
-    return formatted.replace(/AED|د\.إ\.?\s?/g, "Đ");
+    return replaceAedSymbol(formatted, cur);
   };
 
   return (

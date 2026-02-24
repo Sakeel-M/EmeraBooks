@@ -4,6 +4,7 @@ import { StatCard } from "@/components/shared/StatCard";
 import { DollarSign, AlertCircle, TrendingUp, Wallet } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrency } from "@/hooks/useCurrency";
+import { replaceAedSymbol } from "@/lib/utils";
 
 interface FinancialMetrics {
   totalRevenue: number;
@@ -100,8 +101,7 @@ export function FinancialSummary() {
       style: 'currency',
       currency: code,
     }).format(amount);
-    if (code !== 'AED') return formatted;
-    return formatted.replace(/AED|د\.إ\.?\s?/g, 'Đ');
+    return replaceAedSymbol(formatted, code);
   };
 
   if (loading) {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { replaceAedSymbol } from "@/lib/utils";
 import {
   Sheet,
   SheetContent,
@@ -99,8 +100,7 @@ export function CustomerDetail({ open, onOpenChange, customerId, onEditCustomer 
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
-    if (cur !== "AED") return formatted;
-    return formatted.replace(/AED|د\.إ\.?\s?/g, "Đ");
+    return replaceAedSymbol(formatted, cur);
   };
 
   return (

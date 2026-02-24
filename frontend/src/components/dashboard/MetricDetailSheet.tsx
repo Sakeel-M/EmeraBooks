@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { replaceAedSymbol } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -24,8 +25,7 @@ const fmt = (amount: number, currency: string) => {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(amount);
-  if (currency !== "AED") return formatted;
-  return formatted.replace(/AED|د\.إ\.?\s?/g, "Đ");
+  return replaceAedSymbol(formatted, currency);
 };
 
 const MetricDetailSheet = ({ metricType, transactions, currency, onClose }: MetricDetailSheetProps) => {
