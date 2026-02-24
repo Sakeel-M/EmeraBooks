@@ -24,8 +24,7 @@ const fmt = (amount: number, currency: string) => {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(amount);
-  if (currency !== "AED") return formatted;
-  return formatted.replace(/AED|د\.إ\.?\s?/g, "Đ");
+  return formatted;
 };
 
 const MetricDetailSheet = ({ metricType, transactions, currency, onClose }: MetricDetailSheetProps) => {

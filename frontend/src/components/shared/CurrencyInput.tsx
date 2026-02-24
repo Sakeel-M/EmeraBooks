@@ -2,7 +2,7 @@ import { Input } from "@/components/ui/input";
 import { forwardRef } from "react";
 
 const currencySymbols: Record<string, string> = {
-  USD: "$", EUR: "€", GBP: "£", AED: "Đ", SAR: "﷼", EGP: "E£",
+  USD: "$", EUR: "€", GBP: "£", AED: "AED", SAR: "﷼", EGP: "E£",
   INR: "₹", JPY: "¥", CNY: "¥", KRW: "₩", TRY: "₺", BRL: "R$",
   ZAR: "R", NGN: "₦", KES: "KSh", CAD: "C$", AUD: "A$", CHF: "CHF",
 };

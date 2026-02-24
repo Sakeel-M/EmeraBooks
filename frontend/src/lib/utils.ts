@@ -5,18 +5,13 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// Official UAE Dirham symbol: Latin D + two combining long-stroke overlays (U+0336 × 2).
-// This produces "D̶̶" — a D with two horizontal bars — matching the new official symbol
-// announced by the UAE Central Bank on 1 Aug 2023.
-// Unicode has assigned U+20C3 for this character; it will be released in Unicode 18.0.
-// Until then, the combining-character approach works in all modern browsers without custom fonts.
-export const DIRHAM_SYMBOL = "D\u0336\u0336";
+// AED amounts are displayed with the ISO code prefix "AED" (e.g. "AED 1,234").
+// The combining-character Dirham symbol (D\u0336\u0336) renders as Đ on most
+// systems, so we keep the plain ISO code for universal readability.
+export const DIRHAM_SYMBOL = "AED";
 
-export function replaceAedSymbol(formatted: string, currencyCode: string): string {
-  if (currencyCode === "AED") {
-    // Replace the "AED" prefix emitted by Intl.NumberFormat with the Dirham symbol
-    return formatted.replace(/^AED\s*/, DIRHAM_SYMBOL + "\u00A0");
-  }
+export function replaceAedSymbol(formatted: string, _currencyCode: string): string {
+  // Return the Intl.NumberFormat output unchanged — it already prefixes with "AED".
   return formatted;
 }
 
