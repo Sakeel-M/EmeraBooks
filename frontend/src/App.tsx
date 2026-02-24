@@ -12,7 +12,6 @@ import Vendors from "./pages/Vendors";
 import Customers from "./pages/Customers";
 import Financials from "./pages/Financials";
 import Accounting from "./pages/Accounting";
-import Documents from "./pages/Documents";
 import Budget from "./pages/Budget";
 import Settings from "./pages/Settings";
 import Auth from "./pages/Auth";
@@ -60,7 +59,6 @@ const App = () => (
           <Route path="/customers" element={<P><Customers /></P>} />
           <Route path="/financials" element={<P><Financials /></P>} />
           <Route path="/accounting" element={<P><Accounting /></P>} />
-          <Route path="/documents" element={<P><Documents /></P>} />
           <Route path="/budget" element={<P><Budget /></P>} />
           <Route path="/settings" element={<P><Settings /></P>} />
           <Route path="/integrations" element={<P><Integrations /></P>} />
