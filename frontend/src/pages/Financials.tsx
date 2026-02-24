@@ -845,6 +845,8 @@ export default function Financials() {
         outstandingReceivables={outstandingReceivables}
         outstandingPayables={outstandingPayables}
         currency={currency}
+        incomeTxns={plIncomeTxns}
+        expenseTxns={plExpenseTxns}
       />
     </Layout>
   );

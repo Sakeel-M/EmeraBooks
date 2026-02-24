@@ -42,6 +42,11 @@ interface Bill {
   vendors?: { name: string } | null;
 }
 
+interface PlTxn {
+  amount: number;
+  resolvedCategory: string;
+}
+
 interface FinancialDetailSheetProps {
   open: boolean;
   onClose: () => void;
@@ -58,6 +63,10 @@ interface FinancialDetailSheetProps {
   outstandingReceivables?: number;
   outstandingPayables?: number;
   currency?: string;
+  /** Filtered income transactions (same source as totalRevenue) */
+  incomeTxns?: PlTxn[];
+  /** Filtered expense transactions (same source as totalExpenses) */
+  expenseTxns?: PlTxn[];
 }
 
 const TYPE_CONFIG: Record<FinancialDetailType, {
@@ -228,6 +237,7 @@ export function FinancialDetailSheet({
   totalAssets, totalLiabilities, equity,
   outstandingReceivables = 0, outstandingPayables = 0,
   currency = "USD",
+  incomeTxns, expenseTxns,
 }: FinancialDetailSheetProps) {
   const [search, setSearch] = useState("");
 
@@ -296,10 +306,29 @@ export function FinancialDetailSheet({
     });
   }, [transactionList, search]);
 
-  // Breakdown by category
+  // Breakdown by category — uses filtered P&L transaction data when available
+  // so percentages/totals match the headline figures exactly.
   const categoryBreakdown = useMemo(() => {
     if (!type) return [];
-    const source = ["expenses", "liabilities"].includes(type) ? bills : invoices;
+    const isExpenseType = ["expenses", "liabilities"].includes(type);
+
+    // Prefer the pre-filtered transaction arrays passed from Financials.tsx
+    const txnSource = isExpenseType ? expenseTxns : incomeTxns;
+    if (txnSource && txnSource.length > 0) {
+      const groups: Record<string, number> = {};
+      txnSource.forEach((t) => {
+        const cat = t.resolvedCategory || "Other";
+        groups[cat] = (groups[cat] || 0) + Math.abs(Number(t.amount || 0));
+      });
+      const total = Object.values(groups).reduce((s, v) => s + v, 0);
+      return Object.entries(groups)
+        .map(([name, value]) => ({ name, value, pct: total > 0 ? (value / total) * 100 : 0 }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 10);
+    }
+
+    // Fallback: use invoices/bills table data
+    const source = isExpenseType ? bills : invoices;
     const groups: Record<string, number> = {};
     source.forEach((item: any) => {
       const cat = item.category || "Uncategorized";
@@ -310,7 +339,7 @@ export function FinancialDetailSheet({
       .map(([name, value]) => ({ name, value, pct: total > 0 ? (value / total) * 100 : 0 }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 10);
-  }, [type, invoices, bills]);
+  }, [type, invoices, bills, incomeTxns, expenseTxns]);
 
   // Monthly mini-chart data
   const miniChartData = useMemo(() => {
