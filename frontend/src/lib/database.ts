@@ -400,10 +400,10 @@ export const database = {
   },
 
   // Budget operations
-  async saveBudgets(budgets: Record<string, number>, currency: string): Promise<boolean> {
+  async saveBudgets(budgets: Record<string, number>, currency: string): Promise<void> {
     const userId = await getCurrentUserId();
-    
-    // Delete only THIS user's existing budgets (not all budgets)
+
+    // Delete only THIS user's existing budgets
     const { error: deleteError } = await supabase
       .from("budgets")
       .delete()
@@ -411,18 +411,20 @@ export const database = {
 
     if (deleteError) {
       console.error("Error deleting existing budgets:", deleteError);
-      return false;
+      throw new Error(deleteError.message);
     }
 
-    // Insert new budgets
-    const budgetData = Object.entries(budgets).map(([category, amount]) => ({
-      category,
-      budget_amount: amount,
-      currency,
-      user_id: userId,
-    }));
+    // Insert new budgets (skip zero-amount entries)
+    const budgetData = Object.entries(budgets)
+      .filter(([, amount]) => amount > 0)
+      .map(([category, amount]) => ({
+        category,
+        budget_amount: amount,
+        currency,
+        user_id: userId,
+      }));
 
-    if (budgetData.length === 0) return true;
+    if (budgetData.length === 0) return;
 
     const { error } = await supabase
       .from("budgets")
@@ -430,16 +432,16 @@ export const database = {
 
     if (error) {
       console.error("Error saving budgets:", error);
-      return false;
+      throw new Error(error.message);
     }
-
-    return true;
   },
 
   async getBudgets(): Promise<Record<string, number>> {
+    const userId = await getCurrentUserId();
     const { data, error } = await supabase
       .from("budgets")
-      .select("*");
+      .select("*")
+      .eq("user_id", userId);
 
     if (error) {
       console.error("Error fetching budgets:", error);

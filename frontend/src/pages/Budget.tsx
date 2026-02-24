@@ -100,10 +100,12 @@ const Budget = () => {
   const saveBudgets = async () => {
     try {
       await database.saveBudgets(budgets, currency);
+      // Reload from DB to confirm persistence
+      await loadBudgets();
       toast({ title: "Budgets Saved", description: "Your budget allocations have been saved successfully." });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving budgets:", error);
-      toast({ title: "Error", description: "Failed to save budgets.", variant: "destructive" });
+      toast({ title: "Error", description: error?.message || "Failed to save budgets.", variant: "destructive" });
     }
   };
 
