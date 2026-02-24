@@ -658,10 +658,10 @@ export const database = {
           invoice_number: `INV-${fileId.slice(0, 8)}-${String(idx).padStart(6, '0')}`,
           invoice_date: invoiceDate,
           due_date: dueDate,
-          subtotal: t._amount,
+          subtotal: +(t._amount * 0.95).toFixed(2),   // tax-inclusive: original = subtotal + tax
           tax_amount: +(t._amount * 0.05).toFixed(2),
-          total_amount: +(t._amount * 1.05).toFixed(2),
-          amount_paid: +(t._amount * 1.05).toFixed(2),
+          total_amount: t._amount,                       // total stays = original amount received
+          amount_paid: t._amount,
           status: "paid",
           currency,
           category: t._category,
