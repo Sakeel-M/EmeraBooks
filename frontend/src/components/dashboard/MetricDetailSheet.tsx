@@ -108,12 +108,12 @@ const IncomeView = ({ transactions, currency, search }: { transactions: Transact
           <h4 className="text-sm font-semibold text-foreground">Top Sources</h4>
           <div className="space-y-2">
             {topSources.map(([category, amount]) => (
-              <div key={category} className="flex items-center justify-between">
-                <div className="flex items-center gap-2 min-w-0">
-                  <ArrowUpRight className="w-3 h-3 text-green-500 shrink-0" />
+              <div key={category} className="grid grid-cols-[1fr_auto] items-center gap-3">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <ArrowUpRight className="w-3 h-3 text-green-500 flex-none" />
                   <span className="text-sm text-foreground truncate">{category}</span>
                 </div>
-                <span className="text-sm font-medium text-foreground shrink-0 whitespace-nowrap ml-3">{fmt(amount, currency)}</span>
+                <span className="text-sm font-medium text-foreground text-right">{fmt(amount, currency)}</span>
               </div>
             ))}
           </div>
@@ -159,13 +159,13 @@ const ExpensesView = ({ transactions, currency, search }: { transactions: Transa
             {categoryBreakdown.map(([category, amount]) => {
               const pct = total > 0 ? ((amount / total) * 100).toFixed(1) : "0";
               return (
-                <div key={category} className="flex items-center justify-between">
+                <div key={category} className="grid grid-cols-[1fr_auto] items-center gap-3">
                   <div className="flex items-center gap-2 min-w-0">
-                    <ArrowDownRight className="w-3 h-3 text-red-500 shrink-0" />
+                    <ArrowDownRight className="w-3 h-3 text-red-500 flex-none" />
                     <span className="text-sm text-foreground truncate">{category}</span>
-                    <Badge variant="secondary" className="text-xs shrink-0">{pct}%</Badge>
+                    <Badge variant="secondary" className="text-xs flex-none">{pct}%</Badge>
                   </div>
-                  <span className="text-sm font-medium text-foreground shrink-0 whitespace-nowrap ml-3">{fmt(amount, currency)}</span>
+                  <span className="text-sm font-medium text-foreground text-right whitespace-nowrap">{fmt(amount, currency)}</span>
                 </div>
               );
             })}
