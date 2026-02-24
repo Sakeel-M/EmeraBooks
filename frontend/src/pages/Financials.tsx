@@ -160,20 +160,23 @@ export default function Financials() {
     [allInvoices]
   );
 
-  // ── PRIMARY P&L DATA SOURCE: all transactions (same as Home page) ───────────
-  // This replaces bills/invoices table queries for P&L calculations, ensuring
-  // categories and amounts EXACTLY match what the Home page shows.
+  // ── PRIMARY P&L DATA SOURCE: transactions scoped to current file ────────────
+  // Must include currentFileId in queryKey so React Query refetches when file changes.
+  // Filter by file_id when a file is selected — prevents stats accumulating across
+  // multiple uploads or multiple files.
   const { data: plTxns = [] } = useQuery({
-    queryKey: ["pl-transactions", format(dateRange.from, "yyyy-MM-dd"), format(dateRange.to, "yyyy-MM-dd")],
+    queryKey: ["pl-transactions", currentFileId, format(dateRange.from, "yyyy-MM-dd"), format(dateRange.to, "yyyy-MM-dd")],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
-      const { data } = await supabase
+      let q = supabase
         .from("transactions")
         .select("amount, category, description, transaction_date")
         .eq("user_id", user.id)
         .gte("transaction_date", format(dateRange.from, "yyyy-MM-dd"))
         .lte("transaction_date", format(dateRange.to, "yyyy-MM-dd"));
+      if (currentFileId) q = q.eq("file_id", currentFileId);
+      const { data } = await q;
       return (data || []).map((t: any) => ({
         ...t,
         resolvedCategory: resolveCategory(t.category, t.description) || "Other",

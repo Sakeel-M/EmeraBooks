@@ -285,6 +285,11 @@ export const database = {
   // Transaction operations
   async saveTransactions(fileId: string, transactions: any[]): Promise<boolean> {
     const userId = await getCurrentUserId();
+
+    // Delete any existing transactions for this file first.
+    // Prevents row accumulation if the same file slips through the duplicate check.
+    await supabase.from("transactions").delete().eq("file_id", fileId).eq("user_id", userId);
+
     const transactionData = transactions.map((t) => {
       // Parse date to ensure it's in correct format (YYYY-MM-DD)
       let dateStr = t.Date || t.date || t.transaction_date;
