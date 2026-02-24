@@ -7,7 +7,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { EmptyState } from "@/components/shared/EmptyState";
 import { BookOpen, Search, Loader2, FileText, ArrowUpRight, ArrowDownLeft, TrendingUp, TrendingDown } from "lucide-react";
 import { getSectorStyle } from "@/lib/sectorStyles";
-import { guessCategory, mapRawBankCategory } from "@/lib/sectorMapping";
+import { resolveCategory } from "@/lib/sectorMapping";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { useCurrency } from "@/hooks/useCurrency";
@@ -36,9 +36,10 @@ export default function Ledger() {
 
   const [dateMode, setDateMode] = useState<DateMode>("year");
   const [currentQuarter, setCurrentQuarter] = useState(0);
-  const [currentYear, setCurrentYear] = useState(new Date().getFullYear() - 1);
-  const [customFrom, setCustomFrom] = useState<Date>(new Date(new Date().getFullYear() - 1, 0, 1));
-  const [customTo, setCustomTo] = useState<Date>(new Date(new Date().getFullYear() - 1, 11, 31, 23, 59, 59));
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  const [customFrom, setCustomFrom] = useState<Date>(new Date(new Date().getFullYear(), 0, 1));
+  const [customTo, setCustomTo] = useState<Date>(new Date(new Date().getFullYear(), 11, 31, 23, 59, 59));
+  const [yearInitialized, setYearInitialized] = useState(false);
 
   const { from: dateFrom, to: dateTo } = useQuarterDates(currentQuarter, currentYear);
 
@@ -54,10 +55,21 @@ export default function Ledger() {
     const ledgerRows: LedgerRow[] = [];
 
     const { data: txns } = await supabase.from("transactions").select("*").eq("user_id", user.id).order("transaction_date", { ascending: false });
+
+    // Auto-detect most recent transaction year on first load
+    if (txns && txns.length > 0 && !yearInitialized) {
+      const years = txns.map((t) => new Date(t.transaction_date).getFullYear()).filter((y) => y > 1970);
+      const maxYear = years.length > 0 ? Math.max(...years) : new Date().getFullYear();
+      setCurrentYear(maxYear);
+      setCustomFrom(new Date(maxYear, 0, 1));
+      setCustomTo(new Date(maxYear, 11, 31, 23, 59, 59));
+      setYearInitialized(true);
+    }
+
     if (txns) {
       for (const t of txns) {
         const rawAccount = t.category || "";
-        const mappedAccount = guessCategory(t.description) || mapRawBankCategory(rawAccount) || guessCategory(rawAccount) || "Other";
+        const mappedAccount = resolveCategory(rawAccount, t.description) || "Other";
         ledgerRows.push({
           id: `txn-${t.id}`, date: t.transaction_date, account: mappedAccount,
           description: t.description, reference: "",
@@ -76,7 +88,7 @@ export default function Ledger() {
         for (const line of lines) {
           const entry = entries.find(e => e.id === line.journal_entry_id);
           const rawAccount = accountMap.get(line.account_id) || "Unknown";
-          const mappedAccount = guessCategory(rawAccount) || guessCategory(line.description || entry?.description) || rawAccount;
+          const mappedAccount = resolveCategory(rawAccount, line.description || entry?.description) || rawAccount;
           ledgerRows.push({
             id: `jel-${line.id}`, date: entry?.entry_date || "", account: mappedAccount,
             description: line.description || entry?.description || "", reference: entry?.reference || entry?.entry_number || "",
@@ -197,6 +209,7 @@ export default function Ledger() {
                 </div>
                 <div className={`text-2xl font-bold ${netBalance >= 0 ? "text-green-500" : "text-destructive"}`}>
                   {formatAmount(Math.abs(netBalance), currency)}
+                  <span className="text-base ml-1 font-medium opacity-70">{netBalance >= 0 ? "Dr" : "Cr"}</span>
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">Dr − Cr</div>
               </CardContent>

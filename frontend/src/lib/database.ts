@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { mapRawBankCategory, resolveCategory, guessCategory } from "@/lib/sectorMapping";
 
 // Helper to get current authenticated user ID
 const getCurrentUserId = async (): Promise<string> => {
@@ -80,9 +81,12 @@ export const database = {
   },
 
   async getAllFiles(): Promise<UploadedFile[]> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
     const { data, error } = await supabase
       .from("uploaded_files")
       .select("*")
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -293,12 +297,14 @@ export const database = {
         }
       }
 
+      const rawCat = t.Category || t.category || "Uncategorized";
+      const desc = t.Description || t.description || "";
       return {
         file_id: fileId,
         user_id: userId,
         transaction_date: dateStr,
-        description: t.Description || t.description || "",
-        category: t.Category || t.category || "Uncategorized",
+        description: desc,
+        category: resolveCategory(rawCat, desc),
         amount: parseFloat(t.Amount || t.amount || 0),
       };
     });
@@ -340,15 +346,32 @@ export const database = {
     data_overview: any;
   }): Promise<AnalysisResult | null> {
     const userId = await getCurrentUserId();
-    const { data, error } = await supabase
+
+    // Check if an analysis already exists for this file
+    const { data: existing } = await supabase
       .from("analysis_results")
-      .insert({
-        file_id: fileId,
-        user_id: userId,
-        ...analysisData,
-      })
-      .select()
-      .single();
+      .select("id")
+      .eq("file_id", fileId)
+      .maybeSingle();
+
+    let data, error;
+
+    if (existing) {
+      // Update existing row (re-analysis case)
+      ({ data, error } = await supabase
+        .from("analysis_results")
+        .update({ ...analysisData, updated_at: new Date().toISOString() })
+        .eq("id", existing.id)
+        .select()
+        .single());
+    } else {
+      // Insert new row
+      ({ data, error } = await supabase
+        .from("analysis_results")
+        .insert({ file_id: fileId, user_id: userId, ...analysisData })
+        .select()
+        .single());
+    }
 
     if (error) {
       console.error("Error saving analysis:", error);
@@ -359,10 +382,13 @@ export const database = {
   },
 
   async getAnalysisByFileId(fileId: string): Promise<AnalysisResult | null> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
     const { data, error } = await supabase
       .from("analysis_results")
       .select("*")
       .eq("file_id", fileId)
+      .eq("user_id", user.id)
       .single();
 
     if (error) {
@@ -491,7 +517,7 @@ export const database = {
     return localStorage.getItem("currentFileId");
   },
 
-  // Transform bank transactions into business records
+  // Transform bank transactions into business records (batch inserts for performance)
   async syncBankDataToBusinessRecords(fileId: string, transactions: any[], currency: string): Promise<{
     vendorsCreated: number;
     billsCreated: number;
@@ -499,168 +525,363 @@ export const database = {
     invoicesCreated: number;
   }> {
     console.log("🔄 Starting sync of bank data to business records...");
-    
+
+    // Skip if records for this file already exist (check both bills AND invoices)
+    const [billsCheck, invoicesCheck] = await Promise.all([
+      supabase.from("bills").select("id", { count: "exact", head: true }).eq("source_file_id", fileId),
+      supabase.from("invoices").select("id", { count: "exact", head: true }).eq("source_file_id", fileId),
+    ]);
+    if ((billsCheck.count && billsCheck.count > 0) || (invoicesCheck.count && invoicesCheck.count > 0)) {
+      console.log("⚠️ Business records already exist for this file — skipping sync.");
+      return { vendorsCreated: 0, billsCreated: 0, customersCreated: 0, invoicesCreated: 0 };
+    }
+
     const userId = await getCurrentUserId();
-    const vendorMap = new Map<string, string>(); // payee name -> vendor_id
-    const customerMap = new Map<string, string>(); // payer name -> customer_id
-    let vendorsCreated = 0;
-    let billsCreated = 0;
-    let customersCreated = 0;
-    let invoicesCreated = 0;
 
-    // Fetch existing vendors and customers to avoid duplicates
-    const { data: existingVendors } = await supabase.from("vendors").select("id, name");
-    const { data: existingCustomers } = await supabase.from("customers").select("id, name");
+    // Categories that represent non-business events — should not generate bills/invoices
+    const NON_BUSINESS = new Set([
+      "internal transfer", "atm & cash withdrawals", "atm", "atm withdrawal",
+      "cash withdrawal", "cash advance", "bank transfer", "wire transfer",
+      "inter-account transfer",
+    ]);
 
-    // Build maps of existing entities
-    existingVendors?.forEach(v => vendorMap.set(this.normalizeEntityName(v.name), v.id));
-    existingCustomers?.forEach(c => customerMap.set(this.normalizeEntityName(c.name), c.id));
+    // ── PASS 1: Classify transactions and collect unique vendor/customer names ──
+    type EnrichedTxn = { _category: string; _rawName: string; _normName: string; _amount: number; [k: string]: any };
+    const expenseTxns: EnrichedTxn[] = [];
+    const incomeTxns: EnrichedTxn[] = [];
+    const vendorNameMap = new Map<string, string>(); // normalized → rawName (first occurrence)
+    const customerNameMap = new Map<string, string>();
 
-    // Process each transaction
-    for (const transaction of transactions) {
-      const amount = Math.abs(parseFloat(transaction.Amount || transaction.amount || 0));
-      const description = transaction.Description || transaction.description || "";
-      const category = transaction.Category || transaction.category || "Uncategorized";
-      const transactionDate = transaction.Date || transaction.date || transaction.transaction_date;
-      
-      if (amount === 0) continue; // Skip zero-amount transactions
+    for (const t of transactions) {
+      const rawAmt = parseFloat(t.Amount || t.amount || 0);
+      if (Math.abs(rawAmt) === 0) continue;
+      const rawCat = (t.Category || t.category || "Uncategorized");
+      const description = t.Description || t.description || "";
+      const category = resolveCategory(rawCat, description);
+      if (NON_BUSINESS.has(rawCat.toLowerCase().trim()) || NON_BUSINESS.has(category.toLowerCase())) continue;
 
-      // Determine if it's an expense or income
-      const isExpense = (parseFloat(transaction.Amount || transaction.amount || 0)) < 0;
+      const rawName = this.extractPayeeName(t.MerchantName || t.merchantName || description);
+      const normName = this.normalizeEntityName(rawName);
+      const enriched: EnrichedTxn = { ...t, _category: category, _rawName: rawName, _normName: normName, _amount: Math.abs(rawAmt) };
 
-      if (isExpense) {
-        // Create vendor and bill for expenses
-        const payeeName = this.extractPayeeName(description);
-        const normalizedName = this.normalizeEntityName(payeeName);
-        
-        let vendorId = vendorMap.get(normalizedName);
-        
-        // Create vendor if doesn't exist
-        if (!vendorId) {
-          const { data: newVendor } = await supabase
-            .from("vendors")
-            .insert({
-              name: payeeName,
-              user_id: userId,
-              notes: "Auto-created from bank statement",
-            })
-            .select("id")
-            .single();
-          
-          if (newVendor) {
-            vendorId = newVendor.id;
-            vendorMap.set(normalizedName, vendorId);
-            vendorsCreated++;
-          }
-        }
-
-        // Create bill
-        if (vendorId) {
-          const billNumber = `BILL-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-          const billDate = new Date(transactionDate).toISOString().split('T')[0];
-          const dueDate = new Date(new Date(transactionDate).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-
-          const { error } = await supabase.from("bills").insert({
-            vendor_id: vendorId,
-            user_id: userId,
-            bill_number: billNumber,
-            bill_date: billDate,
-            due_date: dueDate,
-            subtotal: amount,
-            tax_amount: 0,
-            total_amount: amount,
-            amount_paid: amount,
-            status: "paid",
-            currency: currency,
-            notes: `${category} - ${description}`,
-            source_file_id: fileId,
-          });
-
-          if (!error) billsCreated++;
-        }
-      } else if (amount > 0) {
-        // Create customer and invoice for income
-        const payerName = this.extractPayeeName(description);
-        const normalizedName = this.normalizeEntityName(payerName);
-        
-        let customerId = customerMap.get(normalizedName);
-        
-        // Create customer if doesn't exist
-        if (!customerId) {
-          const { data: newCustomer } = await supabase
-            .from("customers")
-            .insert({
-              name: payerName,
-              user_id: userId,
-              notes: "Auto-created from bank statement",
-            })
-            .select("id")
-            .single();
-          
-          if (newCustomer) {
-            customerId = newCustomer.id;
-            customerMap.set(normalizedName, customerId);
-            customersCreated++;
-          }
-        }
-
-        // Create invoice
-        if (customerId) {
-          const invoiceNumber = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-          const invoiceDate = new Date(transactionDate).toISOString().split('T')[0];
-          const dueDate = new Date(new Date(transactionDate).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-
-          const { error } = await supabase.from("invoices").insert({
-            customer_id: customerId,
-            user_id: userId,
-            invoice_number: invoiceNumber,
-            invoice_date: invoiceDate,
-            due_date: dueDate,
-            subtotal: amount,
-            tax_amount: 0,
-            total_amount: amount,
-            amount_paid: amount,
-            status: "paid",
-            currency: currency,
-            notes: `${category} - ${description}`,
-            source_file_id: fileId,
-          });
-
-          if (!error) invoicesCreated++;
-        }
+      if (rawAmt < 0) {
+        expenseTxns.push(enriched);
+        if (!vendorNameMap.has(normName)) vendorNameMap.set(normName, rawName);
+      } else {
+        incomeTxns.push(enriched);
+        if (!customerNameMap.has(normName)) customerNameMap.set(normName, rawName);
       }
     }
 
+    // ── PASS 2: Fetch existing vendors/customers in parallel ──
+    const [vendorsRes, customersRes] = await Promise.all([
+      supabase.from("vendors").select("id, name").eq("user_id", userId),
+      supabase.from("customers").select("id, name").eq("user_id", userId),
+    ]);
+    const vendorMap = new Map<string, string>();
+    const customerMap = new Map<string, string>();
+    vendorsRes.data?.forEach(v => vendorMap.set(this.normalizeEntityName(v.name), v.id));
+    customersRes.data?.forEach(c => customerMap.set(this.normalizeEntityName(c.name), c.id));
+
+    // ── PASS 3: Batch-create new vendors ──
+    const newVendors = Array.from(vendorNameMap.entries())
+      .filter(([norm]) => !vendorMap.has(norm))
+      .map(([, rawName]) => ({ name: rawName, user_id: userId, notes: "Auto-created from bank statement" }));
+
+    let vendorsCreated = 0;
+    if (newVendors.length > 0) {
+      const { data: created } = await supabase.from("vendors").insert(newVendors).select("id, name");
+      created?.forEach(v => { vendorMap.set(this.normalizeEntityName(v.name), v.id); vendorsCreated++; });
+    }
+
+    // ── PASS 4: Batch-create new customers ──
+    const newCustomers = Array.from(customerNameMap.entries())
+      .filter(([norm]) => !customerMap.has(norm))
+      .map(([, rawName]) => ({ name: rawName, user_id: userId, notes: "Auto-created from bank statement" }));
+
+    let customersCreated = 0;
+    if (newCustomers.length > 0) {
+      const { data: created } = await supabase.from("customers").insert(newCustomers).select("id, name");
+      created?.forEach(c => { customerMap.set(this.normalizeEntityName(c.name), c.id); customersCreated++; });
+    }
+
+    // ── PASS 5: Build and batch-insert bills ──
+    const billsToInsert = expenseTxns
+      .map((t, idx) => {
+        const vendorId = vendorMap.get(t._normName);
+        if (!vendorId) return null;
+        const transactionDate = t.Date || t.date || t.transaction_date;
+        const billDate = new Date(transactionDate).toISOString().split('T')[0];
+        const dueDate = new Date(new Date(transactionDate).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        return {
+          vendor_id: vendorId,
+          user_id: userId,
+          bill_number: `BILL-${fileId.slice(0, 8)}-${String(idx).padStart(6, '0')}`,
+          bill_date: billDate,
+          due_date: dueDate,
+          subtotal: t._amount,
+          tax_amount: 0,
+          total_amount: t._amount,
+          amount_paid: t._amount,
+          status: "paid",
+          currency,
+          category: t._category,
+          notes: `${t._category} - ${t.Description || t.description || ""}`,
+          source_file_id: fileId,
+        };
+      })
+      .filter(Boolean);
+
+    let billsCreated = 0;
+    for (let i = 0; i < billsToInsert.length; i += 500) {
+      const { error } = await supabase.from("bills").insert(billsToInsert.slice(i, i + 500) as any[]);
+      if (!error) billsCreated += Math.min(500, billsToInsert.length - i);
+      else console.error("❌ Bills batch insert error:", error.message);
+    }
+
+    // ── PASS 6: Build and batch-insert invoices ──
+    const invoicesToInsert = incomeTxns
+      .map((t, idx) => {
+        const customerId = customerMap.get(t._normName);
+        if (!customerId) return null;
+        const transactionDate = t.Date || t.date || t.transaction_date;
+        const invoiceDate = new Date(transactionDate).toISOString().split('T')[0];
+        const dueDate = new Date(new Date(transactionDate).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        return {
+          customer_id: customerId,
+          user_id: userId,
+          invoice_number: `INV-${fileId.slice(0, 8)}-${String(idx).padStart(6, '0')}`,
+          invoice_date: invoiceDate,
+          due_date: dueDate,
+          subtotal: t._amount,
+          tax_amount: 0,
+          total_amount: t._amount,
+          amount_paid: t._amount,
+          status: "paid",
+          currency,
+          category: t._category,
+          notes: `${t._category} - ${t.Description || t.description || ""}`,
+          source_file_id: fileId,
+        };
+      })
+      .filter(Boolean);
+
+    let invoicesCreated = 0;
+    for (let i = 0; i < invoicesToInsert.length; i += 500) {
+      const { error } = await supabase.from("invoices").insert(invoicesToInsert.slice(i, i + 500) as any[]);
+      if (!error) invoicesCreated += Math.min(500, invoicesToInsert.length - i);
+      else console.error("❌ Invoices batch insert error:", error.message);
+    }
+
     console.log(`✅ Sync complete: ${vendorsCreated} vendors, ${billsCreated} bills, ${customersCreated} customers, ${invoicesCreated} invoices`);
-    
+
+    // ── PASS 7: Batch journal entries (non-critical — wrapped in try/catch) ──
+    try {
+      const journalTxns = [...expenseTxns, ...incomeTxns];
+      if (journalTxns.length > 0) {
+        const jeData = journalTxns.map((t, idx) => ({
+          user_id: userId,
+          entry_date: (t.Date || t.date || t.transaction_date || new Date().toISOString()).split("T")[0],
+          description: t._rawName,
+          reference: `BANK-AUTO-${fileId.slice(0, 8)}`,
+          entry_number: `JE-${fileId.slice(0, 8)}-${String(idx).padStart(6, '0')}`,
+        }));
+
+        // Insert journal entries in chunks, collect IDs
+        const allCreatedEntries: Array<{ id: string }> = [];
+        for (let i = 0; i < jeData.length; i += 500) {
+          const { data } = await supabase.from("journal_entries").insert(jeData.slice(i, i + 500)).select("id");
+          if (data) allCreatedEntries.push(...data);
+        }
+
+        // Build and batch-insert journal lines
+        const allLines = journalTxns.flatMap((t, idx) => {
+          const entry = allCreatedEntries[idx];
+          if (!entry) return [];
+          const isExpense = parseFloat(t.Amount || t.amount || 0) < 0;
+          return isExpense
+            ? [
+                { journal_entry_id: entry.id, user_id: userId, account_name: t._category, debit_amount: t._amount, credit_amount: 0 },
+                { journal_entry_id: entry.id, user_id: userId, account_name: "Bank/Cash", debit_amount: 0, credit_amount: t._amount },
+              ]
+            : [
+                { journal_entry_id: entry.id, user_id: userId, account_name: "Bank/Cash", debit_amount: t._amount, credit_amount: 0 },
+                { journal_entry_id: entry.id, user_id: userId, account_name: t._category, debit_amount: 0, credit_amount: t._amount },
+              ];
+        });
+
+        for (let i = 0; i < allLines.length; i += 500) {
+          await supabase.from("journal_entry_lines").insert(allLines.slice(i, i + 500));
+        }
+        console.log(`✅ Auto journal entries created for ${journalTxns.length} transactions`);
+      }
+    } catch (jeError) {
+      console.warn("⚠️ Auto journal entry creation failed (non-critical):", jeError);
+    }
+
     return { vendorsCreated, billsCreated, customersCreated, invoicesCreated };
   },
 
-  // Helper: Extract payee/payer name from transaction description
+  /**
+   * Re-resolve categories for all existing transactions, bills, and invoices
+   * using description/vendor/customer name as fallback. Fixes data saved before
+   * the resolveCategory(rawCat, description) fix was applied.
+   * Safe to call multiple times — only updates records where resolution improves the value.
+   */
+  async reCategorizeExistingData(): Promise<void> {
+    const userId = await getCurrentUserId();
+    console.log("🔄 Re-categorizing existing data...");
+
+    // 1. Transactions
+    const { data: txns } = await supabase
+      .from("transactions").select("id, category, description").eq("user_id", userId);
+    if (txns && txns.length > 0) {
+      const updates = txns
+        .map(t => ({ id: t.id, category: resolveCategory(t.category, t.description) }))
+        .filter(u => u.category && u.category !== "Other" && u.category !== (txns.find(t => t.id === u.id)?.category));
+      for (let i = 0; i < updates.length; i += 500) {
+        await supabase.from("transactions").upsert(updates.slice(i, i + 500));
+      }
+      console.log(`✅ Re-categorized ${updates.length} transactions`);
+    }
+
+    // 2. Bills — vendor name is the most reliable signal; override stored "Technology"/"Other" etc.
+    const { data: bills } = await supabase
+      .from("bills").select("id, category, notes, vendors(name)").eq("user_id", userId);
+    if (bills && bills.length > 0) {
+      const updates = (bills as any[])
+        .map(b => {
+          // Vendor name first — catches mis-tagged bills (e.g. Amazon → Technology vs Retail)
+          const vendorName = (b as any).vendors?.name;
+          const vendorCat = vendorName ? guessCategory(vendorName) : null;
+          if (vendorCat && vendorCat !== "Internal Transfer") return { id: b.id, category: vendorCat };
+          // Fall back: notes description → stored category
+          const noteDesc = b.notes?.split(" - ").slice(1).join(" - ").trim() || "";
+          const resolved = resolveCategory(b.category, noteDesc || vendorName);
+          return { id: b.id, category: resolved };
+        })
+        .filter(u => u.category && u.category !== "Other" && u.category !== (bills as any[]).find((b: any) => b.id === u.id)?.category);
+      for (let i = 0; i < updates.length; i += 500) {
+        await supabase.from("bills").upsert(updates.slice(i, i + 500));
+      }
+      console.log(`✅ Re-categorized ${updates.length} bills`);
+    }
+
+    // 3. Invoices — customer name as primary signal
+    const { data: invoices } = await supabase
+      .from("invoices").select("id, category, notes, customers(name)").eq("user_id", userId);
+    if (invoices && invoices.length > 0) {
+      const updates = (invoices as any[])
+        .map(i => {
+          const customerName = (i as any).customers?.name;
+          const customerCat = customerName ? guessCategory(customerName) : null;
+          if (customerCat && customerCat !== "Internal Transfer") return { id: i.id, category: customerCat };
+          const noteDesc = i.notes?.split(" - ").slice(1).join(" - ").trim() || "";
+          const resolved = resolveCategory(i.category, noteDesc || customerName);
+          return { id: i.id, category: resolved };
+        })
+        .filter(u => u.category && u.category !== "Other" && u.category !== (invoices as any[]).find((b: any) => b.id === u.id)?.category);
+      for (let i = 0; i < updates.length; i += 500) {
+        await supabase.from("invoices").upsert(updates.slice(i, i + 500));
+      }
+      console.log(`✅ Re-categorized ${updates.length} invoices`);
+    }
+  },
+
+  /**
+   * Wipe ALL data belonging to the current user across every table.
+   * Called from Settings → "Clear All Data".
+   */
+  async clearAllUserData(): Promise<void> {
+    const userId = await getCurrentUserId();
+
+    // Delete uploaded files (cascades: transactions, analysis_results,
+    // bills + bill_items, invoices + invoice_items via source_file_id FK)
+    await supabase.from("uploaded_files").delete().eq("user_id", userId);
+
+    // Delete auto-created vendors / customers (not covered by file cascade)
+    await supabase.from("vendors").delete().eq("user_id", userId);
+    await supabase.from("customers").delete().eq("user_id", userId);
+
+    // Delete accounting data
+    await supabase.from("journal_entries").delete().eq("user_id", userId);
+    await supabase.from("accounts").delete().eq("user_id", userId);
+    await supabase.from("bank_accounts").delete().eq("user_id", userId);
+    await supabase.from("reconciliations").delete().eq("user_id", userId);
+    await supabase.from("payables_receivables").delete().eq("user_id", userId);
+    await supabase.from("documents").delete().eq("user_id", userId);
+
+    // Delete user settings
+    await supabase.from("budgets").delete().eq("user_id", userId);
+    await supabase.from("user_preferences").delete().eq("user_id", userId);
+
+    // Clear localStorage ghost data
+    localStorage.removeItem("currentFileId");
+    localStorage.removeItem("finance_current_file");
+    localStorage.removeItem("finance_uploaded_files");
+  },
+
+  // Helper: Extract payee/payer name from transaction description or MerchantName
+  // Pass transaction.MerchantName (backend-cleaned) when available for best results
   extractPayeeName(description: string): string {
     if (!description) return "Unknown";
-    
-    // Remove common prefixes and clean up
-    let cleaned = description
-      .replace(/^(POS|ATM|ACH|WIRE|CHECK|DEBIT|CREDIT)\s+/i, "")
-      .replace(/\s+\d{4,}$/, "") // Remove trailing numbers
-      .replace(/\s+#\d+$/, "") // Remove reference numbers
-      .trim();
-    
-    // Take first part if there's a dash or pipe
-    if (cleaned.includes(" - ")) {
-      cleaned = cleaned.split(" - ")[0];
+
+    let s = description.trim();
+
+    // Strip US bank transaction prefixes (with optional 4-digit date MMDD)
+    const prefixPatterns = [
+      /^CHECKCARD\s+\d{4}\s+/i,
+      /^MOBILE\s+PURCHASE\s+\d{4}\s+/i,
+      /^POS\s+PURCHASE\s+\d{4}\s+/i,
+      /^RECURRING\s+PURCHASE\s+\d{4}\s+/i,
+      /^ONLINE\s+PURCHASE\s+\d{4}\s+/i,
+      /^DEBIT\s+CARD\s+PURCHASE\s+\d{4}\s+/i,
+      /^ACH\s+DEBIT\s+/i,
+      /^ACH\s+CREDIT\s+/i,
+      /^WIRE\s+TRANSFER\s+(TO|FROM)\s+/i,
+      /^WIRE\s+(TO|FROM)\s+/i,
+      /^ZELLE\s+(TO|FROM|PAYMENT)\s+/i,
+      /^VENMO\s+PAYMENT\s+/i,
+      /^PAYPAL\s+(TRANSFER\s+)?/i,
+      /^DIRECT\s+(DEBIT|DEPOSIT)\s+/i,
+      /^ATM\s+WITHDRAWAL\s+/i,
+      /^CHECKCARD\s+/i,
+      /^MOBILE\s+PURCHASE\s+/i,
+      /^POS\s+PURCHASE\s+/i,
+      /^(POS|ATM|ACH|WIRE|CHECK|DEBIT|CREDIT)\s+/i,
+    ];
+    for (const p of prefixPatterns) {
+      s = s.replace(p, "").trim();
+      if (s !== description.trim()) break; // stop after first match
     }
-    if (cleaned.includes(" | ")) {
-      cleaned = cleaned.split(" | ")[0];
-    }
-    
-    // Capitalize properly
-    cleaned = cleaned.split(" ").map(word => 
-      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-    ).join(" ");
-    
-    return cleaned || "Unknown";
+
+    // Handle SQ * (Square payments) — extract merchant name after SQ *
+    const sqMatch = s.match(/^SQ\s*\*\s*(.+)/i);
+    if (sqMatch) s = sqMatch[1].trim();
+
+    // Remove trailing US location info (City ST 12345)
+    s = s.replace(/\s+[A-Z]{2}\s+\d{5}(-\d{4})?$/, "").trim();
+    s = s.replace(/\s+[A-Z]{2}$/, "").trim();
+
+    // Remove long numeric/hex references (8+ digits)
+    s = s.replace(/\s+\d{8,}/g, "").trim();
+    s = s.replace(/\b[0-9A-Fa-f]{10,}\b/g, "").trim();
+
+    // Remove RECURRING suffix and store numbers
+    s = s.replace(/\s+RECURRING(\s+CHARGE)?$/i, "").trim();
+    s = s.replace(/\s+#\d+.*$/i, "").trim();
+    s = s.replace(/\s+\d{4,}$/, "").trim();
+
+    // Take first segment before " - " or " | "
+    if (s.includes(" - ")) s = s.split(" - ")[0].trim();
+    if (s.includes(" | ")) s = s.split(" | ")[0].trim();
+
+    // Title-case
+    const result = s.replace(/\w\S*/g, (w) =>
+      w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+    );
+
+    return (result || "Unknown").slice(0, 60);
   },
 
   // Helper: Normalize entity names for comparison

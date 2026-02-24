@@ -4,11 +4,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { replaceAedSymbol } from "@/lib/utils";
+import { resolveCategory } from "@/lib/sectorMapping";
 
 interface PLRow {
   id: string;
   label: string;
-  code?: string;
   isHeader?: boolean;
   isTotal?: boolean;
   quarters: number[];
@@ -31,13 +31,14 @@ export function PLDetailTable({ invoices, bills, accounts, quarterLabels, quarte
   const rows = useMemo(() => {
     const result: PLRow[] = [];
 
-    // Helper: sum invoices in a quarter by category
+    // Helper: sum invoices in a quarter by category (compare resolved categories)
     const invoiceByQuarterCategory = (cat: string, qIdx: number) => {
       const { from, to } = quarterRanges[qIdx];
       return invoices
         .filter(inv => {
           const d = new Date(inv.invoice_date);
-          return d >= from && d <= to && (inv.category || "Other Revenue") === cat;
+          const resolvedCat = resolveCategory(inv.category) || "Other Revenue";
+          return d >= from && d <= to && resolvedCat === cat;
         })
         .reduce((s, inv) => s + Number(inv.total_amount || 0), 0);
     };
@@ -47,17 +48,22 @@ export function PLDetailTable({ invoices, bills, accounts, quarterLabels, quarte
       return bills
         .filter(b => {
           const d = new Date(b.bill_date);
-          return d >= from && d <= to && (b.category || "General Expenses") === cat;
+          const resolvedCat = resolveCategory(b.category) || "General Expenses";
+          return d >= from && d <= to && resolvedCat === cat;
         })
         .reduce((s, b) => s + Number(b.total_amount || 0), 0);
     };
 
-    // Revenue categories
+    // Revenue categories (resolved to proper sector names)
     const revenueCategories = new Set<string>();
-    invoices.forEach(inv => revenueCategories.add(inv.category || "Other Revenue"));
+    invoices.forEach(inv => revenueCategories.add(
+      resolveCategory(inv.category) || "Other Revenue"
+    ));
 
     const expenseCategories = new Set<string>();
-    bills.forEach(b => expenseCategories.add(b.category || "General Expenses"));
+    bills.forEach(b => expenseCategories.add(
+      resolveCategory(b.category) || "General Expenses"
+    ));
 
     // Revenue section
     result.push({ id: "rev-header", label: "REVENUE", isHeader: true, quarters: [], changePct: null });
@@ -69,7 +75,7 @@ export function PLDetailTable({ invoices, bills, accounts, quarterLabels, quarte
       const last = quarters[quarters.length - 1];
       const prev = quarters.length > 1 ? quarters[quarters.length - 2] : 0;
       const changePct = prev > 0 ? ((last - prev) / prev) * 100 : null;
-      result.push({ id: `rev-${idx}`, label: cat, code: `4${String(idx).padStart(4, "0")}`, quarters, changePct });
+      result.push({ id: `rev-${idx}`, label: cat, quarters, changePct });
     });
 
     result.push({ id: "rev-total", label: "TOTAL REVENUE", isTotal: true, quarters: revTotals, changePct: revTotals.length > 1 && revTotals[revTotals.length - 2] > 0 ? ((revTotals[revTotals.length - 1] - revTotals[revTotals.length - 2]) / revTotals[revTotals.length - 2]) * 100 : null });
@@ -84,7 +90,7 @@ export function PLDetailTable({ invoices, bills, accounts, quarterLabels, quarte
       const last = quarters[quarters.length - 1];
       const prev = quarters.length > 1 ? quarters[quarters.length - 2] : 0;
       const changePct = prev > 0 ? ((last - prev) / prev) * 100 : null;
-      result.push({ id: `exp-${idx}`, label: cat, code: `6${String(idx).padStart(4, "0")}`, quarters, changePct });
+      result.push({ id: `exp-${idx}`, label: cat, quarters, changePct });
     });
 
     result.push({ id: "exp-total", label: "TOTAL OPERATING EXPENSES", isTotal: true, quarters: expTotals, changePct: expTotals.length > 1 && expTotals[expTotals.length - 2] > 0 ? ((expTotals[expTotals.length - 1] - expTotals[expTotals.length - 2]) / expTotals[expTotals.length - 2]) * 100 : null });
@@ -132,10 +138,7 @@ export function PLDetailTable({ invoices, bills, accounts, quarterLabels, quarte
                 onClick={() => !row.isHeader && onRowClick(row)}
               >
                 <TableCell className={`${row.isHeader || row.isTotal ? "font-bold text-foreground" : ""}`}>
-                  <div className="flex items-center gap-2">
-                    {row.code && <span className="text-xs text-muted-foreground font-mono">{row.code}</span>}
-                    <span className={!row.isHeader && !row.isTotal ? "pl-4" : ""}>{row.label}</span>
-                  </div>
+                  <span className={!row.isHeader && !row.isTotal ? "pl-4" : ""}>{row.label}</span>
                 </TableCell>
                 {row.quarters.map((val, qi) => (
                   <TableCell key={qi} className={`text-right ${row.isTotal ? "font-bold" : ""} ${val < 0 ? "text-destructive" : ""}`}>

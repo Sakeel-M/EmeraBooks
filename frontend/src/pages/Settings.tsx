@@ -53,26 +53,9 @@ const Settings = () => {
 
   const clearAllData = async () => {
     try {
-      const files = await database.getAllFiles();
-      let failed = 0;
-      for (const file of files) {
-        try {
-          await database.deleteFile(file.id);
-        } catch {
-          failed++;
-        }
-      }
-      localStorage.removeItem("currentFileId");
+      await database.clearAllUserData();
       setShowClearDialog(false);
-      if (failed > 0) {
-        toast({
-          title: "Partial clear",
-          description: `${files.length - failed} files removed, ${failed} failed. Please try again.`,
-          variant: "destructive",
-        });
-      } else {
-        toast({ title: "Data Cleared", description: "All your data has been removed." });
-      }
+      toast({ title: "Data Cleared", description: "All your data has been permanently removed." });
       window.location.href = "/";
     } catch (err: any) {
       setShowClearDialog(false);

@@ -1,3 +1,5 @@
+import { DIRHAM_SYMBOL } from './utils';
+
 // Utility keywords for auto-extraction from bank statements
 export const UTILITY_KEYWORDS = [
   'electricity', 'electric', 'power', 'etisalat', 'du',
@@ -138,18 +140,24 @@ export function calculateTotals(items: PayableReceivable[]) {
   };
 }
 
-// Check if item is overdue
+// Check if item is overdue (uses UTC midnight to avoid timezone edge cases)
 export function isOverdue(dueDate?: string): boolean {
   if (!dueDate) return false;
-  return new Date(dueDate) < new Date();
+  // Treat date-only strings as UTC midnight to prevent timezone-driven false positives
+  const normalized = dueDate.includes("T") ? dueDate : dueDate + "T00:00:00Z";
+  return new Date(normalized) < new Date();
 }
 
-// Format currency
+// Format currency — uses the new UAE Dirham symbol for AED
 export function formatCurrency(amount: number, currency: string = 'USD'): string {
   const formatted = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(amount);
-  if (currency !== 'AED') return formatted;
-  return formatted.replace(/AED|د\.إ\.?\s?/g, 'Đ');
+  if (currency === 'AED') {
+    return formatted.replace(/^AED\s*/, DIRHAM_SYMBOL + '\u00A0');
+  }
+  return formatted;
 }

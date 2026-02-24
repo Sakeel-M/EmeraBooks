@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 import { useToast } from "@/hooks/use-toast";
@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 import { Loader2, RefreshCw, Download, FilePlus, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useQueryClient } from "@tanstack/react-query";
 import { QuarterNavigator, getCurrentQuarter, useQuarterDates, type DateMode } from "@/components/dashboard/QuarterNavigator";
 import { startOfYear, endOfYear, format } from "date-fns";
 
@@ -43,11 +44,20 @@ export interface AnalysisData {
 
 const Index = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const reCategorizedRef = useRef(false);
   const { toast } = useToast();
+
+  // Synchronous: if a file ID is cached in localStorage, we know data is coming
+  // Used to prevent "flash of empty state" while async init() re-loads on navigation
+  const [hasKnownFile] = useState(() => !!database.getCurrentFile());
 
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [currentFileId, setCurrentFileId] = useState<string | null>(null);
@@ -105,10 +115,12 @@ const Index = () => {
   }, []);
 
   const loadFileData = useCallback(async (fileId: string) => {
-    const file = await database.getFileById(fileId);
+    const [file, txns, analysis] = await Promise.all([
+      database.getFileById(fileId),
+      database.getTransactionsByFileId(fileId),
+      database.getAnalysisByFileId(fileId),
+    ]);
     if (!file) return;
-    const txns = await database.getTransactionsByFileId(fileId);
-    const analysis = await database.getAnalysisByFileId(fileId);
     const info: BankInfo = {
       bank_name: file.bank_name, currency: file.currency,
       country: file.country || "", bank_code: file.bank_code || "",
@@ -126,19 +138,48 @@ const Index = () => {
 
   useEffect(() => {
     if (!user) return;
+    setDataLoading(true);
     const init = async () => {
-      const allFiles = await loadFiles();
-      const savedFileId = database.getCurrentFile();
-      if (savedFileId && allFiles.some((f) => f.id === savedFileId)) {
-        await loadFileData(savedFileId);
-      } else if (allFiles.length > 0) {
-        await loadFileData(allFiles[0].id);
-      } else {
-        database.cleanupOrphanedData().catch(console.error);
-        localStorage.removeItem("currentFileId");
-        localStorage.removeItem("finance_current_file");
-        localStorage.removeItem("finance_uploaded_files");
-        setActiveTab("add-report");
+      try {
+        const allFiles = await loadFiles();
+        const savedFileId = database.getCurrentFile();
+        if (savedFileId && allFiles.some((f) => f.id === savedFileId)) {
+          await loadFileData(savedFileId);
+          if (!reCategorizedRef.current) {
+            reCategorizedRef.current = true;
+            database.reCategorizeExistingData()
+              .then(() => {
+                queryClient.invalidateQueries({ queryKey: ["bills"] });
+                queryClient.invalidateQueries({ queryKey: ["vendor-bills"] });
+                queryClient.invalidateQueries({ queryKey: ["vendors"] });
+                queryClient.invalidateQueries({ queryKey: ["customers"] });
+                queryClient.invalidateQueries({ queryKey: ["invoices"] });
+              })
+              .catch(console.warn);
+          }
+        } else if (allFiles.length > 0) {
+          await loadFileData(allFiles[0].id);
+          if (!reCategorizedRef.current) {
+            reCategorizedRef.current = true;
+            database.reCategorizeExistingData()
+              .then(() => {
+                queryClient.invalidateQueries({ queryKey: ["bills"] });
+                queryClient.invalidateQueries({ queryKey: ["vendor-bills"] });
+                queryClient.invalidateQueries({ queryKey: ["vendors"] });
+                queryClient.invalidateQueries({ queryKey: ["customers"] });
+                queryClient.invalidateQueries({ queryKey: ["invoices"] });
+              })
+              .catch(console.warn);
+          }
+        } else {
+          database.cleanupOrphanedData().catch(console.error);
+          localStorage.removeItem("currentFileId");
+          localStorage.removeItem("finance_current_file");
+          localStorage.removeItem("finance_uploaded_files");
+          setActiveTab("add-report");
+        }
+      } finally {
+        setDataLoading(false);
       }
     };
     init();
@@ -150,6 +191,23 @@ const Index = () => {
       setIsAnalyzing(true);
       if (!data.full_data || !Array.isArray(data.full_data) || !data.bank_info) throw new Error("Failed to process data");
       const fileName = data.full_data[0]?.["File Name"] || data.full_data[0]?.file_name || `${data.bank_info.bank_name} - ${new Date().toLocaleDateString()}`;
+
+      // Prevent duplicate uploads: if a file with this name already exists, load it instead
+      const currentFiles = await database.getAllFiles();
+      const existingFile = currentFiles.find(f => f.file_name === fileName);
+      if (existingFile) {
+        await loadFileData(existingFile.id);
+        setFiles(currentFiles);
+        setActiveTab("overview");
+        setIsAnalyzing(false);
+        toast({
+          title: "File Already Uploaded",
+          description: "Showing existing data. Delete this report in 'Manage Reports' first to re-process it.",
+          duration: 8000,
+        });
+        return;
+      }
+
       const savedFile = await database.saveUploadedFile({
         file_name: fileName, bank_name: data.bank_info.bank_name, currency: data.bank_info.currency,
         country: data.bank_info.country || "", bank_code: data.bank_info.bank_code || "", total_transactions: data.total_rows,
@@ -166,20 +224,55 @@ const Index = () => {
       toast({ title: "Data Loaded!", description: "Your transactions are ready. AI insights are being generated..." });
 
       // Phase 2: Run AI analysis in background (non-blocking)
+      setIsAiAnalyzing(true);
       api.analyzeData(data.full_data, data.bank_info)
         .then(async (analysis) => {
           await database.saveAnalysis(savedFile.id, { ai_analysis: analysis.ai_analysis, basic_statistics: analysis.basic_statistics, data_overview: analysis.data_overview });
           await loadFileData(savedFile.id);
-          toast({ title: "AI Insights Ready!", description: "Your financial analysis is now available." });
+          toast({ title: "AI Insights Ready!", description: "Your financial analysis is now available in the Basic Insights tab." });
         })
         .catch((err) => {
           console.warn("AI analysis error:", err);
           toast({ title: "AI Analysis Pending", description: "You can re-analyze anytime using the Re-analyze button.", variant: "default" });
+        })
+        .finally(() => {
+          setIsAiAnalyzing(false);
         });
 
       // Sync business records in background (non-blocking)
+      setIsSyncing(true);
       database.syncBankDataToBusinessRecords(savedFile.id, data.full_data, data.bank_info.currency)
-        .catch((err) => console.warn("Business records sync error:", err));
+        .then((result) => {
+          // Invalidate all dependent React Query caches so Bills/Vendors/Customers refresh
+          queryClient.invalidateQueries({ queryKey: ["bills"] });
+          queryClient.invalidateQueries({ queryKey: ["vendor-bills"] });
+          queryClient.invalidateQueries({ queryKey: ["vendors"] });
+          queryClient.invalidateQueries({ queryKey: ["customers"] });
+          queryClient.invalidateQueries({ queryKey: ["invoices"] });
+          queryClient.invalidateQueries({ queryKey: ["journal-entries"] });
+          queryClient.invalidateQueries({ queryKey: ["payables"] });
+          if (result.billsCreated > 0 || result.invoicesCreated > 0) {
+            toast({ title: "Records Synced", description: `Created ${result.billsCreated} bills, ${result.invoicesCreated} invoices, ${result.vendorsCreated} vendors.` });
+          }
+          // Re-categorize all DB records now that new data exists
+          reCategorizedRef.current = false;
+          database.reCategorizeExistingData()
+            .then(() => {
+              queryClient.invalidateQueries({ queryKey: ["bills"] });
+              queryClient.invalidateQueries({ queryKey: ["vendor-bills"] });
+              queryClient.invalidateQueries({ queryKey: ["vendors"] });
+              queryClient.invalidateQueries({ queryKey: ["customers"] });
+              queryClient.invalidateQueries({ queryKey: ["invoices"] });
+            })
+            .catch(console.warn);
+        })
+        .catch((err) => {
+          console.warn("Business records sync error:", err);
+          toast({ title: "Sync Warning", description: "Data uploaded but business records sync had an issue. Check Vendors and Bills pages.", variant: "default" });
+        })
+        .finally(() => {
+          setIsSyncing(false);
+        });
     } catch (error: any) {
       setIsAnalyzing(false);
       toast({ title: "Upload Failed", description: error.message || "Could not process your data.", variant: "destructive" });
@@ -217,6 +310,7 @@ const Index = () => {
     } else { setFiles((prev) => prev.filter((f) => f.id !== fileId)); }
   };
 
+  // Only block on auth (< 200ms). Data loading happens in background — no full-page spinner on return navigation.
   if (authLoading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   if (!user) return null;
 
@@ -228,7 +322,9 @@ const Index = () => {
   const currency = bankInfo?.currency || "USD";
   const fmtCur = (v: number) => formatAmount(v, currency);
 
-  const hasData = transactions.length > 0;
+  // Keep hasData true while we're re-loading on return navigation (hasKnownFile = cached file exists)
+  // This prevents a brief flash of the "upload" empty state during background data fetch
+  const hasData = transactions.length > 0 || (dataLoading && hasKnownFile);
 
   return (
     <Layout>
@@ -304,11 +400,11 @@ const Index = () => {
             )}
             <TabsTrigger value="add-report" className="gap-1">
               <FilePlus className="w-3 h-3" />
-              Add Report
+              Add Bank Statement
             </TabsTrigger>
             <TabsTrigger value="manage-reports" className="gap-1">
               <FolderOpen className="w-3 h-3" />
-              Manage Reports
+              Manage Bank Statements
             </TabsTrigger>
           </TabsList>
 
@@ -340,7 +436,11 @@ const Index = () => {
             </>
           )}
           <TabsContent value="add-report">
-            <AddReportTab onUploadSuccess={handleFileUpload} />
+            <AddReportTab
+              onUploadSuccess={handleFileUpload}
+              existingFiles={files}
+              onManageReports={() => setActiveTab("manage-reports")}
+            />
           </TabsContent>
           <TabsContent value="manage-reports">
             <ManageReportsTab files={files} currentFileId={currentFileId} onSelectFile={handleSelectFile} onDeleteFile={handleDeleteFile} />
@@ -354,6 +454,18 @@ const Index = () => {
               <p className="text-lg font-medium text-foreground">Analyzing your finances...</p>
               <p className="text-sm text-muted-foreground">AI is processing your data</p>
             </div>
+          </div>
+        )}
+        {isAiAnalyzing && !isAnalyzing && (
+          <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-lg border bg-background/95 px-4 py-3 shadow-lg text-sm">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            <span className="text-muted-foreground">AI is generating financial insights…</span>
+          </div>
+        )}
+        {isSyncing && !isAnalyzing && (
+          <div className="fixed bottom-4 left-4 z-40 flex items-center gap-2 rounded-lg border bg-background/95 px-4 py-3 shadow-lg text-sm">
+            <Loader2 className="h-4 w-4 animate-spin text-amber-500" />
+            <span className="text-muted-foreground">Syncing bills, vendors &amp; records…</span>
           </div>
         )}
       </div>

@@ -57,8 +57,8 @@ const STANDARD_ACCOUNTS = [
 ];
 
 // Maps transaction category + sign to the correct expense/income account number
-function categoryToAccountNumber(category: string, isIncome: boolean): string {
-  const cat = category.toLowerCase();
+function categoryToAccountNumber(category: string | null | undefined, isIncome: boolean): string {
+  const cat = (category || "").toLowerCase();
   if (isIncome) {
     if (cat.includes("banking") || cat.includes("finance")) return "4300";
     if (cat.includes("sales")) return "4000";
@@ -96,10 +96,13 @@ export function ChartOfAccountsTab() {
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ["accounts"],
     queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
       const { data: accts } = await supabase
         .from("accounts")
         .select("*")
         .eq("is_active", true)
+        .eq("user_id", user.id)
         .order("account_type")
         .order("account_number");
       if (!accts || accts.length === 0) return [];
@@ -215,6 +218,14 @@ export function ChartOfAccountsTab() {
 
       // Step 2.5: Clean up orphaned journal entries (entries with no lines from failed syncs)
       setSyncStatus("Cleaning up orphaned entries...");
+
+      // Delete old BANK-AUTO-* entries (created by a previous sync format — always have 0 amounts)
+      await supabase
+        .from("journal_entries")
+        .delete()
+        .eq("user_id", user.id)
+        .like("reference", "BANK-AUTO%");
+
       const { data: syncedEntries } = await supabase
         .from("journal_entries")
         .select("id, reference")
@@ -365,13 +376,13 @@ export function ChartOfAccountsTab() {
 
       setSyncProgress(85);
 
-      // Step 6: Sync bills
+      // Step 6: Sync bills (include ALL statuses — unpaid bills create AP liability)
       setSyncStatus("Syncing bills...");
       const { data: bills } = await supabase
         .from("bills")
-        .select("id, bill_date, bill_number, total_amount, category")
+        .select("id, bill_date, bill_number, total_amount, category, status")
         .eq("user_id", user.id)
-        .in("status", ["paid"]);
+        .in("status", ["paid", "pending", "overdue", "partial"]);
 
       const { data: existingBillRefs } = await supabase
         .from("journal_entries")
@@ -401,17 +412,27 @@ export function ChartOfAccountsTab() {
 
         const lines: any[] = [];
         const apAccountId = accountMap["2000"]; // Accounts Payable
+        const cashAccountId2 = accountMap["1000"]; // Cash
 
         for (const entry of insertedEntries) {
           const bill = batch.find(b => `BILL:${b.id}` === entry.reference);
-          if (!bill || !apAccountId) continue;
+          if (!bill) continue;
           const expAccountNum = categoryToAccountNumber(bill.category || "", false);
           const expAccountId = accountMap[expAccountNum];
           if (!expAccountId) continue;
           const amount = Math.abs(bill.total_amount);
-          // Debit Expense, Credit AP
-          lines.push({ journal_entry_id: entry.id, account_id: expAccountId, debit_amount: amount, credit_amount: 0 });
-          lines.push({ journal_entry_id: entry.id, account_id: apAccountId, debit_amount: 0, credit_amount: amount });
+
+          if (bill.status === "paid") {
+            // Paid bill: Dr Expense / Cr Cash
+            if (!cashAccountId2) continue;
+            lines.push({ journal_entry_id: entry.id, account_id: expAccountId, debit_amount: amount, credit_amount: 0 });
+            lines.push({ journal_entry_id: entry.id, account_id: cashAccountId2, debit_amount: 0, credit_amount: amount });
+          } else {
+            // Unpaid bill: Dr Expense / Cr Accounts Payable (creates AP liability)
+            if (!apAccountId) continue;
+            lines.push({ journal_entry_id: entry.id, account_id: expAccountId, debit_amount: amount, credit_amount: 0 });
+            lines.push({ journal_entry_id: entry.id, account_id: apAccountId, debit_amount: 0, credit_amount: amount });
+          }
         }
 
         if (lines.length > 0) await supabase.from("journal_entry_lines").insert(lines);
@@ -519,9 +540,7 @@ export function ChartOfAccountsTab() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Number</TableHead>
                     <TableHead>Name</TableHead>
-                    <TableHead>Description</TableHead>
                     <TableHead className="text-right">Balance</TableHead>
                     <TableHead className="w-[100px]" />
                   </TableRow>
@@ -529,9 +548,7 @@ export function ChartOfAccountsTab() {
                 <TableBody>
                   {(accts as any[]).map((a: any) => (
                     <TableRow key={a.id}>
-                      <TableCell className="font-mono">{a.account_number}</TableCell>
                       <TableCell className="font-medium">{a.account_name}</TableCell>
-                      <TableCell className="text-muted-foreground">{a.description || "—"}</TableCell>
                       <TableCell className="text-right font-mono">
                         {a.computed_balance !== 0 ? (
                           <span className={a.computed_balance > 0 ? "text-green-600" : "text-red-600"}>

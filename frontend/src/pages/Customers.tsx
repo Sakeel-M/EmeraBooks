@@ -17,9 +17,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCurrency } from "@/hooks/useCurrency";
-import { guessCategory } from "@/lib/sectorMapping";
+import { resolveCategory, guessCategory } from "@/lib/sectorMapping";
 import { getSectorStyle } from "@/lib/sectorStyles";
-import { cn } from "@/lib/utils";
+import { cn, formatAmount } from "@/lib/utils";
 
 interface InvoiceSummary {
   id: string;
@@ -70,9 +70,12 @@ export default function Customers() {
   const fetchCustomers = async () => {
     setIsLoading(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setIsLoading(false); return; }
       const { data, error } = await supabase
         .from("customers")
-        .select("*, invoices(id, total_amount, amount_paid, status)")
+        .select("*, invoices(id, total_amount, amount_paid, status, category, due_date)")
+        .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -82,12 +85,17 @@ export default function Customers() {
         const totalInvoiced = invs.reduce((sum, i) => sum + (i.total_amount || 0), 0);
         const totalPaid = invs.reduce((sum, i) => sum + (i.amount_paid || 0), 0);
         const outstandingReceivable = invs
-          .filter((i) => i.status === "sent" || i.status === "overdue")
+          .filter((i) => i.status !== "paid" && i.status !== "cancelled")
           .reduce((sum, i) => sum + Math.max(0, (i.total_amount || 0) - (i.amount_paid || 0)), 0);
         const outstandingCount = invs.filter(
-          (i) => i.status === "sent" || i.status === "overdue"
+          (i) => i.status !== "paid" && i.status !== "cancelled"
         ).length;
-        return { ...c, totalInvoiced, totalPaid, outstandingReceivable, outstandingCount };
+        const now = new Date();
+        const hasOverdue = invs.some(
+          (i) => i.status !== "paid" && i.status !== "cancelled" &&
+            i.due_date && new Date(i.due_date + "T00:00:00Z") < now
+        );
+        return { ...c, totalInvoiced, totalPaid, outstandingReceivable, outstandingCount, hasOverdue };
       });
 
       setCustomers(enriched);
@@ -102,23 +110,38 @@ export default function Customers() {
     }
   };
 
-  // Unique categories derived from customer names
+  // Resolve category: invoice categories (from resolveCategory in sync) first → stored category → name guess → "Other"
+  const getCustomerCategory = (c: Customer): string => {
+    // Mode-count across all invoice categories (set by syncBankDataToBusinessRecords via resolveCategory)
+    const catCounts = new Map<string, number>();
+    (c.invoices || []).forEach((i: any) => {
+      if (!i.category) return;
+      const resolved = resolveCategory(i.category, undefined);
+      if (resolved && resolved !== "Other" && resolved !== "Internal Transfer") {
+        catCounts.set(resolved, (catCounts.get(resolved) || 0) + 1);
+      }
+    });
+    let bestCat = "";
+    let maxCount = 0;
+    catCounts.forEach((count, cat) => { if (count > maxCount) { maxCount = count; bestCat = cat; } });
+    if (bestCat) return bestCat;
+    // Fallback: stored customer category, then guess from name
+    const fromName = guessCategory(c.name);
+    if (fromName && fromName !== "Internal Transfer") return fromName;
+    return resolveCategory((c as any).category, undefined) || "Other";
+  };
+
+  // Unique categories derived from customers
   const availableCategories = useMemo(() => {
     const cats = new Set<string>();
-    customers.forEach((c) => {
-      const cat = guessCategory(c.name);
-      cats.add(cat || "Other");
-    });
+    customers.forEach((c) => cats.add(getCustomerCategory(c)));
     return Array.from(cats).sort();
   }, [customers]);
 
   // Filtered customers by selected category
   const filteredCustomers = useMemo(() => {
     if (!selectedCategory) return customers;
-    return customers.filter((c) => {
-      const cat = guessCategory(c.name) || "Other";
-      return cat === selectedCategory;
-    });
+    return customers.filter((c) => getCustomerCategory(c) === selectedCategory);
   }, [customers, selectedCategory]);
 
   const handleDelete = async (customerId: string) => {
@@ -154,16 +177,7 @@ export default function Customers() {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    const formatted = new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-    if (currency !== "AED") return formatted;
-    return formatted.replace(/AED|د\.إ\.?\s?/g, "Đ");
-  };
+  const formatCurrency = (amount: number) => formatAmount(amount, currency);
 
   const columns: ColumnDef<Customer>[] = [
     {
@@ -225,7 +239,7 @@ export default function Customers() {
       id: "sector",
       header: "Sector",
       cell: ({ row }) => {
-        const sector = guessCategory(row.original.name) || "Other";
+        const sector = getCustomerCategory(row.original);
         const style = getSectorStyle(sector.toLowerCase(), 0);
         return (
           <span
@@ -280,11 +294,13 @@ export default function Customers() {
         const invs = row.original.invoices || [];
         const outstanding = row.original.outstandingReceivable || 0;
         const total = row.original.totalInvoiced || 0;
+        const hasOverdue = row.original.hasOverdue || false;
         if (invs.length === 0) {
           return <span className="text-muted-foreground text-xs">No invoices</span>;
         }
         if (outstanding > 0) {
-          return <StatusBadge status="sent" />;
+          // Show "overdue" if any unpaid invoice is past its due date
+          return <StatusBadge status={hasOverdue ? "overdue" : "sent"} />;
         }
         if (total > 0) {
           return <StatusBadge status="paid" />;
@@ -345,7 +361,7 @@ export default function Customers() {
               All ({customers.length})
             </button>
             {availableCategories.map((cat) => {
-              const count = customers.filter((c) => (guessCategory(c.name) || "Other") === cat).length;
+              const count = customers.filter((c) => getCustomerCategory(c) === cat).length;
               const style = getSectorStyle(cat.toLowerCase(), 0);
               const isActive = selectedCategory === cat;
               return (

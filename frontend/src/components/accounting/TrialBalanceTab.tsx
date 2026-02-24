@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { FileText, CheckCircle, AlertTriangle, Download } from "lucide-react";
+import { FileText, CheckCircle, AlertTriangle, Download, Info, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { EnhancedDateRangePicker } from "@/components/shared/EnhancedDateRangePicker";
@@ -35,13 +35,29 @@ export function TrialBalanceTab() {
   const { currency } = useCurrency();
   const fmtVal = (v: number) => formatAmount(v, currency);
 
+  const { data: hasFiles = false } = useQuery({
+    queryKey: ["has-uploaded-files"],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return false;
+      const { count } = await supabase
+        .from("uploaded_files")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id);
+      return (count || 0) > 0;
+    },
+  });
+
   const { data: result = { accounts: [], hasAccounts: false }, isLoading } = useQuery({
     queryKey: ["trial-balance", dateFrom.toISOString(), dateTo.toISOString()],
     queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return { accounts: [], hasAccounts: false };
       const { data: accts } = await supabase
         .from("accounts")
         .select("*")
         .eq("is_active", true)
+        .eq("user_id", user.id)
         .order("account_type")
         .order("account_number");
 
@@ -55,6 +71,7 @@ export function TrialBalanceTab() {
         supabase
           .from("journal_entries")
           .select("id")
+          .eq("user_id", user.id)
           .gte("entry_date", fromStr)
           .lte("entry_date", toStr)
       );
@@ -157,7 +174,14 @@ export function TrialBalanceTab() {
       ]);
       rows.push(["", "", "", "", ""]);
     }
-    rows.push(["Net Income", "", "", "", netIncome >= 0 ? netIncome.toFixed(2) : "0.00"]);
+    // Net Income: positive → Credit column; negative (loss) → Debit column
+    rows.push([
+      "Net Income",
+      "",
+      "",
+      netIncome < 0 ? Math.abs(netIncome).toFixed(2) : "0.00",
+      netIncome >= 0 ? netIncome.toFixed(2) : "0.00",
+    ]);
     rows.push(["TOTAL", "", "", totalDebit.toFixed(2), totalCredit.toFixed(2)]);
 
     const csv = rows.map(r => r.map(c => `"${c}"`).join(",")).join("\n");
@@ -186,11 +210,57 @@ export function TrialBalanceTab() {
         </div>
 
         {!hasAccounts && !isLoading ? (
-          <EmptyState
-            icon={FileText}
-            title="No accounts set up"
-            description='Go to the Chart of Accounts tab and click "Sync Transactions → Journals" to auto-populate from your uploaded data.'
-          />
+          !hasFiles ? (
+            <div className="flex flex-col items-center gap-4 py-12 text-center">
+              <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
+                <Upload className="w-6 h-6 text-amber-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-base">No bank statement uploaded yet</p>
+                <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                  Go to the <strong>Home</strong> page and upload a bank statement first. Once uploaded and synced, your accounts will appear here automatically.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-4 py-12 text-center">
+              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                <Info className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-base">No chart of accounts set up</p>
+                <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                  Go to the <strong>Chart of Accounts</strong> tab, click <strong>Load Standard Accounts</strong>, then click <strong>Sync Transactions → Journals</strong> to populate the trial balance.
+                </p>
+              </div>
+            </div>
+          )
+        ) : hasAccounts && !hasActivity && !isLoading ? (
+          !hasFiles ? (
+            <div className="flex flex-col items-center gap-4 py-12 text-center">
+              <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
+                <Upload className="w-6 h-6 text-amber-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-base">No bank statement uploaded yet</p>
+                <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                  Go to the <strong>Home</strong> page and upload a bank statement. Once uploaded and synced, your trial balance will populate automatically.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-4 py-12 text-center">
+              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                <Info className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-base">No journal entries for this period</p>
+                <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                  Your bank statement is uploaded but no journal entries have been synced yet. Go to the <strong>Chart of Accounts</strong> tab and click <strong>Sync Transactions → Journals</strong>.
+                </p>
+              </div>
+            </div>
+          )
         ) : (
           <>
             <div className="flex items-center gap-2 flex-wrap">
@@ -198,16 +268,12 @@ export function TrialBalanceTab() {
                 <Badge className="bg-green-100 text-green-700 gap-1">
                   <CheckCircle className="w-3 h-3" />Balanced
                 </Badge>
-              ) : isBalanced && !hasActivity ? (
-                <Badge variant="outline" className="gap-1 text-muted-foreground">
-                  No journal entries in period
-                </Badge>
-              ) : (
+              ) : !isBalanced ? (
                 <Badge variant="destructive" className="gap-1">
                   <AlertTriangle className="w-3 h-3" />
                   Out of balance by {fmtVal(Math.abs(totalDebit - totalCredit))}
                 </Badge>
-              )}
+              ) : null}
               {hasActivity && (
                 <span className="text-sm text-muted-foreground">
                   {format(dateFrom, "MMM d, yyyy")} – {format(dateTo, "MMM d, yyyy")}
@@ -219,7 +285,6 @@ export function TrialBalanceTab() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50">
-                    <TableHead className="w-24">Account #</TableHead>
                     <TableHead>Account Name</TableHead>
                     <TableHead className="text-right w-36">Debit</TableHead>
                     <TableHead className="text-right w-36">Credit</TableHead>
@@ -242,8 +307,7 @@ export function TrialBalanceTab() {
                       // Account rows
                       ...grp.map((a: any) => (
                         <TableRow key={a.id}>
-                          <TableCell className="font-mono text-sm pl-6">{a.account_number}</TableCell>
-                          <TableCell className="text-sm">{a.account_name}</TableCell>
+                          <TableCell className="text-sm pl-6">{a.account_name}</TableCell>
                           <TableCell className="text-right font-mono text-sm">
                             {a.computed_debit > 0 ? fmtVal(a.computed_debit) : "—"}
                           </TableCell>

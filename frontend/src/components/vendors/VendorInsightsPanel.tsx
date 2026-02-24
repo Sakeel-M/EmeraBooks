@@ -3,6 +3,7 @@ import { Users, DollarSign, UserPlus, Layers } from "lucide-react";
 import { BarChart, Bar, ResponsiveContainer } from "recharts";
 import { useCurrency } from "@/hooks/useCurrency";
 import { formatAmount } from "@/lib/utils";
+import { guessCategory } from "@/lib/sectorMapping";
 
 interface VendorInsightsPanelProps {
   vendors: any[];
@@ -10,25 +11,24 @@ interface VendorInsightsPanelProps {
   quarterLabel: string;
   quarterFrom: Date;
   quarterTo: Date;
+  activeVendorCount?: number;
 }
 
-export function VendorInsightsPanel({ vendors, bills, quarterLabel, quarterFrom, quarterTo }: VendorInsightsPanelProps) {
+export function VendorInsightsPanel({ vendors, bills, quarterLabel, quarterFrom, quarterTo, activeVendorCount }: VendorInsightsPanelProps) {
   // Bills are already filtered by quarter from parent
   const totalSpend = bills.reduce((s, b) => s + Number(b.total_amount || 0), 0);
   const totalTransactions = bills.length;
 
-  // Unique vendors with bills in this quarter
-  const activeVendorIds = new Set(bills.map((b) => b.vendor_id).filter(Boolean));
-  const activeVendors = activeVendorIds.size;
+  // Active = passed from Vendors.tsx (counts vendors with matched transactions OR created in range)
+  // Fall back to vendors with bills in this period if prop not provided
+  const activeVendorFromBills = new Set(bills.map((b) => b.vendor_id).filter(Boolean)).size;
+  const activeVendors = activeVendorCount ?? activeVendorFromBills;
 
-  // Vendors created in this quarter
-  const newVendors = vendors.filter((v) => {
-    const created = new Date(v.created_at);
-    return created >= quarterFrom && created <= quarterTo;
-  }).length;
+  // Vendors with at least one transaction in this period (created_at is unreliable — it's the sync date)
+  const newVendors = new Set(bills.map((b) => b.vendor_id).filter(Boolean)).size;
 
-  // Categorized vendors
-  const multiCatVendors = vendors.filter((v) => v.category).length;
+  // Categorized = vendors whose name resolves to a known sector (dynamic, not stored DB field)
+  const multiCatVendors = vendors.filter(v => !!guessCategory(v.name) || !!v.category).length;
 
   // Monthly spend chart data (only months in the quarter)
   const monthlySpend = new Map<string, number>();
@@ -88,7 +88,7 @@ export function VendorInsightsPanel({ vendors, bills, quarterLabel, quarterFrom,
               <UserPlus className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">{quarterLabel} · New Vendors</p>
+              <p className="text-xs text-muted-foreground">{quarterLabel} · With Spend</p>
               <p className="text-xl font-bold">{newVendors}</p>
             </div>
           </div>

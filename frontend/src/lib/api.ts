@@ -1,4 +1,15 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://72.60.222.167/api";
+// In development the Vite dev-server proxy forwards /api → http://127.0.0.1:5000
+// (no CORS needed). For production, set VITE_API_BASE_URL to the absolute backend URL.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+const API_SECRET_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
+
+/** Returns headers that include the API key when one is configured. */
+function apiHeaders(extra?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = { ...extra };
+  if (API_SECRET_KEY) headers["X-API-Key"] = API_SECRET_KEY;
+  return headers;
+}
+
 export interface UploadResponse {
   message: string;
   data: any[];
@@ -26,11 +37,17 @@ export const api = {
 
     const response = await fetch(`${API_BASE_URL}/upload`, {
       method: "POST",
+      headers: apiHeaders(),
       body: formData,
     });
 
     if (!response.ok) {
-      throw new Error("Upload failed");
+      let msg = `Server error ${response.status}`;
+      try {
+        const body = await response.json();
+        if (body?.error) msg = body.error;
+      } catch {}
+      throw new Error(msg);
     }
 
     return response.json();
@@ -43,9 +60,7 @@ export const api = {
     try {
       const response = await fetch(`${API_BASE_URL}/analyze`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: apiHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           data,
           bank_info: bankInfo,
@@ -70,7 +85,7 @@ export const api = {
   },
 
   async healthCheck(): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/health`);
+    const response = await fetch(`${API_BASE_URL}/health`, { headers: apiHeaders() });
     return response.json();
   },
 };

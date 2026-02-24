@@ -2,7 +2,7 @@ import {
   Landmark, Car, ShoppingCart, Home, Utensils, Heart, GraduationCap,
   Briefcase, Wifi, Zap, Plane, Gift, Folder, type LucideIcon,
   CreditCard, Building2, Wrench, Music, Dumbbell, Shirt, Baby,
-  PawPrint, Pill, TreePine, Monitor
+  PawPrint, Pill, TreePine, Monitor, ArrowLeftRight, TrendingUp
 } from "lucide-react";
 
 interface SectorStyle {
@@ -32,8 +32,14 @@ const SECTOR_MAP: Record<string, SectorStyle> = {
   "travel": { icon: Plane, borderColor: "border-sky-500", bgColor: "bg-sky-500/10", textColor: "text-sky-600", badgeBg: "bg-sky-100", badgeText: "text-sky-700" },
   "gift": { icon: Gift, borderColor: "border-pink-500", bgColor: "bg-pink-500/10", textColor: "text-pink-600", badgeBg: "bg-pink-100", badgeText: "text-pink-700" },
   "payment": { icon: CreditCard, borderColor: "border-teal-500", bgColor: "bg-teal-500/10", textColor: "text-teal-600", badgeBg: "bg-teal-100", badgeText: "text-teal-700" },
-  "salary": { icon: Building2, borderColor: "border-emerald-500", bgColor: "bg-emerald-500/10", textColor: "text-emerald-600", badgeBg: "bg-emerald-100", badgeText: "text-emerald-700" },
-  "income": { icon: Building2, borderColor: "border-emerald-500", bgColor: "bg-emerald-500/10", textColor: "text-emerald-600", badgeBg: "bg-emerald-100", badgeText: "text-emerald-700" },
+  "salary": { icon: TrendingUp, borderColor: "border-emerald-500", bgColor: "bg-emerald-500/10", textColor: "text-emerald-600", badgeBg: "bg-emerald-100", badgeText: "text-emerald-700" },
+  "income": { icon: TrendingUp, borderColor: "border-emerald-500", bgColor: "bg-emerald-500/10", textColor: "text-emerald-600", badgeBg: "bg-emerald-100", badgeText: "text-emerald-700" },
+  "internal": { icon: ArrowLeftRight, borderColor: "border-slate-400", bgColor: "bg-slate-100/60", textColor: "text-slate-500", badgeBg: "bg-slate-100", badgeText: "text-slate-600" },
+  "transfer": { icon: ArrowLeftRight, borderColor: "border-slate-400", bgColor: "bg-slate-100/60", textColor: "text-slate-500", badgeBg: "bg-slate-100", badgeText: "text-slate-600" },
+  "manufacturing": { icon: Briefcase, borderColor: "border-gray-500", bgColor: "bg-gray-500/10", textColor: "text-gray-600", badgeBg: "bg-gray-100", badgeText: "text-gray-700" },
+  "professional": { icon: Briefcase, borderColor: "border-slate-500", bgColor: "bg-slate-500/10", textColor: "text-slate-600", badgeBg: "bg-slate-100", badgeText: "text-slate-700" },
+  "marketing": { icon: Monitor, borderColor: "border-fuchsia-500", bgColor: "bg-fuchsia-500/10", textColor: "text-fuchsia-600", badgeBg: "bg-fuchsia-100", badgeText: "text-fuchsia-700" },
+  "legal": { icon: Briefcase, borderColor: "border-zinc-500", bgColor: "bg-zinc-500/10", textColor: "text-zinc-600", badgeBg: "bg-zinc-100", badgeText: "text-zinc-700" },
   "maintenance": { icon: Wrench, borderColor: "border-amber-500", bgColor: "bg-amber-500/10", textColor: "text-amber-600", badgeBg: "bg-amber-100", badgeText: "text-amber-700" },
   "entertainment": { icon: Music, borderColor: "border-fuchsia-500", bgColor: "bg-fuchsia-500/10", textColor: "text-fuchsia-600", badgeBg: "bg-fuchsia-100", badgeText: "text-fuchsia-700" },
   "fitness": { icon: Dumbbell, borderColor: "border-lime-500", bgColor: "bg-lime-500/10", textColor: "text-lime-600", badgeBg: "bg-lime-100", badgeText: "text-lime-700" },

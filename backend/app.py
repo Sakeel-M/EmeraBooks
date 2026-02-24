@@ -13,7 +13,48 @@ from pdf_processor import pdf_processor
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+
+# ── Security: restrict CORS to known front-end origins ──────────────────────
+_allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+if _allowed_origins:
+    CORS(app, origins=_allowed_origins)
+else:
+    CORS(app)  # Fallback: open (development mode)
+
+# ── Security: file-size limit (50 MB) ───────────────────────────────────────
+app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
+
+# ── Security: API key authentication ────────────────────────────────────────
+_API_SECRET_KEY = os.getenv("API_SECRET_KEY", "")
+
+@app.before_request
+def _check_api_key():
+    """Require X-API-Key header when API_SECRET_KEY env var is set."""
+    if request.method == "OPTIONS":
+        return  # Allow CORS preflight through
+    if not _API_SECRET_KEY:
+        return  # Auth disabled (key not configured)
+    provided = request.headers.get("X-API-Key", "")
+    if provided != _API_SECRET_KEY:
+        return jsonify({"error": "Unauthorized — invalid or missing API key"}), 401
+
+@app.errorhandler(413)
+def _too_large(e):
+    return jsonify({"error": "File too large. Maximum allowed size is 50 MB."}), 413
+
+# ── Rate limiting (optional — requires flask-limiter) ───────────────────────
+try:
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+    limiter = Limiter(
+        app=app,
+        key_func=get_remote_address,
+        default_limits=["200 per hour", "20 per minute"],
+        storage_uri="memory://",
+    )
+    _LIMITER_ENABLED = True
+except ImportError:
+    _LIMITER_ENABLED = False
 
 # Set OpenAI API key
 openai.api_key = os.getenv('OPENAI_API_KEY')
@@ -226,25 +267,27 @@ def analyze_data():
                     if amount < 0:
                         yearly_data[year] = yearly_data.get(year, 0) + abs(amount)
                 else:
-                    # Fallback
-                    sort_key = '2024-01'
+                    # Fallback to current month when date is missing/malformed
+                    _now = datetime.now()
+                    sort_key = _now.strftime('%Y-%m')
                     if sort_key not in monthly_data:
                         monthly_data[sort_key] = {
-                            'readable': 'January 2024',
+                            'readable': _now.strftime('%B %Y'),
                             'amount': 0,
-                            'year': 2024,
-                            'month': 1
+                            'year': _now.year,
+                            'month': _now.month
                         }
                     if amount < 0:
                         monthly_data[sort_key]['amount'] += abs(amount)
             except:
-                sort_key = '2024-01'
+                _now = datetime.now()
+                sort_key = _now.strftime('%Y-%m')
                 if sort_key not in monthly_data:
                     monthly_data[sort_key] = {
-                        'readable': 'January 2024',
+                        'readable': _now.strftime('%B %Y'),
                         'amount': 0,
-                        'year': 2024,
-                        'month': 1
+                        'year': _now.year,
+                        'month': _now.month
                     }
                 if amount < 0:
                     monthly_data[sort_key]['amount'] += abs(amount)
@@ -641,4 +684,5 @@ if __name__ == '__main__':
     print("Supported: Global banks with automatic currency detection")
     print("OpenAI Integration:", "Enabled" if openai.api_key else "Disabled (Set OPENAI_API_KEY)")
     print("API available at: http://localhost:5000")
-    app.run(debug=True, port=5000)
+    debug_mode = os.getenv("FLASK_DEBUG", "false").lower() == "true"
+    app.run(debug=debug_mode, port=5000)

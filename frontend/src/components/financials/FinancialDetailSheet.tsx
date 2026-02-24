@@ -55,6 +55,8 @@ interface FinancialDetailSheetProps {
   totalAssets: number;
   totalLiabilities: number;
   equity: number;
+  outstandingReceivables?: number;
+  outstandingPayables?: number;
   currency?: string;
 }
 
@@ -98,7 +100,7 @@ const TYPE_CONFIG: Record<FinancialDetailType, {
     icon: LayoutGrid,
     gradient: "from-green-500/15 to-transparent",
     color: "text-green-600",
-    description: "Estimated from outstanding receivables",
+    description: "Cash & Bank + Accounts Receivable (estimated)",
   },
   liabilities: {
     title: "Total Liabilities",
@@ -152,11 +154,14 @@ const STATUS_COLORS = {
   Critical: "bg-red-500/10 text-red-600 border-red-500/20",
 };
 
-function getNarrative(type: FinancialDetailType, invoices: Invoice[], bills: Bill[], totalRevenue: number, totalExpenses: number, netIncome: number, profitMargin: number, currency: string = "USD"): string {
+function getNarrative(
+  type: FinancialDetailType, invoices: Invoice[], bills: Bill[],
+  totalRevenue: number, totalExpenses: number, netIncome: number, profitMargin: number,
+  currency: string = "USD", totalAssets: number = 0,
+  outstandingReceivables: number = 0, outstandingPayables: number = 0
+): string {
   const paidInvoices = invoices.filter(i => i.status === "paid");
-  const unpaidInvoices = invoices.filter(i => i.status !== "paid");
   const paidBills = bills.filter(b => b.status === "paid");
-  const unpaidBills = bills.filter(b => b.status !== "paid");
   const fmt = (v: number) => formatAmount(v, currency);
 
   switch (type) {
@@ -169,11 +174,13 @@ function getNarrative(type: FinancialDetailType, invoices: Invoice[], bills: Bil
     case "profit-margin":
       return `For every unit of revenue, you keep ${(profitMargin / 100).toFixed(2)}. A ${profitMargin >= 20 ? "healthy" : profitMargin >= 10 ? "moderate" : "low"} profit margin of ${profitMargin.toFixed(1)}%.`;
     case "assets":
-      return `Estimated ${fmt(unpaidInvoices.reduce((s, i) => s + Number(i.total_amount || 0), 0))} in outstanding receivables across ${unpaidInvoices.length} unpaid invoice${unpaidInvoices.length !== 1 ? "s" : ""}.`;
+      return `Total assets of ${fmt(totalAssets)} are estimated from transaction data. Cash & Bank: ${fmt(Math.max(0, netIncome))} (from net income). Accounts Receivable: ${fmt(outstandingReceivables)}. Set up Chart of Accounts for precise figures.`;
     case "liabilities":
-      return `You owe ${fmt(unpaidBills.reduce((s, b) => s + Number(b.total_amount || 0), 0))} across ${unpaidBills.length} outstanding bill${unpaidBills.length !== 1 ? "s" : ""} to vendors.`;
+      return outstandingPayables > 0
+        ? `You owe ${fmt(outstandingPayables)} in outstanding bills to vendors. All unpaid bills are recorded as accounts payable.`
+        : `No outstanding bills at this time. All vendor invoices are settled.`;
     case "equity":
-      return `Net worth equals assets minus liabilities. A positive equity indicates the business owns more than it owes.`;
+      return `Net worth equals assets minus liabilities (${fmt(totalAssets)} − ${fmt(outstandingPayables)} = ${fmt(totalAssets - outstandingPayables)}). A positive equity indicates the business owns more than it owes.`;
     case "operating":
       return `Cash generated from core business activities. Based on ${paidInvoices.length} paid invoice${paidInvoices.length !== 1 ? "s" : ""} received in this period.`;
     default:
@@ -218,7 +225,9 @@ function MetricKpi({ label, value }: { label: string; value: string }) {
 export function FinancialDetailSheet({
   open, onClose, type, invoices, bills,
   totalRevenue, totalExpenses, netIncome, profitMargin,
-  totalAssets, totalLiabilities, equity, currency = "USD",
+  totalAssets, totalLiabilities, equity,
+  outstandingReceivables = 0, outstandingPayables = 0,
+  currency = "USD",
 }: FinancialDetailSheetProps) {
   const [search, setSearch] = useState("");
 
@@ -252,10 +261,12 @@ export function FinancialDetailSheet({
     const showBills = ["expenses", "liabilities", "net-income", "profit-margin"].includes(type);
 
     if (type === "assets") {
-      return { transactionList: invoices.filter(i => i.status !== "paid").sort((a, b) => b.total_amount - a.total_amount), isInvoice: true };
+      // Show all income invoices — these are the transactions that make up the cash & bank position
+      return { transactionList: [...invoices].sort((a, b) => Number(b.total_amount) - Number(a.total_amount)), isInvoice: true };
     }
     if (type === "liabilities") {
-      return { transactionList: bills.filter(b => b.status !== "paid").sort((a, b) => b.total_amount - a.total_amount), isInvoice: false };
+      // Only overdue bills are genuine outstanding payables (bank-synced "pending" bills are already cleared)
+      return { transactionList: bills.filter(b => b.status === "overdue").sort((a, b) => b.total_amount - a.total_amount), isInvoice: false };
     }
     if (type === "operating") {
       return { transactionList: invoices.filter(i => i.status === "paid").sort((a, b) => b.total_amount - a.total_amount), isInvoice: true };
@@ -362,16 +373,16 @@ export function FinancialDetailSheet({
         { label: "Net Income", value: formatCurrencyValue(netIncome, currency) },
       ];
       case "assets": return [
+        { label: "Cash & Bank", value: formatCurrencyValue(Math.max(0, netIncome), currency) },
+        { label: "Accounts Receivable", value: formatCurrencyValue(outstandingReceivables, currency) },
         { label: "Total Assets", value: formatCurrencyValue(totalAssets, currency) },
-        { label: "Unpaid Invoices", value: String(invoices.filter(i => i.status !== "paid").length) },
-        { label: "Receivables", value: formatCurrencyValue(invoices.filter(i => i.status !== "paid").reduce((s, i) => s + Number(i.total_amount || 0), 0), currency) },
-        { label: "Paid Invoices", value: String(invoices.filter(i => i.status === "paid").length) },
+        { label: "Basis", value: netIncome >= 0 ? "Net Profit" : "Receivables Only" },
       ];
       case "liabilities": return [
+        { label: "Accounts Payable", value: formatCurrencyValue(outstandingPayables, currency) },
         { label: "Total Liabilities", value: formatCurrencyValue(totalLiabilities, currency) },
-        { label: "Unpaid Bills", value: String(bills.filter(b => b.status !== "paid").length) },
-        { label: "Payables", value: formatCurrencyValue(bills.filter(b => b.status !== "paid").reduce((s, b) => s + Number(b.total_amount || 0), 0), currency) },
-        { label: "Paid Bills", value: String(bills.filter(b => b.status === "paid").length) },
+        { label: "Overdue Bills", value: String(bills.filter(b => b.status === "overdue").length) },
+        { label: "Status", value: outstandingPayables === 0 ? "Settled" : "Outstanding" },
       ];
       case "equity": return [
         { label: "Assets", value: formatCurrencyValue(totalAssets, currency) },
@@ -383,7 +394,7 @@ export function FinancialDetailSheet({
         { label: "Amount", value: formatCurrencyValue(netIncome, currency) },
       ];
     }
-  }, [type, invoices, bills, totalRevenue, totalExpenses, netIncome, profitMargin, totalAssets, totalLiabilities, equity, currency]);
+  }, [type, invoices, bills, totalRevenue, totalExpenses, netIncome, profitMargin, totalAssets, totalLiabilities, equity, outstandingReceivables, outstandingPayables, currency]);
 
   const chartColor = type === "expenses" || type === "liabilities" ? "hsl(0,84%,60%)" :
     type === "equity" || type === "financing" ? "hsl(143,44%,35%)" :
@@ -392,7 +403,7 @@ export function FinancialDetailSheet({
 
   if (!type || !config) return null;
 
-  const narrative = getNarrative(type, invoices, bills, totalRevenue, totalExpenses, netIncome, profitMargin, currency);
+  const narrative = getNarrative(type, invoices, bills, totalRevenue, totalExpenses, netIncome, profitMargin, currency, totalAssets, outstandingReceivables, outstandingPayables);
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
@@ -446,7 +457,46 @@ export function FinancialDetailSheet({
 
             {/* Breakdown Tab */}
             <TabsContent value="breakdown" className="flex-1 overflow-auto px-6 pb-6 pt-4 space-y-4">
-              {type === "equity" ? (
+              {type === "assets" ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">Estimated balance sheet assets</p>
+                  {[
+                    { label: "Cash & Bank (Estimated)", value: Math.max(0, netIncome), color: "bg-green-500" },
+                    { label: "Accounts Receivable", value: outstandingReceivables, color: "bg-blue-500" },
+                  ].map((item) => (
+                    <div key={item.label} className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/20">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
+                        <span className="text-sm font-medium text-foreground">{item.label}</span>
+                      </div>
+                      <span className="text-sm font-bold text-green-600">{formatCurrencyValue(item.value, currency)}</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between p-3 rounded-lg border-2 border-green-500/40 bg-green-50/20 dark:bg-green-950/10">
+                    <span className="text-sm font-bold text-foreground">Total Assets</span>
+                    <span className="text-sm font-bold text-green-600">{formatCurrencyValue(totalAssets, currency)}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">* Estimated from transaction data. Set up Chart of Accounts for actuals.</p>
+                </div>
+              ) : type === "liabilities" ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">Outstanding amounts owed to vendors</p>
+                  <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/20">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                      <span className="text-sm font-medium text-foreground">Accounts Payable (Unpaid Bills)</span>
+                    </div>
+                    <span className="text-sm font-bold text-destructive">{formatCurrencyValue(outstandingPayables, currency)}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-lg border-2 border-red-500/40 bg-red-50/20 dark:bg-red-950/10">
+                    <span className="text-sm font-bold text-foreground">Total Liabilities</span>
+                    <span className="text-sm font-bold text-destructive">{formatCurrencyValue(totalLiabilities, currency)}</span>
+                  </div>
+                  {outstandingPayables === 0 && (
+                    <p className="text-xs text-muted-foreground">All vendor bills are currently settled.</p>
+                  )}
+                </div>
+              ) : type === "equity" ? (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">Net worth = Assets − Liabilities</p>
                   {[
@@ -515,12 +565,12 @@ export function FinancialDetailSheet({
                       const amount = Number(item.total_amount || 0);
                       const statusVal = item.status || "draft";
                       return (
-                        <div key={idx} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-muted/30 hover:bg-muted/50 border border-border/40 transition-colors">
-                          <div className="min-w-0">
+                        <div key={idx} className="grid grid-cols-[1fr_auto] gap-x-3 px-3 py-2.5 rounded-lg bg-muted/30 hover:bg-muted/50 border border-border/40 transition-colors">
+                          <div className="overflow-hidden">
                             <p className="text-sm font-medium text-foreground truncate">{name}</p>
-                            <p className="text-xs text-muted-foreground">{num} · {date ? format(new Date(date), "MMM d, yyyy") : "—"}</p>
+                            <p className="text-xs text-muted-foreground truncate">{num} · {date ? format(new Date(date), "MMM d, yyyy") : "—"}</p>
                           </div>
-                          <div className="text-right ml-3 shrink-0">
+                          <div className="text-right whitespace-nowrap self-center">
                             <p className={`text-sm font-bold ${isBill ? "text-red-500" : "text-green-600"}`}>
                               {isBill ? "-" : "+"}{formatCurrencyValue(amount, currency)}
                             </p>

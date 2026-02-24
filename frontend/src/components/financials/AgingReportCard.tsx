@@ -142,7 +142,7 @@ export function AgingReportCard({ invoices, bills, currency = "USD" }: AgingRepo
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {overdueItems.slice(0, 5).map((item) => {
+                  {overdueItems.map((item) => {
                     const aging = getAgingBucket(item.dueDate);
                     const daysOverdue = differenceInDays(new Date(), new Date(item.dueDate));
                     return (

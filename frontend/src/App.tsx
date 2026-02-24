@@ -27,7 +27,16 @@ import Admin from "./pages/Admin";
 import InvoiceFormPage from "./pages/InvoiceFormPage";
 import AdminUserDashboard from "./pages/AdminUserDashboard";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000,       // 5 min — skip refetch on navigation
+      gcTime: 10 * 60 * 1000,         // 10 min — keep cache in memory
+      refetchOnWindowFocus: false,     // don't refetch when switching browser tabs
+      retry: 1,                       // only retry once on network failure
+    },
+  },
+});
 
 const P = ({ children }: { children: React.ReactNode }) => (
   <ProtectedRoute>{children}</ProtectedRoute>

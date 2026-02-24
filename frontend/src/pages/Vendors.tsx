@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import { CategoryManager } from "@/components/shared/CategoryManager";
 import { QuarterNavigator, DateMode } from "@/components/dashboard/QuarterNavigator";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { guessCategory } from "@/lib/sectorMapping";
+import { resolveCategory, guessCategory } from "@/lib/sectorMapping";
 import { getSectorStyle } from "@/lib/sectorStyles";
 import { useCurrency } from "@/hooks/useCurrency";
 import { formatAmount } from "@/lib/utils";
@@ -35,9 +35,10 @@ export default function Vendors() {
   const [viewMode, setViewMode] = useState<"list" | "grouped">("grouped");
   const [searchQuery, setSearchQuery] = useState("");
   const [dateMode, setDateMode] = useState<DateMode>("year");
-  const [currentYear, setCurrentYear] = useState(2025);
-  const [customFrom, setCustomFrom] = useState<Date>(new Date(2025, 0, 1));
-  const [customTo, setCustomTo] = useState<Date>(new Date(2025, 11, 31, 23, 59, 59));
+  const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
+  const [customFrom, setCustomFrom] = useState<Date>(() => new Date(new Date().getFullYear(), 0, 1));
+  const [customTo, setCustomTo] = useState<Date>(() => new Date(new Date().getFullYear(), 11, 31, 23, 59, 59));
+  const [yearInitialized, setYearInitialized] = useState(false);
 
   const { quarterFrom, quarterTo } = useMemo(() => {
     if (dateMode === "year") {
@@ -52,7 +53,9 @@ export default function Vendors() {
   const { data: vendors, isLoading, refetch } = useQuery({
     queryKey: ["vendors"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("vendors").select("*").order("name");
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+      const { data, error } = await supabase.from("vendors").select("*").eq("user_id", user.id).order("name");
       if (error) throw error;
       return data;
     },
@@ -61,34 +64,156 @@ export default function Vendors() {
   const { data: allBills = [] } = useQuery({
     queryKey: ["vendor-bills"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("bills").select("*").order("bill_date", { ascending: false });
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+      const { data, error } = await supabase.from("bills").select("*").eq("user_id", user.id).order("bill_date", { ascending: false });
       if (error) throw error;
       return data || [];
     },
   });
 
-  // Filter bills by selected quarter
-  const quarterBills = useMemo(() => {
-    return allBills.filter((b) => {
+  // Expense transactions — source of truth for year auto-detection
+  const { data: expenseTxns = [] } = useQuery({
+    queryKey: ["expense-transactions-vendors"],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+      const { data } = await supabase
+        .from("transactions")
+        .select("amount, category, description, transaction_date")
+        .eq("user_id", user.id)
+        .lt("amount", 0)
+        .order("transaction_date", { ascending: false });
+      return (data || []).map((t: any) => ({
+        ...t,
+        resolvedCategory: resolveCategory(t.category, t.description) || "Other",
+        absAmount: Math.abs(Number(t.amount || 0)),
+      }));
+    },
+  });
+
+  // Auto-detect the most recent year from transactions (primary) or bills (fallback)
+  useEffect(() => {
+    if (!yearInitialized && (expenseTxns.length > 0 || allBills.length > 0)) {
+      const txnYears = expenseTxns.map((t: any) => new Date(t.transaction_date).getFullYear()).filter((y: number) => y > 1970);
+      const billYears = allBills.map((b: any) => new Date(b.bill_date).getFullYear()).filter((y: number) => y > 1970);
+      const allYears = [...txnYears, ...billYears];
+      const maxYear = allYears.length > 0 ? Math.max(...allYears) : new Date().getFullYear();
+      setCurrentYear(maxYear);
+      setCustomFrom(new Date(maxYear, 0, 1));
+      setCustomTo(new Date(maxYear, 11, 31, 23, 59, 59));
+      setYearInitialized(true);
+    }
+  }, [expenseTxns.length, allBills.length, yearInitialized]);
+
+  // Vendor name lookup for transaction → vendor matching
+  const vendorNameLookup = useMemo(() => {
+    const map = new Map<string, string>(); // lowercase_name → vendor_id
+    (vendors || []).forEach(v => {
+      if (v.name && v.name.trim().length >= 4) {
+        map.set(v.name.toLowerCase().trim(), v.id);
+      }
+    });
+    return map;
+  }, [vendors]);
+
+  // Convert expense transactions to bill-like objects — Ledger pattern (category from resolveCategory)
+  // Matches each transaction to a vendor by finding the longest vendor name in the description.
+  const txnAsBills = useMemo(() => {
+    return expenseTxns.map((t: any) => {
+      const desc = (t.description || "").toLowerCase();
+      let vendorId: string | null = null;
+      let bestLen = 0;
+      for (const [nameLower, vid] of vendorNameLookup.entries()) {
+        if (nameLower.length > bestLen && desc.includes(nameLower)) {
+          vendorId = vid;
+          bestLen = nameLower.length;
+        }
+      }
+      return {
+        id: t.id,
+        vendor_id: vendorId,
+        total_amount: t.absAmount,
+        bill_date: t.transaction_date,
+        category: t.resolvedCategory,   // always correct — resolveCategory(t.category, t.description)
+        notes: t.description,
+        amount_paid: t.absAmount,
+        status: "paid" as const,
+      };
+    });
+  }, [expenseTxns, vendorNameLookup]);
+
+  // Year-filtered transaction-bills (used for fallback if bills table is empty)
+  const quarterTxnBills = useMemo(() => {
+    return txnAsBills.filter(b => {
       const d = new Date(b.bill_date);
       return d >= quarterFrom && d <= quarterTo;
     });
-  }, [allBills, quarterFrom, quarterTo]);
+  }, [txnAsBills, quarterFrom, quarterTo]);
 
-  // Vendors with activity in the selected quarter (have bills or created in quarter)
+  // Primary: bills from the bills table (have proper vendor_id links from sync)
+  // Fall back to transaction-derived bills only if bills table has no data
+  const quarterBills = useMemo(() => {
+    const fromTable = allBills.filter(b => {
+      const d = new Date(b.bill_date);
+      return d >= quarterFrom && d <= quarterTo;
+    });
+    return fromTable.length > 0 ? fromTable : quarterTxnBills;
+  }, [allBills, quarterTxnBills, quarterFrom, quarterTo]);
+
+  // Vendors with matching bills in the selected year
   const activeVendorIds = useMemo(() => {
     const ids = new Set<string>();
     quarterBills.forEach((b) => { if (b.vendor_id) ids.add(b.vendor_id); });
-    (vendors || []).forEach((v) => {
-      const created = new Date(v.created_at);
-      if (created >= quarterFrom && created <= quarterTo) ids.add(v.id);
-    });
     return ids;
-  }, [quarterBills, vendors, quarterFrom, quarterTo]);
+  }, [quarterBills]);
 
-  // Auto-map sector from vendor name if no explicit category
-  const getVendorCategory = (v: any): string =>
-    v.category || guessCategory(v.name) || "Other";
+  // Mode-count transaction categories per vendor (replaces bill-based map)
+  const vendorBillCategoryMap = useMemo(() => {
+    const map = new Map<string, string>();
+    const vendorCatCounts = new Map<string, Map<string, number>>();
+    quarterTxnBills.forEach((b) => {
+      if (!b.vendor_id) return;
+      const resolved = b.category; // already resolveCategory result from txnAsBills
+      if (!resolved || resolved === "Other" || resolved === "Internal Transfer") return;
+      if (!vendorCatCounts.has(b.vendor_id)) vendorCatCounts.set(b.vendor_id, new Map());
+      const cats = vendorCatCounts.get(b.vendor_id)!;
+      cats.set(resolved, (cats.get(resolved) || 0) + 1);
+    });
+    vendorCatCounts.forEach((cats, vendorId) => {
+      let maxCount = 0, bestCat = "";
+      cats.forEach((count, cat) => { if (count > maxCount) { maxCount = count; bestCat = cat; } });
+      if (bestCat) map.set(vendorId, bestCat);
+    });
+    return map;
+  }, [quarterTxnBills]);
+
+  const getVendorCategory = (v: any): string => {
+    // Vendor name is the most reliable signal — direct keyword matching
+    const nameGuess = guessCategory(v.name);
+    if (nameGuess && nameGuess !== "Internal Transfer") return nameGuess;
+    // Fall back to transaction-matched category
+    const txnCat = vendorBillCategoryMap.get(v.id);
+    if (txnCat) return txnCat;
+    // Last resort: stored/resolved category
+    return resolveCategory(v.category, v.name) || "Other";
+  };
+
+  // Dynamic vendor balance: sum of (total_amount - amount_paid) across all bills for each vendor
+  const vendorBalanceMap = useMemo(() => {
+    const map = new Map<string, number>();
+    allBills.forEach((b) => {
+      if (!b.vendor_id) return;
+      const outstanding = Number(b.total_amount || 0) - Number(b.amount_paid || 0);
+      map.set(b.vendor_id, (map.get(b.vendor_id) || 0) + outstanding);
+    });
+    return map;
+  }, [allBills]);
+
+  const getVendorBalance = (v: any): number => {
+    const dynamic = vendorBalanceMap.get(v.id);
+    return dynamic !== undefined ? dynamic : Number(v.balance || 0);
+  };
 
   // Unique auto-mapped sectors for CategoryManager
   const vendorSectors = useMemo(() => {
@@ -137,7 +262,7 @@ export default function Vendors() {
     {
       accessorKey: "balance", header: "Balance",
       cell: ({ row }) => {
-        const balance = row.original.balance || 0;
+        const balance = getVendorBalance(row.original);
         return <span className={balance > 0 ? "text-destructive font-medium" : ""}>{formatAmount(balance, currency)}</span>;
       },
     },
@@ -205,6 +330,7 @@ export default function Vendors() {
                 quarterLabel={quarterLabel}
                 quarterFrom={quarterFrom}
                 quarterTo={quarterTo}
+                activeVendorCount={activeVendorIds.size}
               />
               <VendorGroupedList
                 vendors={vendors || []}

@@ -25,7 +25,9 @@ export default function Documents() {
   const { data: documents = [], isLoading } = useQuery({
     queryKey: ["documents"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("documents").select("*").order("created_at", { ascending: false });
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+      const { data, error } = await supabase.from("documents").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
       if (error) throw error;
       return data || [];
     },
@@ -59,7 +61,15 @@ export default function Documents() {
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (files && files.length > 0) Array.from(files).forEach(file => uploadMutation.mutate(file));
+    if (files && files.length > 0) {
+      Array.from(files).forEach(file => {
+        if (file.size > 50 * 1024 * 1024) {
+          toast({ title: "File too large", description: `${file.name} exceeds the 50MB limit`, variant: "destructive" });
+          return;
+        }
+        uploadMutation.mutate(file);
+      });
+    }
   };
 
   const handleDownload = async (doc: any) => {

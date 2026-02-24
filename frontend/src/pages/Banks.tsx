@@ -11,20 +11,25 @@ import { DataTable } from "@/components/shared/DataTable";
 import { DataTableRowActions } from "@/components/shared/DataTableRowActions";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/export";
+import { useCurrency } from "@/hooks/useCurrency";
 import { ColumnDef } from "@tanstack/react-table";
 
 export default function Banks() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<any>(null);
   const { toast } = useToast();
+  const { currency } = useCurrency();
   const queryClient = useQueryClient();
 
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ["bank-accounts"],
     queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
       const { data, error } = await supabase
         .from("bank_accounts")
         .select("*")
+        .eq("user_id", user.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data || [];
@@ -45,9 +50,19 @@ export default function Banks() {
     },
   });
 
-  const totalBalance = accounts
-    .filter((acc) => acc.is_active)
-    .reduce((sum, acc) => sum + Number(acc.balance || 0), 0);
+  // Group balances by currency to avoid incorrect cross-currency summation
+  const balanceByCurrency: Record<string, number> = {};
+  accounts.filter((acc) => acc.is_active).forEach((acc) => {
+    const cur = acc.currency || currency;
+    balanceByCurrency[cur] = (balanceByCurrency[cur] || 0) + Number(acc.balance || 0);
+  });
+  const currencyKeys = Object.keys(balanceByCurrency);
+  // Use single-currency total if all accounts share one currency; else show first currency
+  const totalBalance = currencyKeys.length === 1
+    ? balanceByCurrency[currencyKeys[0]]
+    : Object.values(balanceByCurrency).reduce((s, v) => s + v, 0);
+  const totalBalanceCurrency = currencyKeys.length === 1 ? currencyKeys[0] : currency;
+  const mixedCurrencies = currencyKeys.length > 1;
 
   const activeAccounts = accounts.filter((acc) => acc.is_active).length;
 
@@ -136,8 +151,10 @@ export default function Banks() {
               <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(totalBalance)}</div>
-              <p className="text-xs text-muted-foreground">Across all active accounts</p>
+              <div className="text-2xl font-bold">{formatCurrency(totalBalance, totalBalanceCurrency)}</div>
+              <p className="text-xs text-muted-foreground">
+                {mixedCurrencies ? "Multiple currencies — see individual accounts" : "Across all active accounts"}
+              </p>
             </CardContent>
           </Card>
 

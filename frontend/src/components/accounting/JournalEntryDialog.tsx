@@ -9,6 +9,8 @@ import { Plus, Trash2, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
+import { useCurrency } from "@/hooks/useCurrency";
+import { formatAmount } from "@/lib/utils";
 
 interface Props {
   open: boolean;
@@ -24,6 +26,8 @@ interface LineItem {
 }
 
 export function JournalEntryDialog({ open, onOpenChange, onSaved }: Props) {
+  const { currency } = useCurrency();
+  const fmt = (v: number) => formatAmount(v, currency);
   const [entryNumber, setEntryNumber] = useState("");
   const [entryDate, setEntryDate] = useState(new Date().toISOString().split("T")[0]);
   const [description, setDescription] = useState("");
@@ -37,7 +41,9 @@ export function JournalEntryDialog({ open, onOpenChange, onSaved }: Props) {
   const { data: accounts = [] } = useQuery({
     queryKey: ["accounts-active"],
     queryFn: async () => {
-      const { data } = await supabase.from("accounts").select("id, account_name, account_number, account_type").eq("is_active", true).order("account_number");
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+      const { data } = await supabase.from("accounts").select("id, account_name, account_number, account_type").eq("is_active", true).eq("user_id", user.id).order("account_number");
       return data || [];
     },
   });
@@ -134,7 +140,7 @@ export function JournalEntryDialog({ open, onOpenChange, onSaved }: Props) {
                       <Select value={line.account_id} onValueChange={v => updateLine(idx, "account_id", v)}>
                         <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                         <SelectContent>
-                          {accounts.map((a: any) => <SelectItem key={a.id} value={a.id}>{a.account_number} — {a.account_name}</SelectItem>)}
+                          {accounts.map((a: any) => <SelectItem key={a.id} value={a.id}>{a.account_name}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </TableCell>
@@ -146,14 +152,14 @@ export function JournalEntryDialog({ open, onOpenChange, onSaved }: Props) {
                 ))}
                 <TableRow className="font-bold">
                   <TableCell colSpan={2} className="text-right">Totals</TableCell>
-                  <TableCell>${totalDebit.toFixed(2)}</TableCell>
-                  <TableCell>${totalCredit.toFixed(2)}</TableCell>
+                  <TableCell>{fmt(totalDebit)}</TableCell>
+                  <TableCell>{fmt(totalCredit)}</TableCell>
                   <TableCell />
                 </TableRow>
               </TableBody>
             </Table>
             {!isBalanced && totalDebit > 0 && (
-              <div className="flex items-center gap-2 text-destructive text-sm"><AlertCircle className="w-4 h-4" />Debits (${totalDebit.toFixed(2)}) must equal credits (${totalCredit.toFixed(2)})</div>
+              <div className="flex items-center gap-2 text-destructive text-sm"><AlertCircle className="w-4 h-4" />Debits ({fmt(totalDebit)}) must equal credits ({fmt(totalCredit)})</div>
             )}
           </div>
 

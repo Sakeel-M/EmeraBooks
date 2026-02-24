@@ -2,6 +2,7 @@
 Flask==3.0.0
 Flask-CORS==4.0.0
 python-dotenv==1.0.0
+Flask-Limiter==3.8.0
 
 # AI & Processing
 openai==1.54.0

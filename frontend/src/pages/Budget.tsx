@@ -13,6 +13,7 @@ import { Target, AlertCircle, CheckCircle, Save } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { useToast } from "@/hooks/use-toast";
 import { EnhancedDateRangePicker } from "@/components/shared/EnhancedDateRangePicker";
+import { resolveCategory } from "@/lib/sectorMapping";
 import { startOfMonth, endOfMonth, format } from "date-fns";
 import { formatAmount } from "@/lib/utils";
 
@@ -80,7 +81,10 @@ const Budget = () => {
       const spending: Record<string, number> = {};
       if (txns) {
         for (const t of txns) {
-          const cat = t.category || "Uncategorized";
+          // Only count expenses (negative amounts) — exclude income transactions
+          if (t.amount >= 0) continue;
+          // Resolve raw category to sector name so it matches budget category keys
+          const cat = resolveCategory(t.category || "", t.description) || t.category || "Uncategorized";
           spending[cat] = (spending[cat] || 0) + Math.abs(t.amount);
         }
       }
@@ -226,9 +230,10 @@ const Budget = () => {
                         <Input
                           type="number"
                           placeholder="Set budget"
+                          min="0"
                           value={budgets[category] || ""}
                           onChange={(e) =>
-                            setBudgets({ ...budgets, [category]: parseFloat(e.target.value) || 0 })
+                            setBudgets({ ...budgets, [category]: Math.max(0, parseFloat(e.target.value) || 0) })
                           }
                           className="w-32 text-right"
                         />

@@ -1,0 +1,36 @@
+# Environment files — never commit secrets
+.env
+.env.local
+.env.production
+.env.*.local
+backend/.env
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Build output (built on server)
+frontend/dist/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+backend/venv/
+backend/__pycache__/
+*.egg-info/
+.Python
+
+# IDE / OS
+.DS_Store
+.vscode/
+*.swp
+*.swo
+Thumbs.db
+
+# AI assistant memory (local only)
+.claude/
+
+# Logs
+*.log
+npm-debug.log*

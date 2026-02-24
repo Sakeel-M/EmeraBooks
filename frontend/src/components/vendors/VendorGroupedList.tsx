@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { X, Tag } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { guessCategory } from "@/lib/sectorMapping";
+import { resolveCategory, guessCategory, mapRawBankCategory } from "@/lib/sectorMapping";
 import { PREDEFINED_SECTORS } from "@/lib/predefinedSectors";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -92,23 +92,8 @@ export function VendorGroupedList({ vendors, bills, onEdit, onView, onDelete, on
     return consolidatedVendors.filter((v) => v.name.toLowerCase().includes(q));
   }, [consolidatedVendors, searchQuery]);
 
-  // Group vendors by category (use guessCategory for auto-detection)
-  const grouped = useMemo(() => {
-    const groups = new Map<string, ConsolidatedVendor[]>();
-    filteredVendors.forEach((v) => {
-      const cat = v.category || guessCategory(v.name) || "Other";
-      if (!groups.has(cat)) groups.set(cat, []);
-      groups.get(cat)!.push(v);
-    });
-    // Sort: Other last
-    return Array.from(groups.entries()).sort(([a], [b]) => {
-      if (a === "Other") return 1;
-      if (b === "Other") return -1;
-      return a.localeCompare(b);
-    });
-  }, [filteredVendors]);
-
   // Get bills per vendor (using all vendor IDs for consolidated vendors)
+  // Must be declared BEFORE 'grouped' which depends on it
   const vendorBillsMap = useMemo(() => {
     const idToName = new Map<string, string>();
     consolidatedVendors.forEach((cv) => {
@@ -124,6 +109,48 @@ export function VendorGroupedList({ vendors, bills, onEdit, onView, onDelete, on
     });
     return map;
   }, [bills, consolidatedVendors]);
+
+  // Group vendors by category.
+  // Priority: most common bill category (resolveCategory) → vendor.category → guess from name → "Other"
+  const grouped = useMemo(() => {
+    const groups = new Map<string, ConsolidatedVendor[]>();
+    filteredVendors.forEach((v) => {
+      // Bills have category set by syncBankDataToBusinessRecords via resolveCategory — most reliable
+      const vendorBills = vendorBillsMap.get(v.id) || [];
+      const billCatCounts = new Map<string, number>();
+      vendorBills.forEach((b: any) => {
+        const resolved = resolveCategory(b.category, b.notes);
+        if (!resolved || resolved === "Internal Transfer") return;
+        billCatCounts.set(resolved, (billCatCounts.get(resolved) || 0) + 1);
+      });
+      let bestBillCat = "";
+      let maxCount = 0;
+      billCatCounts.forEach((count, cat) => {
+        if (count > maxCount && cat !== "Other") { maxCount = count; bestBillCat = cat; }
+      });
+
+      let cat: string;
+      // Vendor name is the most reliable signal — guessCategory uses direct keyword matching
+      const nameGuess = guessCategory(v.name);
+      if (nameGuess && nameGuess !== "Internal Transfer") {
+        cat = nameGuess;
+      } else if (bestBillCat) {
+        cat = bestBillCat;
+      } else {
+        // Last resort: stored/mapped category
+        const stored = v.category ? (mapRawBankCategory(v.category) || resolveCategory(v.category)) : null;
+        cat = stored || "Other";
+      }
+      if (!groups.has(cat)) groups.set(cat, []);
+      groups.get(cat)!.push(v);
+    });
+    // Sort: Other last
+    return Array.from(groups.entries()).sort(([a], [b]) => {
+      if (a === "Other") return 1;
+      if (b === "Other") return -1;
+      return a.localeCompare(b);
+    });
+  }, [filteredVendors, vendorBillsMap]);
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -192,11 +219,12 @@ export function VendorGroupedList({ vendors, bills, onEdit, onView, onDelete, on
     <div className="relative">
       <Accordion type="multiple" className="space-y-2">
         {grouped.map(([category, vendorList]) => {
-          const categoryTotal = vendorList.reduce((s, v) => {
-            const vBills = vendorBillsMap.get(v.id) || [];
-            const billTotal = vBills.reduce((bs, b) => bs + Number(b.total_amount || 0), 0);
-            return s + (billTotal || v.balance);
-          }, 0);
+          // Sum bills for vendors in this group (vendor_id matched — most accurate)
+          const groupIdSet = new Set(vendorList.flatMap((v) => v.ids));
+          const categoryTotal = bills
+            .filter(b => b.vendor_id && groupIdSet.has(b.vendor_id))
+            .reduce((sum, b) => sum + Number(b.total_amount || 0), 0);
+
           const groupIds = vendorList.map((v) => v.id);
           const allGroupSelected = groupIds.length > 0 && groupIds.every((id) => selected.has(id));
           const someGroupSelected = groupIds.some((id) => selected.has(id));
@@ -216,7 +244,7 @@ export function VendorGroupedList({ vendors, bills, onEdit, onView, onDelete, on
                     <span className="font-semibold text-sm">{category}</span>
                     <Badge variant="secondary" className="text-xs">{vendorList.length}</Badge>
                   </div>
-                  <span className="text-sm font-medium">{fmt(categoryTotal)}</span>
+                  {categoryTotal > 0 && <span className="text-sm font-medium">{fmt(categoryTotal)}</span>}
                 </div>
               </AccordionTrigger>
               <AccordionContent>
@@ -257,7 +285,7 @@ export function VendorGroupedList({ vendors, bills, onEdit, onView, onDelete, on
                         <div className="flex items-center gap-3">
                           <div onClick={(e) => e.stopPropagation()}>
                             <Select
-                              value={vendor.category || guessCategory(vendor.name) || "uncategorized"}
+                              value={resolveCategory(vendor.category, vendor.name) || "uncategorized"}
                               onValueChange={(val) => handleInlineCategory(vendor, val)}
                             >
                               <SelectTrigger className="h-7 text-xs w-[130px] border-dashed">

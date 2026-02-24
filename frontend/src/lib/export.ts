@@ -8,17 +8,22 @@ export function exportToCSV(data: any[], filename: string) {
   }
 
   const headers = Object.keys(data[0]);
+
+  // Sanitize a cell value to prevent CSV formula injection (=, +, -, @, \t, \r prefixes)
+  const sanitizeCell = (value: any): string => {
+    if (value === null || value === undefined) return '';
+    const str = String(value);
+    // Wrap in quotes if contains comma, quote, or newline
+    const needsQuotes = str.includes(',') || str.includes('"') || str.includes('\n');
+    // Prefix with a single quote if starts with formula-triggering characters
+    const safe = /^[=+\-@\t\r]/.test(str) ? `'${str}` : str;
+    return needsQuotes ? `"${safe.replace(/"/g, '""')}"` : safe;
+  };
+
   const csvContent = [
     headers.join(','),
-    ...data.map(row => 
-      headers.map(header => {
-        const value = row[header];
-        // Handle values that might contain commas or quotes
-        if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
-          return `"${value.replace(/"/g, '""')}"`;
-        }
-        return value ?? '';
-      }).join(',')
+    ...data.map(row =>
+      headers.map(header => sanitizeCell(row[header])).join(',')
     )
   ].join('\n');
 

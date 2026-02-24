@@ -98,8 +98,8 @@ export default function Integrations() {
       throw new Error(errorMsg);
     }
 
-    // Store credentials temporarily for callback
-    localStorage.setItem('zoho_pending_credentials', JSON.stringify({
+    // Store credentials temporarily for callback (sessionStorage clears on tab close — safer than localStorage)
+    sessionStorage.setItem('zoho_pending_credentials', JSON.stringify({
       client_id: credentials.client_id,
       client_secret: credentials.client_secret,
       organization_id: credentials.organization_id,
@@ -142,8 +142,8 @@ export default function Integrations() {
       throw new Error(qbErrorMsg);
     }
 
-    // Store credentials temporarily for callback
-    localStorage.setItem('quickbooks_pending_credentials', JSON.stringify({
+    // Store credentials temporarily for callback (sessionStorage clears on tab close — safer than localStorage)
+    sessionStorage.setItem('quickbooks_pending_credentials', JSON.stringify({
       client_id: credentials.client_id,
       client_secret: credentials.client_secret,
       redirect_uri: redirectUri,
@@ -180,10 +180,22 @@ export default function Integrations() {
     // Get data to export if needed
     let exportData = [];
     if (direction === 'export') {
-      const { data, error } = await supabase
-        .from(entityType as 'customers' | 'vendors' | 'invoices' | 'bills')
-        .select('*')
-        .limit(100);
+      // Paginate to fetch ALL records (not just first 100)
+      let allExportData: any[] = [];
+      let exportFrom = 0;
+      const pageSize = 1000;
+      while (true) {
+        const { data: page, error } = await supabase
+          .from(entityType as 'customers' | 'vendors' | 'invoices' | 'bills')
+          .select('*')
+          .range(exportFrom, exportFrom + pageSize - 1);
+        if (error) throw error;
+        if (!page || page.length === 0) break;
+        allExportData = allExportData.concat(page);
+        if (page.length < pageSize) break;
+        exportFrom += pageSize;
+      }
+      const { data, error } = { data: allExportData, error: null };
       
       if (error) throw error;
       exportData = data || [];

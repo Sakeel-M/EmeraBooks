@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Search } from "lucide-react";
 import type { Transaction } from "@/lib/database";
 import { replaceAedSymbol } from "@/lib/utils";
+import { resolveCategory } from "@/lib/sectorMapping";
 
 interface OverviewTabProps {
   transactions: Transaction[];
@@ -33,7 +34,7 @@ const OverviewTab = ({ transactions, currency }: OverviewTabProps) => {
   const categoryMap = new Map<string, { total: number; count: number }>();
   transactions.forEach((t) => {
     if (t.amount < 0) {
-      const cat = t.category || "Uncategorized";
+      const cat = resolveCategory(t.category, t.description) || "Uncategorized";
       const existing = categoryMap.get(cat) || { total: 0, count: 0 };
       categoryMap.set(cat, { total: existing.total + Math.abs(t.amount), count: existing.count + 1 });
     }

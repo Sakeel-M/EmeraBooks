@@ -44,7 +44,10 @@ const CustomTooltip = ({ active, payload, label, currency = "USD" }: any) => {
             <div className="flex items-center justify-between">
               <span className="text-xs text-muted-foreground">Change</span>
               {(() => {
-                const change = ((payload[0].value - payload[1].value) / (payload[1].value || 1)) * 100;
+                if (payload[1].value === 0) {
+                  return <span className="text-sm text-muted-foreground">N/A</span>;
+                }
+                const change = ((payload[0].value - payload[1].value) / payload[1].value) * 100;
                 const isPositive = change >= 0;
                 return (
                   <span className={`text-sm font-bold flex items-center gap-1 ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
