@@ -22,7 +22,7 @@ import { TaxationReport } from "@/components/financials/TaxationReport";
 import { FinancialDetailSheet, type FinancialDetailType } from "@/components/financials/FinancialDetailSheet";
 import { QuarterNavigator, getCurrentQuarter, useQuarterDates } from "@/components/dashboard/QuarterNavigator";
 import { CHART_COLORS, formatCurrencyValue } from "@/lib/chartColors";
-import { startOfMonth, endOfMonth, format, subMonths, getMonth, getYear, parseISO } from "date-fns";
+import { format, getMonth, getYear, parseISO } from "date-fns";
 import { useCurrency } from "@/hooks/useCurrency";
 import { database } from "@/lib/database";
 import { resolveCategory } from "@/lib/sectorMapping";
@@ -60,9 +60,12 @@ async function fetchAllRows<T>(
 export default function Financials() {
   const { currency } = useCurrency();
   const currentFileId = database.getCurrentFile();
-  const [dateRange, setDateRange] = useState({
-    from: startOfMonth(subMonths(new Date(), 11)),
-    to: endOfMonth(new Date()),
+  const [dateRange, setDateRange] = useState(() => {
+    const now = new Date();
+    return {
+      from: new Date(now.getFullYear(), 0, 1),   // Jan 1 of current year
+      to: new Date(now.getFullYear(), 11, 31),    // Dec 31 of current year
+    };
   });
 
   // P&L detail state
