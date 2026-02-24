@@ -82,7 +82,8 @@ export function LineItemsEditor({ form }: LineItemsEditorProps) {
       currency: cur,
       minimumFractionDigits: 2,
     }).format(amount);
-    return formatted;
+    if (cur !== "AED") return formatted;
+    return formatted.replace(/AED|د\.إ\.?\s?/g, "Đ");
   };
 
   return (

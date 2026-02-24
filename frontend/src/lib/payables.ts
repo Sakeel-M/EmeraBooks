@@ -156,5 +156,8 @@ export function formatCurrency(amount: number, currency: string = 'USD'): string
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(amount);
+  if (currency === 'AED') {
+    return formatted.replace(/^AED\s*/, DIRHAM_SYMBOL + '\u00A0');
+  }
   return formatted;
 }

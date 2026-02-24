@@ -99,7 +99,8 @@ export function CustomerDetail({ open, onOpenChange, customerId, onEditCustomer 
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
-    return formatted;
+    if (cur !== "AED") return formatted;
+    return formatted.replace(/AED|د\.إ\.?\s?/g, "Đ");
   };
 
   return (

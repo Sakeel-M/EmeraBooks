@@ -100,7 +100,8 @@ export function FinancialSummary() {
       style: 'currency',
       currency: code,
     }).format(amount);
-    return formatted;
+    if (code !== 'AED') return formatted;
+    return formatted.replace(/AED|د\.إ\.?\s?/g, 'Đ');
   };
 
   if (loading) {
