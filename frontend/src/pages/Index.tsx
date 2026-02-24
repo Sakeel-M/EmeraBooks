@@ -134,7 +134,13 @@ const Index = () => {
     } else {
       setAnalysisData(null);
     }
-  }, []);
+    // Refresh invoices in background: applies 5% VAT and includes all income transactions
+    if (txns.length > 0) {
+      database.syncBankDataToBusinessRecords(fileId, txns, file.currency)
+        .then(() => queryClient.invalidateQueries({ queryKey: ["invoices-page"] }))
+        .catch(console.warn);
+    }
+  }, [queryClient]);
 
   useEffect(() => {
     if (!user) return;

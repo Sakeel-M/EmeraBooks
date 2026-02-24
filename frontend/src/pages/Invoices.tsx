@@ -67,7 +67,8 @@ export default function Invoices() {
       return (data || []).map((inv: any) => ({
         ...inv,
         // Ledger pattern: resolveCategory(rawCategory, fallbackName)
-        resolvedCategory: resolveCategory(inv.category, inv.customers?.name) || "Other",
+        // Use notes (contains original description) as fallback — matches Home page categorization logic
+        resolvedCategory: resolveCategory(inv.category, inv.notes) || "Other",
       }));
     },
   });

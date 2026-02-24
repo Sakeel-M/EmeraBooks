@@ -528,14 +528,14 @@ export const database = {
   }> {
     console.log("🔄 Starting sync of bank data to business records...");
 
-    // Skip if records for this file already exist (check both bills AND invoices)
-    const [billsCheck, invoicesCheck] = await Promise.all([
-      supabase.from("bills").select("id", { count: "exact", head: true }).eq("source_file_id", fileId),
-      supabase.from("invoices").select("id", { count: "exact", head: true }).eq("source_file_id", fileId),
-    ]);
-    if ((billsCheck.count && billsCheck.count > 0) || (invoicesCheck.count && invoicesCheck.count > 0)) {
-      console.log("⚠️ Business records already exist for this file — skipping sync.");
-      return { vendorsCreated: 0, billsCreated: 0, customersCreated: 0, invoicesCreated: 0 };
+    // Always delete existing invoices so they are recreated with latest logic (5% VAT, all income)
+    await supabase.from("invoices").delete().eq("source_file_id", fileId);
+
+    // Only check bills to prevent duplicate expense records
+    const billsCheck = await supabase.from("bills").select("id", { count: "exact", head: true }).eq("source_file_id", fileId);
+    const billsAlreadyExist = (billsCheck.count ?? 0) > 0;
+    if (billsAlreadyExist) {
+      console.log("ℹ️ Bills already exist for this file — refreshing invoices only.");
     }
 
     const userId = await getCurrentUserId();
@@ -560,7 +560,8 @@ export const database = {
       const rawCat = (t.Category || t.category || "Uncategorized");
       const description = t.Description || t.description || "";
       const category = resolveCategory(rawCat, description);
-      if (NON_BUSINESS.has(rawCat.toLowerCase().trim()) || NON_BUSINESS.has(category.toLowerCase())) continue;
+      // Only skip NON_BUSINESS for expenses — income transactions (all categories) become invoices
+      if (rawAmt < 0 && (NON_BUSINESS.has(rawCat.toLowerCase().trim()) || NON_BUSINESS.has(category.toLowerCase()))) continue;
 
       const rawName = this.extractPayeeName(t.MerchantName || t.merchantName || description);
       const normName = this.normalizeEntityName(rawName);
@@ -585,13 +586,13 @@ export const database = {
     vendorsRes.data?.forEach(v => vendorMap.set(this.normalizeEntityName(v.name), v.id));
     customersRes.data?.forEach(c => customerMap.set(this.normalizeEntityName(c.name), c.id));
 
-    // ── PASS 3: Batch-create new vendors ──
+    // ── PASS 3: Batch-create new vendors (skip if bills already exist) ──
     const newVendors = Array.from(vendorNameMap.entries())
       .filter(([norm]) => !vendorMap.has(norm))
       .map(([, rawName]) => ({ name: rawName, user_id: userId, notes: "Auto-created from bank statement" }));
 
     let vendorsCreated = 0;
-    if (newVendors.length > 0) {
+    if (newVendors.length > 0 && !billsAlreadyExist) {
       const { data: created } = await supabase.from("vendors").insert(newVendors).select("id, name");
       created?.forEach(v => { vendorMap.set(this.normalizeEntityName(v.name), v.id); vendorsCreated++; });
     }
@@ -607,38 +608,40 @@ export const database = {
       created?.forEach(c => { customerMap.set(this.normalizeEntityName(c.name), c.id); customersCreated++; });
     }
 
-    // ── PASS 5: Build and batch-insert bills ──
-    const billsToInsert = expenseTxns
-      .map((t, idx) => {
-        const vendorId = vendorMap.get(t._normName);
-        if (!vendorId) return null;
-        const transactionDate = t.Date || t.date || t.transaction_date;
-        const billDate = new Date(transactionDate).toISOString().split('T')[0];
-        const dueDate = new Date(new Date(transactionDate).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        return {
-          vendor_id: vendorId,
-          user_id: userId,
-          bill_number: `BILL-${fileId.slice(0, 8)}-${String(idx).padStart(6, '0')}`,
-          bill_date: billDate,
-          due_date: dueDate,
-          subtotal: t._amount,
-          tax_amount: 0,
-          total_amount: t._amount,
-          amount_paid: t._amount,
-          status: "paid",
-          currency,
-          category: t._category,
-          notes: `${t._category} - ${t.Description || t.description || ""}`,
-          source_file_id: fileId,
-        };
-      })
-      .filter(Boolean);
-
+    // ── PASS 5: Build and batch-insert bills (skip if bills already exist) ──
     let billsCreated = 0;
-    for (let i = 0; i < billsToInsert.length; i += 500) {
-      const { error } = await supabase.from("bills").insert(billsToInsert.slice(i, i + 500) as any[]);
-      if (!error) billsCreated += Math.min(500, billsToInsert.length - i);
-      else console.error("❌ Bills batch insert error:", error.message);
+    if (!billsAlreadyExist) {
+      const billsToInsert = expenseTxns
+        .map((t, idx) => {
+          const vendorId = vendorMap.get(t._normName);
+          if (!vendorId) return null;
+          const transactionDate = t.Date || t.date || t.transaction_date;
+          const billDate = new Date(transactionDate).toISOString().split('T')[0];
+          const dueDate = new Date(new Date(transactionDate).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          return {
+            vendor_id: vendorId,
+            user_id: userId,
+            bill_number: `BILL-${fileId.slice(0, 8)}-${String(idx).padStart(6, '0')}`,
+            bill_date: billDate,
+            due_date: dueDate,
+            subtotal: t._amount,
+            tax_amount: 0,
+            total_amount: t._amount,
+            amount_paid: t._amount,
+            status: "paid",
+            currency,
+            category: t._category,
+            notes: `${t._category} - ${t.Description || t.description || ""}`,
+            source_file_id: fileId,
+          };
+        })
+        .filter(Boolean);
+
+      for (let i = 0; i < billsToInsert.length; i += 500) {
+        const { error } = await supabase.from("bills").insert(billsToInsert.slice(i, i + 500) as any[]);
+        if (!error) billsCreated += Math.min(500, billsToInsert.length - i);
+        else console.error("❌ Bills batch insert error:", error.message);
+      }
     }
 
     // ── PASS 6: Build and batch-insert invoices ──
@@ -656,9 +659,9 @@ export const database = {
           invoice_date: invoiceDate,
           due_date: dueDate,
           subtotal: t._amount,
-          tax_amount: 0,
-          total_amount: t._amount,
-          amount_paid: t._amount,
+          tax_amount: +(t._amount * 0.05).toFixed(2),
+          total_amount: +(t._amount * 1.05).toFixed(2),
+          amount_paid: +(t._amount * 1.05).toFixed(2),
           status: "paid",
           currency,
           category: t._category,
@@ -677,8 +680,9 @@ export const database = {
 
     console.log(`✅ Sync complete: ${vendorsCreated} vendors, ${billsCreated} bills, ${customersCreated} customers, ${invoicesCreated} invoices`);
 
-    // ── PASS 7: Batch journal entries (non-critical — wrapped in try/catch) ──
+    // ── PASS 7: Batch journal entries (non-critical — skip if bills already exist to avoid duplicates) ──
     try {
+      if (billsAlreadyExist) throw new Error("skip"); // bills/journal entries already created
       const journalTxns = [...expenseTxns, ...incomeTxns];
       if (journalTxns.length > 0) {
         const jeData = journalTxns.map((t, idx) => ({
