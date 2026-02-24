@@ -249,12 +249,19 @@ export function resolveCategory(
  * (Food & Beverage, Technology, Retail & Shopping, etc.) to income transactions.
  */
 
-// Sectors that are valid for income invoices
+// Sectors that are valid for income invoices.
+// ONLY include categories that unambiguously represent income.
+// Expense-oriented categories (Technology, Food & Beverage, Retail & Shopping, etc.)
+// are intentionally excluded — company names containing "tech", "food", etc. must NOT
+// cause income transactions to inherit those expense categories.
 const INCOME_SAFE_SECTORS = new Set([
-  "Internal Transfer", "ATM & Cash Deposits", "Salary & Income",
-  "Finance & Banking", "Business Income", "Real Estate",
-  "Professional Services", "Technology", "Transportation & Logistics",
-  "Utilities", "Education", "Healthcare", "Travel & Tourism",
+  "Internal Transfer",
+  "ATM & Cash Deposits",
+  "Salary & Income",
+  "Finance & Banking",
+  "Business Income",
+  "Real Estate",       // rental / property income
+  "Professional Services", // consulting / advisory fees received
 ]);
 
 // Raw category values that map to Internal Transfer for income
