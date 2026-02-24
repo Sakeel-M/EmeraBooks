@@ -19,7 +19,7 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { DataTableRowActions } from "@/components/shared/DataTableRowActions";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { CategoryManager } from "@/components/shared/CategoryManager";
-import { resolveCategory } from "@/lib/sectorMapping";
+import { resolveCategory, resolveIncomeCategory } from "@/lib/sectorMapping";
 import { getSectorStyle } from "@/lib/sectorStyles";
 import { toast } from "sonner";
 
@@ -66,9 +66,9 @@ export default function Invoices() {
       if (error) throw error;
       return (data || []).map((inv: any) => ({
         ...inv,
-        // Ledger pattern: resolveCategory(rawCategory, fallbackName)
-        // Use notes (contains original description) as fallback — matches Home page categorization logic
-        resolvedCategory: resolveCategory(inv.category, inv.notes) || "Other",
+        // Use income-specific categorizer — never returns expense categories
+        // (Technology, Food & Beverage, Retail etc.) for income invoices.
+        resolvedCategory: resolveIncomeCategory(inv.category, inv.notes),
       }));
     },
   });
