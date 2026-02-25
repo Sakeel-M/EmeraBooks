@@ -649,7 +649,7 @@ export const database = {
         .filter(Boolean);
 
       for (let i = 0; i < billsToInsert.length; i += 500) {
-        const { error } = await supabase.from("bills").insert(billsToInsert.slice(i, i + 500) as any[]);
+        const { error } = await supabase.from("bills").upsert(billsToInsert.slice(i, i + 500) as any[], { onConflict: 'bill_number', ignoreDuplicates: true });
         if (!error) billsCreated += Math.min(500, billsToInsert.length - i);
         else console.error("❌ Bills batch insert error:", error.message);
       }
@@ -684,7 +684,7 @@ export const database = {
 
     let invoicesCreated = 0;
     for (let i = 0; i < invoicesToInsert.length; i += 500) {
-      const { error } = await supabase.from("invoices").insert(invoicesToInsert.slice(i, i + 500) as any[]);
+      const { error } = await supabase.from("invoices").upsert(invoicesToInsert.slice(i, i + 500) as any[], { onConflict: 'invoice_number', ignoreDuplicates: true });
       if (!error) invoicesCreated += Math.min(500, invoicesToInsert.length - i);
       else console.error("❌ Invoices batch insert error:", error.message);
     }
@@ -757,7 +757,7 @@ export const database = {
         .map(t => ({ id: t.id, user_id: userId, category: getCanonicalCategory(t.category, null, t.description) }))
         .filter(u => u.category && u.category !== "Other" && u.category !== (txns.find(t => t.id === u.id)?.category));
       for (let i = 0; i < updates.length; i += 500) {
-        await supabase.from("transactions").upsert(updates.slice(i, i + 500));
+        await supabase.from("transactions").upsert(updates.slice(i, i + 500), { onConflict: 'id' });
       }
       console.log(`✅ Re-categorized ${updates.length} transactions`);
     }
@@ -776,7 +776,7 @@ export const database = {
         })
         .filter(u => u.category && u.category !== "Other" && u.category !== (bills as any[]).find((b: any) => b.id === u.id)?.category);
       for (let i = 0; i < updates.length; i += 500) {
-        await supabase.from("bills").upsert(updates.slice(i, i + 500));
+        await supabase.from("bills").upsert(updates.slice(i, i + 500), { onConflict: 'id' });
       }
       console.log(`✅ Re-categorized ${updates.length} bills`);
     }
@@ -794,7 +794,7 @@ export const database = {
         })
         .filter(u => u.category && u.category !== "Other" && u.category !== (invoices as any[]).find((b: any) => b.id === u.id)?.category);
       for (let i = 0; i < updates.length; i += 500) {
-        await supabase.from("invoices").upsert(updates.slice(i, i + 500));
+        await supabase.from("invoices").upsert(updates.slice(i, i + 500), { onConflict: 'id' });
       }
       console.log(`✅ Re-categorized ${updates.length} invoices`);
     }
