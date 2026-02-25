@@ -142,7 +142,7 @@ export function YoYComparisonChart({
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11 }} tick={<CurrencyAxisTick currency={currency} anchor="end" />} />
+                <YAxis axisLine={false} tickLine={false} tick={<CurrencyAxisTick currency={currency} anchor="end" />} />
                 <Tooltip content={<CustomTooltip currency={currency} />} />
                 <Bar dataKey="currentYear" name={currentYearLabel} fill="url(#currentRevenue)" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="previousYear" name={previousYearLabel} fill="url(#previousRevenue)" radius={[4, 4, 0, 0]} />
@@ -167,7 +167,7 @@ export function YoYComparisonChart({
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11 }} tick={<CurrencyAxisTick currency={currency} anchor="end" />} />
+                <YAxis axisLine={false} tickLine={false} tick={<CurrencyAxisTick currency={currency} anchor="end" />} />
                 <Tooltip content={<CustomTooltip currency={currency} />} />
                 <Bar dataKey="currentYear" name={currentYearLabel} fill="url(#currentExpense)" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="previousYear" name={previousYearLabel} fill="url(#previousExpense)" radius={[4, 4, 0, 0]} />

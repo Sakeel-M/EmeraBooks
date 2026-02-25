@@ -139,7 +139,6 @@ export function RevenueExpenseTrend({ data, currency = "USD", onStatClick }: Rev
             <YAxis
               axisLine={false}
               tickLine={false}
-              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
               tick={<CurrencyAxisTick currency={currency} anchor="end" />}
             />
             <Tooltip content={<CustomTooltip currency={currency} />} />
