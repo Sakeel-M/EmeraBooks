@@ -113,6 +113,19 @@ export function VendorGroupedList({ vendors, bills, onEdit, onView, onDelete, on
     return map;
   }, [bills, consolidatedVendors]);
 
+  // Per-category reason for why that group exists
+  const getCategoryGroupReason = (category: string, vendorList: ConsolidatedVendor[]): string => {
+    const byName = vendorList.filter(v => {
+      const g = guessCategory(v.name);
+      return g && g !== "Internal Transfer" && g === category;
+    }).length;
+    const byBills = vendorList.length - byName;
+    const parts: string[] = [];
+    if (byName > 0) parts.push(`${byName} matched by vendor name`);
+    if (byBills > 0) parts.push(`${byBills} inferred from transactions`);
+    return parts.length > 0 ? parts.join(", ") : "Category resolved from stored profiles";
+  };
+
   // Group vendors by category.
   // Priority: most common bill category (resolveCategory) → vendor.category → guess from name → "Other"
   const grouped = useMemo(() => {
@@ -277,7 +290,12 @@ export function VendorGroupedList({ vendors, bills, onEdit, onView, onDelete, on
                         onCheckedChange={() => toggleGroupSelect(vendorList)}
                       />
                     </div>
-                    <span className="font-semibold text-sm">{category}</span>
+                    <div className="flex flex-col items-start">
+                      <span className="font-semibold text-sm">{category}</span>
+                      <span className="text-xs text-muted-foreground font-normal">
+                        {getCategoryGroupReason(category, vendorList)}
+                      </span>
+                    </div>
                     <Badge variant="secondary" className="text-xs">{vendorList.length}</Badge>
                   </div>
                   {categoryTotal > 0 && <span className="text-sm font-medium"><FormattedCurrency amount={categoryTotal} currency={currency} /></span>}

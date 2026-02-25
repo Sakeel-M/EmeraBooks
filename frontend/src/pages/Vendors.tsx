@@ -19,7 +19,8 @@ import { CategoryManager } from "@/components/shared/CategoryManager";
 import { QuarterNavigator, DateMode } from "@/components/dashboard/QuarterNavigator";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { getCanonicalCategory, guessCategory } from "@/lib/sectorMapping";
+import { getCanonicalCategory, guessCategory, resolveCategory } from "@/lib/sectorMapping";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getSectorStyle } from "@/lib/sectorStyles";
 import { useCurrency } from "@/hooks/useCurrency";
 import { formatAmount } from "@/lib/utils";
@@ -189,6 +190,19 @@ export default function Vendors() {
     return map;
   }, [quarterTxnBills]);
 
+  const getVendorCategoryReason = (v: any): string => {
+    const nameGuess = guessCategory(v.name);
+    if (nameGuess && nameGuess !== "Internal Transfer")
+      return `Matched by vendor name — "${v.name}" contains a keyword for "${nameGuess}".`;
+    const txnCat = vendorBillCategoryMap.get(v.id);
+    if (txnCat)
+      return `Inferred from linked transaction categories in the selected period → "${txnCat}".`;
+    const stored = getCanonicalCategory(v.category, v.name, null);
+    if (stored && stored !== "Other")
+      return `Taken from the stored vendor profile category: "${stored}".`;
+    return "Category could not be determined — defaulted to \"Other\".";
+  };
+
   const getVendorCategory = (v: any): string => {
     // Vendor name is the most reliable signal — direct keyword matching
     const nameGuess = guessCategory(v.name);
@@ -253,11 +267,21 @@ export default function Vendors() {
     { accessorKey: "phone", header: "Phone" },
     { accessorKey: "category", header: "Category", cell: ({ row }) => {
       const cat = getVendorCategory(row.original);
+      const reason = getVendorCategoryReason(row.original);
       const style = getSectorStyle(cat.toLowerCase(), 0);
       return (
-        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${style.badgeBg} ${style.badgeText}`}>
-          {cat}
-        </span>
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium cursor-help ${style.badgeBg} ${style.badgeText}`}>
+                {cat}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="max-w-xs text-xs">
+              {reason}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       );
     }},
     {
