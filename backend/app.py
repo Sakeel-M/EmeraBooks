@@ -723,13 +723,13 @@ Top Spending Categories:
 RULES — you MUST follow all of them:
 1. Every insight, pattern, and recommendation MUST reference at least one specific number or category name from the data above.
 2. Do NOT use vague phrases like "your spending" or "your income" without quoting the actual value.
-3. Derive financial_health_score from savings rate: >20% → 70-100, 5-20% → 40-69, <5% or negative → 0-39.
+3. Derive financial_health_score from savings rate using this scale: negative → 10-20, 0-2% → 20-35, 2-5% → 35-50, 5-10% → 50-62, 10-20% → 62-78, >20% → 78-100. Never return 0 unless there is literally zero income AND zero savings.
 4. Return ONLY a valid JSON object — no markdown, no explanation, no code fences.
 
 JSON structure:
 {{
   "financial_health_score": <integer 0-100>,
-  "score_category": "<Excellent|Good|Fair|Poor>",
+  "score_category": "<Excellent|Good|Fair|Needs Improvement|Poor>",
   "key_insights": ["<insight with actual number>", "<insight>", "<insight>"],
   "spending_patterns": ["<pattern with actual category/number>", "<pattern>", "<pattern>"],
   "recommendations": ["<recommendation>", "<recommendation>", "<recommendation>"]
