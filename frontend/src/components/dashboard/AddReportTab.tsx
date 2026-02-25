@@ -41,11 +41,6 @@ const AddReportTab = ({ onUploadSuccess, files = [], currentFileId, onSelectFile
     <div className="max-w-2xl mx-auto space-y-8">
       {/* Upload section */}
       <div className="space-y-6">
-        <div className="text-center space-y-1">
-          <h2 className="text-xl font-semibold text-foreground">Upload Your Bank Statement</h2>
-          <p className="text-sm text-muted-foreground">Get AI-powered insights into your spending patterns</p>
-        </div>
-
         <FileUpload onUploadSuccess={onUploadSuccess} />
 
         <div className="grid md:grid-cols-3 gap-4">
