@@ -754,7 +754,7 @@ export const database = {
       .from("transactions").select("id, category, description").eq("user_id", userId);
     if (txns && txns.length > 0) {
       const updates = txns
-        .map(t => ({ id: t.id, category: getCanonicalCategory(t.category, null, t.description) }))
+        .map(t => ({ id: t.id, user_id: userId, category: getCanonicalCategory(t.category, null, t.description) }))
         .filter(u => u.category && u.category !== "Other" && u.category !== (txns.find(t => t.id === u.id)?.category));
       for (let i = 0; i < updates.length; i += 500) {
         await supabase.from("transactions").upsert(updates.slice(i, i + 500));
@@ -772,7 +772,7 @@ export const database = {
           const vendorName = (b as any).vendors?.name;
           const noteDesc = b.notes?.split(" - ").slice(1).join(" - ").trim() || "";
           const resolved = getCanonicalCategory(b.category, vendorName, noteDesc);
-          return { id: b.id, category: resolved };
+          return { id: b.id, user_id: userId, category: resolved };
         })
         .filter(u => u.category && u.category !== "Other" && u.category !== (bills as any[]).find((b: any) => b.id === u.id)?.category);
       for (let i = 0; i < updates.length; i += 500) {
@@ -790,7 +790,7 @@ export const database = {
           const customerName = (i as any).customers?.name;
           const noteDesc = i.notes?.split(" - ").slice(1).join(" - ").trim() || "";
           const resolved = resolveIncomeCategory(i.category, noteDesc || customerName);
-          return { id: i.id, category: resolved };
+          return { id: i.id, user_id: userId, category: resolved };
         })
         .filter(u => u.category && u.category !== "Other" && u.category !== (invoices as any[]).find((b: any) => b.id === u.id)?.category);
       for (let i = 0; i < updates.length; i += 500) {
