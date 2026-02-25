@@ -1,5 +1,5 @@
 import { Separator } from "@/components/ui/separator";
-import { formatAmount } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface InvoicePreviewProps {
   invoice: any;
@@ -31,9 +31,20 @@ export function InvoicePreview({ invoice, companyProfile, templateSettings, item
   const footerText = templateSettings?.invoice_footer_text;
 
   const hasItems = items.length > 0;
-  const subtotal = hasItems ? items.reduce((s, i) => s + (i.quantity * i.unit_price), 0) : Number(invoice?.subtotal || invoice?.total_amount || 0);
-  const taxTotal = hasItems && showTax ? items.reduce((s, i) => s + (i.quantity * i.unit_price * (i.tax_rate || 0) / 100), 0) : Number(invoice?.tax_amount || 0);
-  const total = hasItems ? subtotal + taxTotal : Number(invoice?.total_amount || 0);
+  const VAT_RATE = 5; // 5% UAE VAT
+  const rawTotal = Number(invoice?.total_amount || 0);
+
+  // For line-item invoices: sum from items. For bank-synced invoices (no items):
+  // treat total_amount as VAT-inclusive → subtotal = total * 95%, tax = total * 5%
+  const subtotal = hasItems
+    ? items.reduce((s, i) => s + (i.quantity * i.unit_price), 0)
+    : (invoice?.subtotal != null ? Number(invoice.subtotal) : rawTotal * (1 - VAT_RATE / 100));
+  const taxTotal = hasItems && showTax
+    ? items.reduce((s, i) => s + (i.quantity * i.unit_price * (i.tax_rate || 0) / 100), 0)
+    : (invoice?.tax_amount != null && Number(invoice.tax_amount) > 0
+        ? Number(invoice.tax_amount)
+        : (showTax ? rawTotal * (VAT_RATE / 100) : 0));
+  const total = hasItems ? subtotal + taxTotal : rawTotal;
 
   if (template === "modern") {
     return (
@@ -144,9 +155,9 @@ function InvoiceBody({ invoice, items, subtotal, taxTotal, total, showTax, showT
             <tr key={i} className="border-b border-gray-100">
               <td className="py-2">{item.description}</td>
               <td className="text-right py-2">{item.quantity}</td>
-              <td className="text-right py-2">{formatAmount(Number(item.unit_price), currency)}</td>
+              <td className="text-right py-2"><FormattedCurrency amount={Number(item.unit_price)} currency={currency} /></td>
               {showTax && <td className="text-right py-2">{item.tax_rate || 0}%</td>}
-              <td className="text-right py-2">{formatAmount(item.quantity * item.unit_price * (1 + (item.tax_rate || 0) / 100), currency)}</td>
+              <td className="text-right py-2"><FormattedCurrency amount={item.quantity * item.unit_price * (1 + (item.tax_rate || 0) / 100)} currency={currency} /></td>
             </tr>
           )) : (
             <tr><td colSpan={showTax ? 5 : 4} className="py-4 text-center text-gray-400">No line items</td></tr>
@@ -157,10 +168,10 @@ function InvoiceBody({ invoice, items, subtotal, taxTotal, total, showTax, showT
       {/* Totals */}
       <div className="flex justify-end mb-6">
         <div className={compact ? "w-40" : "w-56"}>
-          <div className="flex justify-between py-1"><span className="text-gray-500">Subtotal</span><span>{formatAmount(subtotal, currency)}</span></div>
-          {showTax && <div className="flex justify-between py-1"><span className="text-gray-500">Tax</span><span>{formatAmount(taxTotal, currency)}</span></div>}
+          <div className="flex justify-between py-1"><span className="text-gray-500">Subtotal</span><span><FormattedCurrency amount={subtotal} currency={currency} /></span></div>
+          {showTax && <div className="flex justify-between py-1"><span className="text-gray-500">VAT (5%)</span><span><FormattedCurrency amount={taxTotal} currency={currency} /></span></div>}
           <Separator className="my-1" />
-          <div className="flex justify-between py-1 font-bold text-lg"><span>Total</span><span>{formatAmount(total, currency)}</span></div>
+          <div className="flex justify-between py-1 font-bold text-lg"><span>Total</span><span><FormattedCurrency amount={total} currency={currency} /></span></div>
         </div>
       </div>
 

@@ -5,14 +5,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { X, Tag } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Separator } from "@/components/ui/separator";
+import { X, Tag, Info, Building2, Receipt, Bookmark } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { resolveCategory, guessCategory, mapRawBankCategory } from "@/lib/sectorMapping";
+import { resolveCategory, guessCategory, mapRawBankCategory, getCanonicalCategory } from "@/lib/sectorMapping";
 import { PREDEFINED_SECTORS } from "@/lib/predefinedSectors";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useCurrency } from "@/hooks/useCurrency";
-import { formatAmount } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface VendorGroupedListProps {
   vendors: any[];
@@ -38,11 +40,12 @@ interface ConsolidatedVendor {
 
 export function VendorGroupedList({ vendors, bills, onEdit, onView, onDelete, onRefresh, searchQuery = "" }: VendorGroupedListProps) {
   const { currency } = useCurrency();
-  const fmt = (v: number) => formatAmount(v, currency);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkCategory, setBulkCategory] = useState("");
   const [applying, setApplying] = useState(false);
   const queryClient = useQueryClient();
+  const [reasonOpen, setReasonOpen] = useState(false);
+  const [reasonData, setReasonData] = useState<{ vendor: ConsolidatedVendor; category: string; bills: any[] } | null>(null);
 
   const { data: categories = [] } = useQuery({
     queryKey: ["categories", "vendor"],
@@ -117,6 +120,8 @@ export function VendorGroupedList({ vendors, bills, onEdit, onView, onDelete, on
     filteredVendors.forEach((v) => {
       // Bills have category set by syncBankDataToBusinessRecords via resolveCategory — most reliable
       const vendorBills = vendorBillsMap.get(v.id) || [];
+      // Skip vendors with no activity in the selected period
+      if (vendorBills.length === 0) return;
       const billCatCounts = new Map<string, number>();
       vendorBills.forEach((b: any) => {
         const resolved = resolveCategory(b.category, b.notes);
@@ -215,6 +220,37 @@ export function VendorGroupedList({ vendors, bills, onEdit, onView, onDelete, on
     }
   };
 
+  const openReason = (vendor: ConsolidatedVendor, category: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const vBills = vendorBillsMap.get(vendor.id) || [];
+    setReasonData({ vendor, category, bills: vBills });
+    setReasonOpen(true);
+  };
+
+  // Explain how category was determined for a vendor
+  const getCategoryReason = (vendor: ConsolidatedVendor, vBills: any[]): string => {
+    const nameGuess = guessCategory(vendor.name);
+    if (nameGuess && nameGuess !== "Internal Transfer") {
+      return `Matched by vendor name — "${vendor.name}" contains a keyword for "${nameGuess}".`;
+    }
+    const billCatCounts = new Map<string, number>();
+    vBills.forEach((b: any) => {
+      const resolved = resolveCategory(b.category, b.notes);
+      if (resolved && resolved !== "Internal Transfer" && resolved !== "Other")
+        billCatCounts.set(resolved, (billCatCounts.get(resolved) || 0) + 1);
+    });
+    let bestBillCat = "";
+    let maxCount = 0;
+    billCatCounts.forEach((count, cat) => { if (count > maxCount) { maxCount = count; bestBillCat = cat; } });
+    if (bestBillCat) {
+      return `Inferred from ${maxCount} bill(s) in this period whose category resolved to "${bestBillCat}".`;
+    }
+    if (vendor.category) {
+      return `Taken from the stored vendor profile category: "${vendor.category}".`;
+    }
+    return "Category could not be determined — defaulted to \"Other\".";
+  };
+
   return (
     <div className="relative">
       <Accordion type="multiple" className="space-y-2">
@@ -244,7 +280,7 @@ export function VendorGroupedList({ vendors, bills, onEdit, onView, onDelete, on
                     <span className="font-semibold text-sm">{category}</span>
                     <Badge variant="secondary" className="text-xs">{vendorList.length}</Badge>
                   </div>
-                  {categoryTotal > 0 && <span className="text-sm font-medium">{fmt(categoryTotal)}</span>}
+                  {categoryTotal > 0 && <span className="text-sm font-medium"><FormattedCurrency amount={categoryTotal} currency={currency} /></span>}
                 </div>
               </AccordionTrigger>
               <AccordionContent>
@@ -282,10 +318,10 @@ export function VendorGroupedList({ vendors, bills, onEdit, onView, onDelete, on
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
                           <div onClick={(e) => e.stopPropagation()}>
                             <Select
-                              value={resolveCategory(vendor.category, vendor.name) || "uncategorized"}
+                              value={getCanonicalCategory(vendor.category, vendor.name, null) || "uncategorized"}
                               onValueChange={(val) => handleInlineCategory(vendor, val)}
                             >
                               <SelectTrigger className="h-7 text-xs w-[130px] border-dashed">
@@ -304,8 +340,17 @@ export function VendorGroupedList({ vendors, bills, onEdit, onView, onDelete, on
                             </Select>
                           </div>
                           <span className="text-sm font-semibold">
-                            {vendorTotal > 0 ? fmt(vendorTotal) : fmt(vendor.balance)}
+                            <FormattedCurrency amount={vendorTotal > 0 ? vendorTotal : vendor.balance} currency={currency} />
                           </span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-primary"
+                            title="Why is this vendor here?"
+                            onClick={(e) => openReason(vendor, category, e)}
+                          >
+                            <Info className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
                     );
@@ -343,6 +388,77 @@ export function VendorGroupedList({ vendors, bills, onEdit, onView, onDelete, on
           </Button>
         </div>
       )}
+
+      {/* Reason Sheet */}
+      <Sheet open={reasonOpen} onOpenChange={setReasonOpen}>
+        <SheetContent className="w-full sm:max-w-lg flex flex-col overflow-hidden">
+          {reasonData && (
+            <>
+              <SheetHeader>
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-primary" />
+                  <SheetTitle>{reasonData.vendor.name}</SheetTitle>
+                </div>
+                <SheetDescription>Why this vendor appears and how its data was determined</SheetDescription>
+              </SheetHeader>
+
+              <div className="flex-1 overflow-y-auto mt-4 space-y-5 pr-1">
+                {/* Appearance reason */}
+                <div className="rounded-lg border p-4 space-y-1">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <Receipt className="w-4 h-4 text-primary" />
+                    Why this vendor is shown
+                  </div>
+                  {reasonData.bills.length > 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Found <span className="font-medium text-foreground">{reasonData.bills.length} bill{reasonData.bills.length !== 1 ? "s" : ""}</span> in the selected period that are linked to this vendor. Total spend: <span className="font-medium text-foreground"><FormattedCurrency amount={reasonData.bills.reduce((s, b) => s + Number(b.total_amount || 0), 0)} currency={currency} /></span>.
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      This vendor exists in your vendor list but has no bills linked in the selected period. It may have been added manually or synced from an earlier upload.
+                    </p>
+                  )}
+                </div>
+
+                {/* Category reason */}
+                <div className="rounded-lg border p-4 space-y-1">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <Bookmark className="w-4 h-4 text-primary" />
+                    Category: <span className="text-primary">{reasonData.category}</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {getCategoryReason(reasonData.vendor, reasonData.bills)}
+                  </p>
+                </div>
+
+                {/* Bill list */}
+                {reasonData.bills.length > 0 && (
+                  <>
+                    <Separator />
+                    <div>
+                      <p className="text-sm font-semibold text-foreground mb-2">Linked Bills ({reasonData.bills.length})</p>
+                      <div className="space-y-1">
+                        {reasonData.bills.slice(0, 30).map((b: any, i: number) => (
+                          <div key={b.id || i} className="flex items-center justify-between py-2 px-2 rounded hover:bg-muted/50 text-sm">
+                            <div className="flex-1 min-w-0">
+                              <p className="truncate text-foreground">{b.notes || b.description || "—"}</p>
+                              <p className="text-xs text-muted-foreground">{b.bill_date} · {resolveCategory(b.category, b.notes) || b.category || "Unknown"}</p>
+                            </div>
+                            <span className="ml-3 shrink-0 font-medium text-foreground"><FormattedCurrency amount={Number(b.total_amount || 0)} currency={currency} /></span>
+                          </div>
+                        ))}
+                        {reasonData.bills.length > 30 && (
+                          <p className="text-xs text-muted-foreground text-center pt-1">Showing first 30 of {reasonData.bills.length}</p>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

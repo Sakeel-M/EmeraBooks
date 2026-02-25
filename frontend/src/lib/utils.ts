@@ -5,39 +5,26 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// Official UAE Dirham symbol: Latin D + two combining long-stroke overlays (U+0336 × 2).
-// This produces "D̶̶" — a D with two horizontal bars — matching the new official symbol
-// announced by the UAE Central Bank on 1 Aug 2023.
-// Unicode has assigned U+20C3 for this character; it will be released in Unicode 18.0.
-// Until then, the combining-character approach works in all modern browsers without custom fonts.
-export const DIRHAM_SYMBOL = "D\u0336\u0336";
-
-export function replaceAedSymbol(formatted: string, currencyCode: string): string {
-  if (currencyCode === "AED") {
-    // Replace the "AED" prefix emitted by Intl.NumberFormat with the Dirham symbol
-    return formatted.replace(/^AED\s*/, DIRHAM_SYMBOL + "\u00A0");
-  }
+/** @deprecated No longer needed — kept for backward compatibility only */
+export function replaceAedSymbol(formatted: string, _currencyCode: string): string {
   return formatted;
 }
 
+/** Returns a formatted currency string (e.g. "AED 55,113" or "$55,113").
+ *  For JSX display with the UAE Dirham SVG symbol use <FormattedCurrency> instead. */
 export const formatAmount = (amount: number, currency: string = "USD") =>
-  replaceAedSymbol(
-    new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    }).format(amount),
-    currency
-  );
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(amount);
 
+/** Compact version of formatAmount (e.g. "AED 55.1K"). String output only. */
 export const formatCompactCurrency = (value: number, currency: string = "USD") =>
-  replaceAedSymbol(
-    new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency,
-      notation: "compact",
-      maximumFractionDigits: 0,
-    }).format(value),
-    currency
-  );
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    notation: "compact",
+    maximumFractionDigits: 1,
+  } as Intl.NumberFormatOptions).format(value);

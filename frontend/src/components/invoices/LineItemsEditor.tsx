@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { replaceAedSymbol } from "@/lib/utils";
 import { UseFormReturn } from "react-hook-form";
 import { Plus, Trash2, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,6 +18,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { InvoiceFormData } from "@/lib/validations/invoice";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface LineItemsEditorProps {
   form: UseFormReturn<InvoiceFormData>;
@@ -26,6 +26,7 @@ interface LineItemsEditorProps {
 
 export function LineItemsEditor({ form }: LineItemsEditorProps) {
   const items = form.watch("items");
+  const currency = form.watch("currency") || "USD";
 
   const addItem = () => {
     const currentItems = form.getValues("items");
@@ -74,16 +75,6 @@ export function LineItemsEditor({ form }: LineItemsEditorProps) {
 
   const calculateTotal = () => {
     return calculateSubtotal() + calculateTotalTax();
-  };
-
-  const formatCurrency = (amount: number) => {
-    const cur = form.watch("currency") || "USD";
-    const formatted = new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: cur,
-      minimumFractionDigits: 2,
-    }).format(amount);
-    return replaceAedSymbol(formatted, cur);
   };
 
   return (
@@ -190,7 +181,7 @@ export function LineItemsEditor({ form }: LineItemsEditorProps) {
                   />
                 </TableCell>
                 <TableCell className="text-right font-medium">
-                  {formatCurrency(calculateLineTotal(index))}
+                  <FormattedCurrency amount={calculateLineTotal(index)} currency={currency} maxDecimals={2} />
                 </TableCell>
                 <TableCell>
                   <Button
@@ -226,15 +217,15 @@ export function LineItemsEditor({ form }: LineItemsEditorProps) {
         <div className="w-80 space-y-2">
           <div className="flex justify-between py-2 border-t">
             <span className="text-muted-foreground">Subtotal:</span>
-            <span className="font-medium">{formatCurrency(calculateSubtotal())}</span>
+            <span className="font-medium"><FormattedCurrency amount={calculateSubtotal()} currency={currency} maxDecimals={2} /></span>
           </div>
           <div className="flex justify-between py-2">
             <span className="text-muted-foreground">Tax:</span>
-            <span className="font-medium">{formatCurrency(calculateTotalTax())}</span>
+            <span className="font-medium"><FormattedCurrency amount={calculateTotalTax()} currency={currency} maxDecimals={2} /></span>
           </div>
           <div className="flex justify-between py-3 border-t-2 border-foreground">
             <span className="text-lg font-semibold">Total:</span>
-            <span className="text-lg font-bold">{formatCurrency(calculateTotal())}</span>
+            <span className="text-lg font-bold"><FormattedCurrency amount={calculateTotal()} currency={currency} maxDecimals={2} /></span>
           </div>
         </div>
       </div>

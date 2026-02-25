@@ -4,7 +4,7 @@ import { StatCard } from "@/components/shared/StatCard";
 import { DollarSign, AlertCircle, TrendingUp, Wallet } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrency } from "@/hooks/useCurrency";
-import { replaceAedSymbol } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface FinancialMetrics {
   totalRevenue: number;
@@ -32,7 +32,7 @@ export function FinancialSummary() {
           .select('total_amount');
 
         const totalRevenue = allInvoices?.reduce(
-          (sum, inv) => sum + Number(inv.total_amount), 
+          (sum, inv) => sum + Number(inv.total_amount),
           0
         ) || 0;
 
@@ -44,7 +44,7 @@ export function FinancialSummary() {
           .select('total_amount');
 
         const totalExpenses = allBills?.reduce(
-          (sum, bill) => sum + Number(bill.total_amount), 
+          (sum, bill) => sum + Number(bill.total_amount),
           0
         ) || 0;
 
@@ -65,12 +65,12 @@ export function FinancialSummary() {
           .neq('status', 'paid');
 
         const unpaidInvoicesTotal = unpaidInvoices?.reduce(
-          (sum, inv) => sum + Number(inv.total_amount), 
+          (sum, inv) => sum + Number(inv.total_amount),
           0
         ) || 0;
 
         const unpaidBillsTotal = unpaidBills?.reduce(
-          (sum, bill) => sum + Number(bill.total_amount), 
+          (sum, bill) => sum + Number(bill.total_amount),
           0
         ) || 0;
 
@@ -95,15 +95,6 @@ export function FinancialSummary() {
     fetchMetrics();
   }, [userCurrency]);
 
-  const formatCurrency = (amount: number, cur: string) => {
-    const code = cur || 'USD';
-    const formatted = new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: code,
-    }).format(amount);
-    return replaceAedSymbol(formatted, code);
-  };
-
   if (loading) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -120,29 +111,29 @@ export function FinancialSummary() {
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       <StatCard
         title="Total Revenue"
-        value={formatCurrency(metrics.totalRevenue, metrics.currency)}
+        value={<FormattedCurrency amount={metrics.totalRevenue} currency={metrics.currency} />}
         icon={DollarSign}
         trend="up"
         change={`${metrics.invoiceCount} invoices`}
       />
-      
+
       <StatCard
         title="Total Expenses"
-        value={formatCurrency(metrics.totalExpenses, metrics.currency)}
+        value={<FormattedCurrency amount={metrics.totalExpenses} currency={metrics.currency} />}
         icon={AlertCircle}
         change={`${metrics.billCount} bills`}
       />
-      
+
       <StatCard
         title="Net Profit"
-        value={formatCurrency(metrics.netProfit, metrics.currency)}
+        value={<FormattedCurrency amount={metrics.netProfit} currency={metrics.currency} />}
         icon={TrendingUp}
         trend={metrics.netProfit >= 0 ? "up" : "down"}
       />
-      
+
       <StatCard
         title="Outstanding Balance"
-        value={formatCurrency(metrics.outstandingBalance, metrics.currency)}
+        value={<FormattedCurrency amount={metrics.outstandingBalance} currency={metrics.currency} />}
         icon={Wallet}
         className={metrics.outstandingBalance > 0 ? "border-orange-500/20" : ""}
       />

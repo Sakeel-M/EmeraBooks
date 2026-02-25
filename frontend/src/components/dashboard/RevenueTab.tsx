@@ -10,7 +10,9 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from "recharts";
 import type { Transaction } from "@/lib/database";
-import { replaceAedSymbol } from "@/lib/utils";
+import { resolveIncomeCategory } from "@/lib/sectorMapping";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
+import { CurrencyAxisTick } from "@/components/shared/CurrencyAxisTick";
 
 interface RevenueTabProps {
   transactions: Transaction[];
@@ -22,8 +24,6 @@ const RevenueTab = ({ transactions, currency, quarterLabel }: RevenueTabProps) =
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
-  const fmt = (v: number) =>
-    replaceAedSymbol(new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v), currency);
 
   const incomeTransactions = transactions.filter(t => t.amount > 0);
   const totalRevenue = incomeTransactions.reduce((s, t) => s + t.amount, 0);
@@ -31,7 +31,7 @@ const RevenueTab = ({ transactions, currency, quarterLabel }: RevenueTabProps) =
   const revenueBySource = useMemo(() => {
     const sources = new Map<string, number>();
     incomeTransactions.forEach((t) => {
-      const cat = t.category || "Other Income";
+      const cat = resolveIncomeCategory(t.category, t.description);
       sources.set(cat, (sources.get(cat) || 0) + t.amount);
     });
     return Array.from(sources.entries())
@@ -65,7 +65,7 @@ const RevenueTab = ({ transactions, currency, quarterLabel }: RevenueTabProps) =
   const sourceTransactions = useMemo(() => {
     if (!selectedSource) return [];
     return incomeTransactions
-      .filter(t => (t.category || "Other Income") === selectedSource)
+      .filter(t => resolveIncomeCategory(t.category, t.description) === selectedSource)
       .filter(t => !search || t.description.toLowerCase().includes(search.toLowerCase()))
       .sort((a, b) => b.amount - a.amount);
   }, [incomeTransactions, selectedSource, search]);
@@ -82,7 +82,7 @@ const RevenueTab = ({ transactions, currency, quarterLabel }: RevenueTabProps) =
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold text-green-600">{fmt(totalRevenue)}</span>
+              <span className="text-2xl font-bold text-green-600"><FormattedCurrency amount={totalRevenue} currency={currency} /></span>
               <Badge variant="secondary" className="text-xs">
                 {incomeTransactions.length} transactions
               </Badge>
@@ -98,7 +98,7 @@ const RevenueTab = ({ transactions, currency, quarterLabel }: RevenueTabProps) =
                     <span className="text-xs font-bold text-muted-foreground w-5">{i + 1}.</span>
                     <span className="text-sm">{src.name}</span>
                   </div>
-                  <span className="text-sm font-semibold text-green-600">{fmt(src.amount)}</span>
+                  <span className="text-sm font-semibold text-green-600"><FormattedCurrency amount={src.amount} currency={currency} /></span>
                 </div>
               ))}
             </div>
@@ -112,9 +112,9 @@ const RevenueTab = ({ transactions, currency, quarterLabel }: RevenueTabProps) =
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={revenueBySource} layout="vertical" margin={{ left: 80 }}>
-                <XAxis type="number" stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => fmt(v)} />
+                <XAxis type="number" stroke="hsl(var(--muted-foreground))" tick={<CurrencyAxisTick currency={currency} />} />
                 <YAxis type="category" dataKey="name" stroke="hsl(var(--muted-foreground))" width={80} tick={{ fontSize: 11 }} />
-                <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => fmt(v)} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => <FormattedCurrency amount={v} currency={currency} />} />
                 <Bar
                   dataKey="amount"
                   fill="hsl(143 44% 35%)"
@@ -136,8 +136,8 @@ const RevenueTab = ({ transactions, currency, quarterLabel }: RevenueTabProps) =
           <ResponsiveContainer width="100%" height={250}>
             <AreaChart data={revenueTrend}>
               <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" />
-              <YAxis stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => fmt(v)} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => fmt(v)} />
+              <YAxis stroke="hsl(var(--muted-foreground))" tick={<CurrencyAxisTick currency={currency} anchor="end" />} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => <FormattedCurrency amount={v} currency={currency} />} />
               <defs>
                 <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="hsl(143 44% 35%)" stopOpacity={0.3} />
@@ -156,7 +156,7 @@ const RevenueTab = ({ transactions, currency, quarterLabel }: RevenueTabProps) =
           <SheetHeader>
             <SheetTitle>{selectedSource}</SheetTitle>
             <SheetDescription>
-              {sourceTransactions.length} transactions · {fmt(sourceTotal)} total
+              {sourceTransactions.length} transactions · <FormattedCurrency amount={sourceTotal} currency={currency} /> total
             </SheetDescription>
           </SheetHeader>
           <div className="mt-4 space-y-4">
@@ -178,7 +178,7 @@ const RevenueTab = ({ transactions, currency, quarterLabel }: RevenueTabProps) =
                     <TableRow key={i}>
                       <TableCell className="whitespace-nowrap text-muted-foreground">{new Date(t.transaction_date).toLocaleDateString()}</TableCell>
                       <TableCell className="max-w-[200px] truncate">{t.description}</TableCell>
-                      <TableCell className="text-right font-semibold text-green-600">{fmt(t.amount)}</TableCell>
+                      <TableCell className="text-right font-semibold text-green-600"><FormattedCurrency amount={t.amount} currency={currency} /></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

@@ -11,12 +11,16 @@ const TransactionTable = ({ data }: TransactionTableProps) => {
 
   const getCategoryColor = (category: string) => {
     const colors: Record<string, string> = {
-      'Food & Dining': 'bg-orange-100 text-orange-700',
-      'Shopping': 'bg-orange-100 text-orange-700',
-      'Transportation': 'bg-orange-100 text-orange-700',
-      'Entertainment': 'bg-orange-100 text-orange-700',
-      'Bills & Utilities': 'bg-orange-100 text-orange-700',
+      'Food & Beverage': 'bg-orange-100 text-orange-700',
+      'Retail & Shopping': 'bg-orange-100 text-orange-700',
+      'Transportation & Logistics': 'bg-orange-100 text-orange-700',
+      'Entertainment & Media': 'bg-orange-100 text-orange-700',
+      'Utilities': 'bg-orange-100 text-orange-700',
+      'Technology': 'bg-orange-100 text-orange-700',
       'Healthcare': 'bg-orange-100 text-orange-700',
+      'Finance & Banking': 'bg-blue-100 text-blue-700',
+      'Salary & Income': 'bg-green-100 text-green-700',
+      'Internal Transfer': 'bg-gray-100 text-gray-600',
       'Other': 'bg-muted text-muted-foreground',
     };
     return colors[category] || 'bg-muted text-muted-foreground';

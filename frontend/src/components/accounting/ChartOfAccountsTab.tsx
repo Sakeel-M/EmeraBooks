@@ -7,13 +7,15 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { AccountDialog } from "./AccountDialog";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
-import { Plus, Calculator, Pencil, Trash2, Download, Search, RefreshCw } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Plus, Calculator, Pencil, Trash2, Download, Search, RefreshCw, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Progress } from "@/components/ui/progress";
 import { useCurrency } from "@/hooks/useCurrency";
-import { formatAmount } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
+import { format } from "date-fns";
 
 const typeColors: Record<string, string> = {
   asset: "bg-blue-100 text-blue-700",
@@ -80,9 +82,22 @@ function categoryToAccountNumber(category: string | null | undefined, isIncome: 
   return "5950";
 }
 
+// Accounting rules per account type
+function getAccountRule(type: string): string {
+  if (type === "asset") return "Asset accounts have a normal Debit balance. Debits increase assets (e.g., cash received); Credits decrease assets (e.g., cash paid out).";
+  if (type === "expense") return "Expense accounts have a normal Debit balance. Debits record costs incurred; Credits reduce expenses (e.g., refunds or reversals).";
+  if (type === "liability") return "Liability accounts have a normal Credit balance. Credits increase what you owe; Debits reduce liabilities (e.g., loan repayments).";
+  if (type === "equity") return "Equity accounts have a normal Credit balance. Credits increase owner's equity; Debits decrease it (e.g., owner withdrawals).";
+  if (type === "revenue") return "Revenue accounts have a normal Credit balance. Credits record income earned; Debits are reversals or refunds.";
+  return "Balance = Total Debits − Total Credits from all journal entry lines for this account.";
+}
+function getNormalBalance(type: string): string {
+  return ["asset", "expense"].includes(type) ? "Debit" : "Credit";
+}
+
 export function ChartOfAccountsTab() {
   const { currency } = useCurrency();
-  const fmtBal = (v: number) => formatAmount(v, currency);
+  const fmtBal = (v: number) => <FormattedCurrency amount={v} currency={currency} />;
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<any>(null);
@@ -92,6 +107,30 @@ export function ChartOfAccountsTab() {
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState(0);
   const [syncStatus, setSyncStatus] = useState("");
+
+  // Reason sheet state
+  const [reasonOpen, setReasonOpen] = useState(false);
+  const [reasonAccount, setReasonAccount] = useState<any>(null);
+  const [reasonLines, setReasonLines] = useState<any[]>([]);
+  const [reasonLoading, setReasonLoading] = useState(false);
+
+  const openReason = async (account: any) => {
+    setReasonAccount(account);
+    setReasonLines([]);
+    setReasonOpen(true);
+    setReasonLoading(true);
+    try {
+      const { data } = await supabase
+        .from("journal_entry_lines")
+        .select("debit_amount, credit_amount, journal_entries(entry_date, description, entry_number)")
+        .eq("account_id", account.id)
+        .limit(100);
+      setReasonLines(data || []);
+    } catch {
+      setReasonLines([]);
+    }
+    setReasonLoading(false);
+  };
 
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ["accounts"],
@@ -549,7 +588,11 @@ export function ChartOfAccountsTab() {
                   {(accts as any[]).map((a: any) => (
                     <TableRow key={a.id}>
                       <TableCell className="font-medium">{a.account_name}</TableCell>
-                      <TableCell className="text-right font-mono">
+                      <TableCell
+                        className="text-right font-mono cursor-pointer hover:bg-muted/50 transition-colors rounded"
+                        title="Click to see balance breakdown"
+                        onClick={() => openReason(a)}
+                      >
                         {a.computed_balance !== 0 ? (
                           <span className={a.computed_balance > 0 ? "text-green-600" : "text-red-600"}>
                             {a.computed_balance > 0 ? "+" : ""}{fmtBal(a.computed_balance)}
@@ -594,6 +637,103 @@ export function ChartOfAccountsTab() {
         confirmLabel="Deactivate"
         onConfirm={handleDelete}
       />
+
+      {/* Reason Sheet */}
+      <Sheet open={reasonOpen} onOpenChange={setReasonOpen}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Balance Breakdown</SheetTitle>
+          </SheetHeader>
+          {reasonAccount && (
+            <div className="mt-4 space-y-4">
+              {/* Account info */}
+              <div className="flex items-center gap-2">
+                <Badge className={typeColors[reasonAccount.account_type] || ""}>{reasonAccount.account_type}</Badge>
+                <span className="font-semibold">{reasonAccount.account_name}</span>
+                <span className="text-xs text-muted-foreground">#{reasonAccount.account_number}</span>
+              </div>
+
+              {/* Formula box */}
+              <div className="bg-muted/40 rounded-lg p-4 space-y-2">
+                <p className="text-xs uppercase font-semibold text-muted-foreground">Formula</p>
+                <p className="font-mono text-sm">Balance = Total Debits − Total Credits</p>
+                {!reasonLoading && (() => {
+                  const totalDr = reasonLines.reduce((s, l) => s + (l.debit_amount || 0), 0);
+                  const totalCr = reasonLines.reduce((s, l) => s + (l.credit_amount || 0), 0);
+                  const bal = totalDr - totalCr;
+                  return (
+                    <div className="space-y-1 pt-1 border-t border-muted">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Total Debits</span>
+                        <span className="font-mono text-green-600">+{fmtBal(totalDr)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Total Credits</span>
+                        <span className="font-mono text-red-500">−{fmtBal(totalCr)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm font-bold border-t pt-1">
+                        <span>Net Balance</span>
+                        <span className={bal >= 0 ? "text-green-600" : "text-red-500"}>{fmtBal(bal)}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Accounting rule */}
+              <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-4 space-y-1">
+                <p className="text-xs uppercase font-semibold text-muted-foreground">Accounting Rule</p>
+                <p className="text-sm">{getAccountRule(reasonAccount.account_type)}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Normal balance side: <span className="font-semibold">{getNormalBalance(reasonAccount.account_type)}</span>
+                </p>
+              </div>
+
+              {/* Journal entry lines */}
+              <div>
+                <p className="text-xs uppercase font-semibold text-muted-foreground mb-2">
+                  Journal Entry Lines {!reasonLoading && `(${reasonLines.length})`}
+                </p>
+                {reasonLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="animate-spin w-5 h-5 text-muted-foreground" />
+                  </div>
+                ) : reasonLines.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4">No journal entries found for this account.</p>
+                ) : (
+                  <div className="space-y-0 divide-y rounded-md border overflow-hidden">
+                    {reasonLines.slice(0, 50).map((line: any, i: number) => (
+                      <div key={i} className="flex items-start justify-between px-3 py-2 text-sm hover:bg-muted/30">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs text-muted-foreground">
+                            {line.journal_entries?.entry_date
+                              ? format(new Date(line.journal_entries.entry_date + "T00:00:00"), "MMM d, yyyy")
+                              : ""} · {line.journal_entries?.entry_number}
+                          </p>
+                          <p className="truncate max-w-[220px]">{line.journal_entries?.description || "—"}</p>
+                        </div>
+                        <div className="text-right ml-3 shrink-0">
+                          {(line.debit_amount || 0) > 0 && (
+                            <p className="text-green-600 font-mono text-xs">Dr {fmtBal(line.debit_amount)}</p>
+                          )}
+                          {(line.credit_amount || 0) > 0 && (
+                            <p className="text-red-500 font-mono text-xs">Cr {fmtBal(line.credit_amount)}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {reasonLines.length > 50 && (
+                      <p className="text-xs text-muted-foreground text-center py-2">
+                        Showing 50 of {reasonLines.length} entries
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

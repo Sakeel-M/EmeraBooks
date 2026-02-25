@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { replaceAedSymbol } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Search, TrendingUp, TrendingDown, PiggyBank, Calculator, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import type { Transaction } from "@/lib/database";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 type MetricType = "income" | "expenses" | "savings" | "average" | null;
 
@@ -17,16 +17,6 @@ interface MetricDetailSheetProps {
   currency: string;
   onClose: () => void;
 }
-
-const fmt = (amount: number, currency: string) => {
-  const formatted = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(amount);
-  return replaceAedSymbol(formatted, currency);
-};
 
 const MetricDetailSheet = ({ metricType, transactions, currency, onClose }: MetricDetailSheetProps) => {
   const [search, setSearch] = useState("");
@@ -42,7 +32,7 @@ const MetricDetailSheet = ({ metricType, transactions, currency, onClose }: Metr
 
   return (
     <Sheet open={!!metricType} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="w-full sm:max-w-lg overflow-hidden flex flex-col">
+      <SheetContent className="w-full sm:max-w-2xl overflow-hidden flex flex-col">
         {config && (
           <>
             <SheetHeader>
@@ -99,7 +89,7 @@ const IncomeView = ({ transactions, currency, search }: { transactions: Transact
     <div className="space-y-4 pb-6">
       <Card className="p-4 bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800">
         <p className="text-sm text-muted-foreground">Total Income</p>
-        <p className="text-2xl font-bold text-green-600">{fmt(total, currency)}</p>
+        <p className="text-2xl font-bold text-green-600"><FormattedCurrency amount={total} currency={currency} /></p>
         <p className="text-xs text-muted-foreground mt-1">{incomeTransactions.length} transactions</p>
       </Card>
 
@@ -108,12 +98,10 @@ const IncomeView = ({ transactions, currency, search }: { transactions: Transact
           <h4 className="text-sm font-semibold text-foreground">Top Sources</h4>
           <div className="space-y-2">
             {topSources.map(([category, amount]) => (
-              <div key={category} className="grid grid-cols-[1fr_auto] items-center gap-3">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <ArrowUpRight className="w-3 h-3 text-green-500 flex-none" />
-                  <span className="text-sm text-foreground truncate">{category}</span>
-                </div>
-                <span className="text-sm font-medium text-foreground text-right">{fmt(amount, currency)}</span>
+              <div key={category} className="flex items-center gap-2">
+                <ArrowUpRight className="w-3 h-3 text-green-500 flex-none" />
+                <span className="text-sm text-foreground truncate flex-1 min-w-0">{category}</span>
+                <span className="text-sm font-medium text-foreground whitespace-nowrap flex-none min-w-[6rem] text-right"><FormattedCurrency amount={amount} currency={currency} /></span>
               </div>
             ))}
           </div>
@@ -148,7 +136,7 @@ const ExpensesView = ({ transactions, currency, search }: { transactions: Transa
     <div className="space-y-4 pb-6">
       <Card className="p-4 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800">
         <p className="text-sm text-muted-foreground">Total Expenses</p>
-        <p className="text-2xl font-bold text-red-600">{fmt(total, currency)}</p>
+        <p className="text-2xl font-bold text-red-600"><FormattedCurrency amount={total} currency={currency} /></p>
         <p className="text-xs text-muted-foreground mt-1">{expenseTransactions.length} transactions</p>
       </Card>
 
@@ -159,13 +147,11 @@ const ExpensesView = ({ transactions, currency, search }: { transactions: Transa
             {categoryBreakdown.map(([category, amount]) => {
               const pct = total > 0 ? ((amount / total) * 100).toFixed(1) : "0";
               return (
-                <div key={category} className="grid grid-cols-[1fr_auto] items-center gap-3">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <ArrowDownRight className="w-3 h-3 text-red-500 flex-none" />
-                    <span className="text-sm text-foreground truncate">{category}</span>
-                    <Badge variant="secondary" className="text-xs flex-none">{pct}%</Badge>
-                  </div>
-                  <span className="text-sm font-medium text-foreground text-right whitespace-nowrap">{fmt(amount, currency)}</span>
+                <div key={category} className="flex items-center gap-2">
+                  <ArrowDownRight className="w-3 h-3 text-red-500 flex-none" />
+                  <span className="text-sm text-foreground truncate flex-1 min-w-0">{category}</span>
+                  <Badge variant="secondary" className="text-xs flex-none">{pct}%</Badge>
+                  <span className="text-sm font-medium text-foreground whitespace-nowrap flex-none min-w-[6rem] text-right"><FormattedCurrency amount={amount} currency={currency} /></span>
                 </div>
               );
             })}
@@ -207,15 +193,15 @@ const SavingsView = ({ transactions, currency, search }: { transactions: Transac
       <div className="grid grid-cols-3 gap-2">
         <Card className="p-3 text-center">
           <p className="text-xs text-muted-foreground">Income</p>
-          <p className="text-sm font-bold text-green-600">{fmt(totalIncome, currency)}</p>
+          <p className="text-sm font-bold text-green-600"><FormattedCurrency amount={totalIncome} currency={currency} /></p>
         </Card>
         <Card className="p-3 text-center">
           <p className="text-xs text-muted-foreground">Expenses</p>
-          <p className="text-sm font-bold text-red-600">{fmt(totalExpenses, currency)}</p>
+          <p className="text-sm font-bold text-red-600"><FormattedCurrency amount={totalExpenses} currency={currency} /></p>
         </Card>
         <Card className="p-3 text-center">
           <p className="text-xs text-muted-foreground">Net</p>
-          <p className={`text-sm font-bold ${netSavings >= 0 ? "text-green-600" : "text-red-600"}`}>{fmt(netSavings, currency)}</p>
+          <p className={`text-sm font-bold ${netSavings >= 0 ? "text-green-600" : "text-red-600"}`}><FormattedCurrency amount={netSavings} currency={currency} /></p>
         </Card>
       </div>
 
@@ -226,12 +212,12 @@ const SavingsView = ({ transactions, currency, search }: { transactions: Transac
             <div className="flex items-center justify-between mb-1">
               <span className="text-sm font-medium text-foreground">{m.month}</span>
               <span className={`text-sm font-bold ${m.net >= 0 ? "text-green-600" : "text-red-600"}`}>
-                {m.net >= 0 ? "+" : ""}{fmt(m.net, currency)}
+                {m.net >= 0 ? "+" : ""}<FormattedCurrency amount={m.net} currency={currency} />
               </span>
             </div>
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>In: {fmt(m.income, currency)}</span>
-              <span>Out: {fmt(m.expenses, currency)}</span>
+              <span>In: <FormattedCurrency amount={m.income} currency={currency} /></span>
+              <span>Out: <FormattedCurrency amount={m.expenses} currency={currency} /></span>
             </div>
           </Card>
         ))}
@@ -287,25 +273,25 @@ const AverageView = ({ transactions, currency, search }: { transactions: Transac
       <div className="grid grid-cols-2 gap-2">
         <Card className="p-3 text-center">
           <p className="text-xs text-muted-foreground">Mean</p>
-          <p className="text-sm font-bold text-foreground">{fmt(stats.mean, currency)}</p>
+          <p className="text-sm font-bold text-foreground"><FormattedCurrency amount={stats.mean} currency={currency} /></p>
         </Card>
         <Card className="p-3 text-center">
           <p className="text-xs text-muted-foreground">Median</p>
-          <p className="text-sm font-bold text-foreground">{fmt(stats.median, currency)}</p>
+          <p className="text-sm font-bold text-foreground"><FormattedCurrency amount={stats.median} currency={currency} /></p>
         </Card>
         <Card className="p-3 text-center">
           <p className="text-xs text-muted-foreground">Lowest</p>
-          <p className="text-sm font-bold text-foreground">{fmt(stats.min, currency)}</p>
+          <p className="text-sm font-bold text-foreground"><FormattedCurrency amount={stats.min} currency={currency} /></p>
         </Card>
         <Card className="p-3 text-center">
           <p className="text-xs text-muted-foreground">Highest</p>
-          <p className="text-sm font-bold text-foreground">{fmt(stats.max, currency)}</p>
+          <p className="text-sm font-bold text-foreground"><FormattedCurrency amount={stats.max} currency={currency} /></p>
         </Card>
       </div>
 
       <Card className="p-3 text-center">
         <p className="text-xs text-muted-foreground">Std Deviation</p>
-        <p className="text-sm font-bold text-foreground">{fmt(stats.stdDev, currency)}</p>
+        <p className="text-sm font-bold text-foreground"><FormattedCurrency amount={stats.stdDev} currency={currency} /></p>
         <p className="text-xs text-muted-foreground mt-1">{stats.count} total transactions</p>
       </Card>
 
@@ -341,7 +327,7 @@ const TransactionList = ({ transactions, currency, type }: { transactions: Trans
           </div>
         </div>
         <span className={`text-sm font-medium ml-3 shrink-0 whitespace-nowrap ${type === "income" ? "text-green-600" : "text-red-600"}`}>
-          {fmt(Math.abs(t.amount), currency)}
+          <FormattedCurrency amount={Math.abs(t.amount)} currency={currency} />
         </span>
       </div>
     ))}

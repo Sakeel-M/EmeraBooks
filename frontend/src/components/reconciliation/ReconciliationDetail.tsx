@@ -20,7 +20,7 @@ import {
 } from "@/lib/reconciliation";
 import { format } from "date-fns";
 import { useCurrency } from "@/hooks/useCurrency";
-import { formatAmount } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface UploadedFile {
   id: string;
@@ -39,7 +39,6 @@ interface Props {
 
 export function ReconciliationDetail({ reconciliationId, uploadedFiles, onBack }: Props) {
   const { currency } = useCurrency();
-  const fmtCur = (v: number) => formatAmount(v, currency);
   const [recon, setRecon] = useState<any>(null);
   const [results, setResults] = useState<ReconciliationResults | null>(null);
   const [settings, setSettings] = useState<SettingsType>(defaultSettings);
@@ -397,7 +396,7 @@ export function ReconciliationDetail({ reconciliationId, uploadedFiles, onBack }
             <Card>
               <CardContent className="pt-6 text-center">
                 <div className={`text-3xl font-bold ${results.unreconciledDifference === 0 ? 'text-green-600' : 'text-destructive'}`}>
-                  {fmtCur(Math.abs(results.unreconciledDifference))}
+                  <FormattedCurrency amount={Math.abs(results.unreconciledDifference)} currency={currency} />
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">Unreconciled</p>
               </CardContent>
@@ -432,7 +431,7 @@ export function ReconciliationDetail({ reconciliationId, uploadedFiles, onBack }
                             <TableCell>{format(new Date(m.statementDate), "MMM d, yyyy")}</TableCell>
                             <TableCell>{m.statementDescription}</TableCell>
                             <TableCell>{m.ledgerDescription}</TableCell>
-                            <TableCell className="text-right">{fmtCur(m.statementAmount)}</TableCell>
+                            <TableCell className="text-right"><FormattedCurrency amount={m.statementAmount} currency={currency} /></TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -478,7 +477,7 @@ export function ReconciliationDetail({ reconciliationId, uploadedFiles, onBack }
                               </TableCell>
                               <TableCell>{format(new Date(f.date), "MMM d, yyyy")}</TableCell>
                               <TableCell>{f.description}</TableCell>
-                              <TableCell className="text-right">{fmtCur(f.amount)}</TableCell>
+                              <TableCell className="text-right"><FormattedCurrency amount={f.amount} currency={currency} /></TableCell>
                               <TableCell>
                                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
                               </TableCell>

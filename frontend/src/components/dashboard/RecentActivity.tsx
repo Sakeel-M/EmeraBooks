@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface Invoice {
   id: string;
@@ -60,13 +61,6 @@ export function RecentActivity() {
     fetchData();
   }, []);
 
-  const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency || 'USD',
-    }).format(amount);
-  };
-
   if (loading) {
     return (
       <div className="grid md:grid-cols-2 gap-6">
@@ -121,7 +115,7 @@ export function RecentActivity() {
                   </div>
                   <div className="flex items-center gap-3 ml-4">
                     <p className="text-sm font-semibold text-foreground whitespace-nowrap">
-                      {formatCurrency(invoice.total_amount, invoice.currency)}
+                      <FormattedCurrency amount={invoice.total_amount} currency={invoice.currency || "USD"} />
                     </p>
                     <StatusBadge status={invoice.status as any} />
                   </div>
@@ -157,7 +151,7 @@ export function RecentActivity() {
                   </div>
                   <div className="flex items-center gap-3 ml-4">
                     <p className="text-sm font-semibold text-foreground whitespace-nowrap">
-                      {formatCurrency(bill.total_amount, bill.currency)}
+                      <FormattedCurrency amount={bill.total_amount} currency={bill.currency || "USD"} />
                     </p>
                     <StatusBadge status={bill.status as any} />
                   </div>

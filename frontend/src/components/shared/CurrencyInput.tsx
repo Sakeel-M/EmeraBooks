@@ -1,14 +1,21 @@
 import { Input } from "@/components/ui/input";
 import { forwardRef } from "react";
-import { DIRHAM_SYMBOL } from "@/lib/utils";
+import { DirhamSymbol } from "./DirhamSymbol";
 
 const currencySymbols: Record<string, string> = {
-  USD: "$", EUR: "€", GBP: "£", AED: DIRHAM_SYMBOL, SAR: "﷼", EGP: "E£",
+  USD: "$", EUR: "€", GBP: "£", SAR: "﷼", EGP: "E£",
   INR: "₹", JPY: "¥", CNY: "¥", KRW: "₩", TRY: "₺", BRL: "R$",
   ZAR: "R", NGN: "₦", KES: "KSh", CAD: "C$", AUD: "A$", CHF: "CHF",
 };
 
 const getCurrencySymbol = (code: string) => currencySymbols[code] || code;
+
+const getSymbolElement = (currency: string) => {
+  if (currency === "AED") {
+    return <DirhamSymbol style={{ width: "1em", height: "0.87em" }} />;
+  }
+  return <>{getCurrencySymbol(currency)}</>;
+};
 
 interface CurrencyInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
   value: number;
@@ -31,7 +38,7 @@ export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
     return (
       <div className="relative">
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
-          {getCurrencySymbol(currency)}
+          {getSymbolElement(currency)}
         </span>
         <Input
           {...props}

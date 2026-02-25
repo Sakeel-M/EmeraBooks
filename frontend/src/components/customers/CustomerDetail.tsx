@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { replaceAedSymbol } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 import {
   Sheet,
   SheetContent,
@@ -93,16 +93,6 @@ export function CustomerDetail({ open, onOpenChange, customerId, onEditCustomer 
   const unpaidInvoices = invoices.filter((inv) => inv.status === "sent" || inv.status === "overdue");
   const paidInvoices = invoices.filter((inv) => inv.status === "paid");
 
-  const formatCurrency = (amount: number, cur: string = "USD") => {
-    const formatted = new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: cur,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-    return replaceAedSymbol(formatted, cur);
-  };
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
@@ -188,7 +178,7 @@ export function CustomerDetail({ open, onOpenChange, customerId, onEditCustomer 
                     <span className="text-xs text-muted-foreground font-medium">Total Invoiced</span>
                   </div>
                   <p className="text-lg font-bold">
-                    {formatCurrency(totalInvoiced, invoices[0]?.currency || "USD")}
+                    <FormattedCurrency amount={totalInvoiced} currency={invoices[0]?.currency || "USD"} />
                   </p>
                   <p className="text-xs text-muted-foreground">{invoices.length} invoice{invoices.length !== 1 ? "s" : ""}</p>
                 </CardContent>
@@ -200,7 +190,7 @@ export function CustomerDetail({ open, onOpenChange, customerId, onEditCustomer 
                     <span className="text-xs text-muted-foreground font-medium">Collected</span>
                   </div>
                   <p className="text-lg font-bold text-primary">
-                    {formatCurrency(totalCollected, invoices[0]?.currency || "USD")}
+                    <FormattedCurrency amount={totalCollected} currency={invoices[0]?.currency || "USD"} />
                   </p>
                   <p className="text-xs text-muted-foreground">{paidInvoices.length} paid</p>
                 </CardContent>
@@ -212,7 +202,7 @@ export function CustomerDetail({ open, onOpenChange, customerId, onEditCustomer 
                     <span className="text-xs text-muted-foreground font-medium">Receivable</span>
                   </div>
                   <p className={`text-lg font-bold ${outstandingReceivable > 0 ? "text-amber-600" : "text-muted-foreground"}`}>
-                    {formatCurrency(outstandingReceivable, invoices[0]?.currency || "USD")}
+                    <FormattedCurrency amount={outstandingReceivable} currency={invoices[0]?.currency || "USD"} />
                   </p>
                   <p className="text-xs text-muted-foreground">{unpaidInvoices.length} unpaid</p>
                 </CardContent>
@@ -257,17 +247,17 @@ export function CustomerDetail({ open, onOpenChange, customerId, onEditCustomer 
                           </div>
                           <div className="text-right">
                             <p className="font-bold text-lg">
-                              {formatCurrency(invoice.total_amount, invoice.currency)}
+                              <FormattedCurrency amount={invoice.total_amount} currency={invoice.currency || "USD"} />
                             </p>
                             {invoice.amount_paid > 0 && (
                               <p className="text-sm text-primary">
-                                Paid: {formatCurrency(invoice.amount_paid, invoice.currency)}
+                                Paid: <FormattedCurrency amount={invoice.amount_paid} currency={invoice.currency || "USD"} />
                               </p>
                             )}
                             {(invoice.status === "sent" || invoice.status === "overdue") &&
                               invoice.total_amount - (invoice.amount_paid || 0) > 0 && (
                                 <p className="text-sm text-amber-600">
-                                  Due: {formatCurrency(invoice.total_amount - (invoice.amount_paid || 0), invoice.currency)}
+                                  Due: <FormattedCurrency amount={invoice.total_amount - (invoice.amount_paid || 0)} currency={invoice.currency || "USD"} />
                                 </p>
                               )}
                           </div>
@@ -301,7 +291,7 @@ export function CustomerDetail({ open, onOpenChange, customerId, onEditCustomer 
                           </div>
                           <div className="text-right">
                             <p className="font-bold text-primary">
-                              {formatCurrency(pr.amount, pr.currency || "USD")}
+                              <FormattedCurrency amount={pr.amount} currency={pr.currency || "USD"} />
                             </p>
                             {pr.status && <StatusBadge status={pr.status as any} />}
                           </div>
@@ -331,7 +321,7 @@ export function CustomerDetail({ open, onOpenChange, customerId, onEditCustomer 
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-sm font-medium">Invoice #{invoice.invoice_number}</p>
                             <p className="text-sm font-bold shrink-0">
-                              {formatCurrency(invoice.total_amount, invoice.currency)}
+                              <FormattedCurrency amount={invoice.total_amount} currency={invoice.currency || "USD"} />
                             </p>
                           </div>
                           <p className="text-xs text-muted-foreground">

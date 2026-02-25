@@ -1,6 +1,6 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { CHART_COLORS } from "@/lib/chartColors";
-import { formatAmount } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface DonutChartProps {
   data: Array<{ name: string; value: number; color?: string }>;
@@ -20,7 +20,7 @@ const CustomTooltip = ({ active, payload, isCurrency, currency = "USD" }: any) =
       <div className="bg-popover/95 backdrop-blur-sm border border-border rounded-lg shadow-xl p-3 animate-in fade-in-0 zoom-in-95">
         <p className="text-sm font-medium text-foreground">{data.name}</p>
         <p className="text-lg font-bold" style={{ color: data.payload.color }}>
-          {isCurrency ? formatAmount(data.value, currency) : data.value.toLocaleString()}
+          {isCurrency ? <FormattedCurrency amount={data.value} currency={currency} /> : data.value.toLocaleString()}
         </p>
       </div>
     );
@@ -82,7 +82,7 @@ export function DonutChart({
               <span className="text-2xl font-bold text-foreground">
               {typeof centerValue === "number"
                   ? isCurrency
-                    ? formatAmount(centerValue, currency)
+                    ? <FormattedCurrency amount={centerValue} currency={currency} />
                     : centerValue.toLocaleString()
                   : centerValue}
               </span>

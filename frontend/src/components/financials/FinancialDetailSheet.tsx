@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -13,8 +13,9 @@ import {
   Scale, Banknote, Receipt,
 } from "lucide-react";
 import { formatCurrencyValue } from "@/lib/chartColors";
-import { formatCompactCurrency } from "@/lib/utils";
 import { formatAmount } from "@/lib/utils";
+import { CurrencyAxisTick } from "@/components/shared/CurrencyAxisTick";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 import { format } from "date-fns";
 
 export type FinancialDetailType =
@@ -163,6 +164,96 @@ const STATUS_COLORS = {
   Critical: "bg-red-500/10 text-red-600 border-red-500/20",
 };
 
+function getReason(
+  type: FinancialDetailType,
+  totalRevenue: number, totalExpenses: number, netIncome: number, profitMargin: number,
+  totalAssets: number, totalLiabilities: number, equity: number,
+  incomeTxns: PlTxn[], expenseTxns: PlTxn[],
+  currency: string,
+): { formula: string; steps: { label: string; value: ReactNode }[]; note?: string } {
+  const fc = (v: number) => <FormattedCurrency amount={v} currency={currency} />;
+  switch (type) {
+    case "revenue":
+      return {
+        formula: "Σ Income Transactions",
+        steps: [
+          { label: "Income transactions", value: String(incomeTxns.length) },
+          { label: "Avg per transaction", value: fc(incomeTxns.length > 0 ? totalRevenue / incomeTxns.length : 0) },
+          { label: "Internal Transfers excluded", value: "Yes" },
+          { label: "Total Revenue", value: fc(totalRevenue) },
+        ],
+        note: "Own-account movements (MOBN, internal transfers, ATM deposits) are excluded — only real business income is counted.",
+      };
+    case "expenses":
+      return {
+        formula: "Σ Expense Transactions",
+        steps: [
+          { label: "Expense transactions", value: String(expenseTxns.length) },
+          { label: "Avg per transaction", value: fc(expenseTxns.length > 0 ? totalExpenses / expenseTxns.length : 0) },
+          { label: "Internal Transfers excluded", value: "Yes" },
+          { label: "Total Expenses", value: fc(totalExpenses) },
+        ],
+        note: "ATM withdrawals and inter-account transfers are excluded — only real business spending is counted.",
+      };
+    case "net-income":
+      return {
+        formula: "Revenue − Expenses",
+        steps: [
+          { label: "Total Revenue", value: fc(totalRevenue) },
+          { label: "minus Total Expenses", value: fc(totalExpenses) },
+          { label: "Net Income", value: fc(netIncome) },
+          { label: "Profit margin", value: `${profitMargin.toFixed(1)}%` },
+        ],
+        note: netIncome >= 0 ? "Business is profitable this period." : "Expenses exceed revenue — review spending.",
+      };
+    case "profit-margin":
+      return {
+        formula: "Net Income ÷ Revenue × 100",
+        steps: [
+          { label: "Net Income", value: fc(netIncome) },
+          { label: "Total Revenue", value: fc(totalRevenue) },
+          { label: "Profit Margin", value: `${profitMargin.toFixed(2)}%` },
+        ],
+        note: profitMargin >= 20 ? "Healthy margin (>20%)." : profitMargin >= 10 ? "Moderate margin (10–20%)." : "Low margin — consider reducing expenses.",
+      };
+    case "assets":
+      return {
+        formula: "Cash & Bank + Receivables",
+        steps: [
+          { label: "Cash (from Net Income)", value: fc(Math.max(0, netIncome)) },
+          { label: "Accounts Receivable", value: fc(totalAssets - Math.max(0, netIncome)) },
+          { label: "Total Assets", value: fc(totalAssets) },
+        ],
+        note: "Estimated from transaction data. Set up Chart of Accounts for precise balance sheet figures.",
+      };
+    case "liabilities":
+      return {
+        formula: "Σ Overdue Bills",
+        steps: [
+          { label: "Only overdue bills", value: "Yes" },
+          { label: "Pending/paid bills", value: "Excluded" },
+          { label: "Total Payable", value: fc(totalLiabilities) },
+        ],
+        note: "Bank-synced bills marked 'pending' are already cleared transactions — not real liabilities.",
+      };
+    case "equity":
+      return {
+        formula: "Assets − Liabilities",
+        steps: [
+          { label: "Total Assets", value: fc(totalAssets) },
+          { label: "minus Liabilities", value: fc(totalLiabilities) },
+          { label: "Equity", value: fc(equity) },
+        ],
+        note: equity >= 0 ? "Positive equity — business owns more than it owes." : "Negative equity — liabilities exceed assets.",
+      };
+    default:
+      return {
+        formula: "From transaction data",
+        steps: [{ label: "Value", value: fc(netIncome) }],
+      };
+  }
+}
+
 function getNarrative(
   type: FinancialDetailType, invoices: Invoice[], bills: Bill[],
   totalRevenue: number, totalExpenses: number, netIncome: number, profitMargin: number,
@@ -199,18 +290,17 @@ function getNarrative(
 
 function MonthlyMiniChart({ data, color, currency = "USD" }: { data: { month: string; value: number }[]; color: string; currency?: string }) {
   if (!data.length) return <p className="text-sm text-muted-foreground text-center py-8">No monthly data available.</p>;
-  const tickFmt = (v: number) => formatCompactCurrency(v, currency);
   return (
     <ResponsiveContainer width="100%" height={180}>
       <BarChart data={data} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
         <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
-        <YAxis axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} tickFormatter={tickFmt} />
+        <YAxis axisLine={false} tickLine={false} tick={<CurrencyAxisTick currency={currency} anchor="end" fontSize={10} />} />
         <Tooltip
           content={({ active, payload, label }) => active && payload?.length ? (
             <div className="bg-popover border border-border rounded-lg shadow-lg p-2">
               <p className="text-xs text-muted-foreground">{label}</p>
-              <p className="text-sm font-bold text-foreground">{formatAmount(payload[0].value as number, currency)}</p>
+              <p className="text-sm font-bold text-foreground"><FormattedCurrency amount={payload[0].value as number} currency={currency} /></p>
             </div>
           ) : null}
         />
@@ -222,7 +312,7 @@ function MonthlyMiniChart({ data, color, currency = "USD" }: { data: { month: st
   );
 }
 
-function MetricKpi({ label, value }: { label: string; value: string }) {
+function MetricKpi({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="text-center p-3 rounded-lg bg-muted/40 border border-border/50">
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
@@ -245,19 +335,20 @@ export function FinancialDetailSheet({
   const Icon = config?.icon || DollarSign;
 
   // Main value display
-  const displayValue = useMemo(() => {
-    if (!type) return "";
+  const displayValue = useMemo((): ReactNode => {
+    if (!type) return null;
+    const fc = (v: number) => <FormattedCurrency amount={v} currency={currency} />;
     switch (type) {
-      case "revenue": return formatCurrencyValue(totalRevenue, currency);
-      case "expenses": return formatCurrencyValue(totalExpenses, currency);
-      case "net-income": return formatCurrencyValue(netIncome, currency);
+      case "revenue": return fc(totalRevenue);
+      case "expenses": return fc(totalExpenses);
+      case "net-income": return fc(netIncome);
       case "profit-margin": return `${profitMargin.toFixed(1)}%`;
-      case "assets": return formatCurrencyValue(totalAssets, currency);
-      case "liabilities": return formatCurrencyValue(totalLiabilities, currency);
-      case "equity": return formatCurrencyValue(equity, currency);
-      case "operating": return formatCurrencyValue(netIncome, currency);
-      case "investing": return formatCurrencyValue(0, currency);
-      case "financing": return formatCurrencyValue(0, currency);
+      case "assets": return fc(totalAssets);
+      case "liabilities": return fc(totalLiabilities);
+      case "equity": return fc(equity);
+      case "operating": return fc(netIncome);
+      case "investing": return fc(0);
+      case "financing": return fc(0);
     }
   }, [type, totalRevenue, totalExpenses, netIncome, profitMargin, totalAssets, totalLiabilities, equity, currency]);
 
@@ -376,51 +467,52 @@ export function FinancialDetailSheet({
   // Summary KPIs
   const kpis = useMemo(() => {
     if (!type) return [];
+    const fc = (v: number) => <FormattedCurrency amount={v} currency={currency} />;
     switch (type) {
       case "revenue": return [
         { label: "Invoices", value: String(invoices.length) },
-        { label: "Average", value: formatCurrencyValue(invoices.length > 0 ? totalRevenue / invoices.length : 0, currency) },
-        { label: "Largest", value: formatCurrencyValue(Math.max(...invoices.map(i => Number(i.total_amount || 0)), 0), currency) },
+        { label: "Average", value: fc(invoices.length > 0 ? totalRevenue / invoices.length : 0) },
+        { label: "Largest", value: fc(Math.max(...invoices.map(i => Number(i.total_amount || 0)), 0)) },
         { label: "Paid", value: String(invoices.filter(i => i.status === "paid").length) },
       ];
       case "expenses": return [
         { label: "Bills", value: String(bills.length) },
-        { label: "Average", value: formatCurrencyValue(bills.length > 0 ? totalExpenses / bills.length : 0, currency) },
-        { label: "Largest", value: formatCurrencyValue(Math.max(...bills.map(b => Number(b.total_amount || 0)), 0), currency) },
+        { label: "Average", value: fc(bills.length > 0 ? totalExpenses / bills.length : 0) },
+        { label: "Largest", value: fc(Math.max(...bills.map(b => Number(b.total_amount || 0)), 0)) },
         { label: "Paid", value: String(bills.filter(b => b.status === "paid").length) },
       ];
       case "net-income": return [
-        { label: "Revenue", value: formatCurrencyValue(totalRevenue, currency) },
-        { label: "Expenses", value: formatCurrencyValue(totalExpenses, currency) },
+        { label: "Revenue", value: fc(totalRevenue) },
+        { label: "Expenses", value: fc(totalExpenses) },
         { label: "Margin", value: `${profitMargin.toFixed(1)}%` },
         { label: "Status", value: netIncome >= 0 ? "Profitable" : "Loss" },
       ];
       case "profit-margin": return [
         { label: "Margin", value: `${profitMargin.toFixed(1)}%` },
         { label: "Per unit revenue", value: `${(profitMargin / 100).toFixed(2)}` },
-        { label: "Revenue", value: formatCurrencyValue(totalRevenue, currency) },
-        { label: "Net Income", value: formatCurrencyValue(netIncome, currency) },
+        { label: "Revenue", value: fc(totalRevenue) },
+        { label: "Net Income", value: fc(netIncome) },
       ];
       case "assets": return [
-        { label: "Cash & Bank", value: formatCurrencyValue(Math.max(0, netIncome), currency) },
-        { label: "Accounts Receivable", value: formatCurrencyValue(outstandingReceivables, currency) },
-        { label: "Total Assets", value: formatCurrencyValue(totalAssets, currency) },
+        { label: "Cash & Bank", value: fc(Math.max(0, netIncome)) },
+        { label: "Accounts Receivable", value: fc(outstandingReceivables) },
+        { label: "Total Assets", value: fc(totalAssets) },
         { label: "Basis", value: netIncome >= 0 ? "Net Profit" : "Receivables Only" },
       ];
       case "liabilities": return [
-        { label: "Accounts Payable", value: formatCurrencyValue(outstandingPayables, currency) },
-        { label: "Total Liabilities", value: formatCurrencyValue(totalLiabilities, currency) },
+        { label: "Accounts Payable", value: fc(outstandingPayables) },
+        { label: "Total Liabilities", value: fc(totalLiabilities) },
         { label: "Overdue Bills", value: String(bills.filter(b => b.status === "overdue").length) },
         { label: "Status", value: outstandingPayables === 0 ? "Settled" : "Outstanding" },
       ];
       case "equity": return [
-        { label: "Assets", value: formatCurrencyValue(totalAssets, currency) },
-        { label: "Liabilities", value: formatCurrencyValue(totalLiabilities, currency) },
-        { label: "Equity", value: formatCurrencyValue(equity, currency) },
+        { label: "Assets", value: fc(totalAssets) },
+        { label: "Liabilities", value: fc(totalLiabilities) },
+        { label: "Equity", value: fc(equity) },
         { label: "Status", value: equity >= 0 ? "Positive" : "Negative" },
       ];
       default: return [
-        { label: "Amount", value: formatCurrencyValue(netIncome, currency) },
+        { label: "Amount", value: fc(netIncome) },
       ];
     }
   }, [type, invoices, bills, totalRevenue, totalExpenses, netIncome, profitMargin, totalAssets, totalLiabilities, equity, outstandingReceivables, outstandingPayables, currency]);
@@ -433,10 +525,11 @@ export function FinancialDetailSheet({
   if (!type || !config) return null;
 
   const narrative = getNarrative(type, invoices, bills, totalRevenue, totalExpenses, netIncome, profitMargin, currency, totalAssets, outstandingReceivables, outstandingPayables);
+  const reason = getReason(type, totalRevenue, totalExpenses, netIncome, profitMargin, totalAssets, totalLiabilities, equity, incomeTxns || [], expenseTxns || [], currency);
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="sm:max-w-xl overflow-hidden flex flex-col p-0">
+      <SheetContent className="sm:max-w-2xl overflow-hidden flex flex-col p-0">
         {/* Header */}
         <div className={`bg-gradient-to-r ${config.gradient} p-6 border-b border-border`}>
           <SheetHeader>
@@ -456,8 +549,51 @@ export function FinancialDetailSheet({
           </SheetHeader>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-hidden">
+        {/* Body — left reason sidebar + right tabs */}
+        <div className="flex-1 overflow-hidden flex">
+
+          {/* Left Reason Sidebar */}
+          <div className="w-44 shrink-0 border-r border-border bg-muted/20 flex flex-col overflow-y-auto p-3 gap-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">How calculated</p>
+
+            {/* Formula badge */}
+            <div className={`px-2 py-1.5 rounded-md bg-background border border-border text-xs font-mono font-semibold ${config.color} text-center leading-snug`}>
+              {reason.formula}
+            </div>
+
+            {/* Step-by-step */}
+            <div className="space-y-2">
+              {reason.steps.map((step, i) => (
+                <div key={i} className="space-y-0.5">
+                  <p className="text-[10px] text-muted-foreground leading-none">{step.label}</p>
+                  <p className="text-xs font-semibold text-foreground truncate">{step.value}</p>
+                  {i < reason.steps.length - 1 && (
+                    <div className="border-b border-dashed border-border/60 pt-1" />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Final result highlight */}
+            <div className={`mt-auto rounded-md px-2 py-2 border text-center ${
+              type === "expenses" || type === "liabilities" ? "bg-red-500/5 border-red-500/20" :
+              type === "equity" || type === "profit-margin" ? "bg-purple-500/5 border-purple-500/20" :
+              "bg-green-500/5 border-green-500/20"
+            }`}>
+              <p className="text-[10px] text-muted-foreground mb-0.5">Result</p>
+              <p className={`text-sm font-extrabold ${config.color}`}>{displayValue}</p>
+            </div>
+
+            {/* Note */}
+            {reason.note && (
+              <p className="text-[10px] text-muted-foreground leading-relaxed border-t border-border/40 pt-2">
+                {reason.note}
+              </p>
+            )}
+          </div>
+
+          {/* Right: Tabs */}
+          <div className="flex-1 overflow-hidden flex flex-col">
           <Tabs defaultValue="summary" className="h-full flex flex-col">
             <TabsList className="mx-6 mt-4 grid grid-cols-3">
               <TabsTrigger value="summary">Summary</TabsTrigger>
@@ -498,12 +634,12 @@ export function FinancialDetailSheet({
                         <div className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
                         <span className="text-sm font-medium text-foreground">{item.label}</span>
                       </div>
-                      <span className="text-sm font-bold text-green-600">{formatCurrencyValue(item.value, currency)}</span>
+                      <span className="text-sm font-bold text-green-600"><FormattedCurrency amount={item.value} currency={currency} /></span>
                     </div>
                   ))}
                   <div className="flex items-center justify-between p-3 rounded-lg border-2 border-green-500/40 bg-green-50/20 dark:bg-green-950/10">
                     <span className="text-sm font-bold text-foreground">Total Assets</span>
-                    <span className="text-sm font-bold text-green-600">{formatCurrencyValue(totalAssets, currency)}</span>
+                    <span className="text-sm font-bold text-green-600"><FormattedCurrency amount={totalAssets} currency={currency} /></span>
                   </div>
                   <p className="text-xs text-muted-foreground">* Estimated from transaction data. Set up Chart of Accounts for actuals.</p>
                 </div>
@@ -515,11 +651,11 @@ export function FinancialDetailSheet({
                       <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
                       <span className="text-sm font-medium text-foreground">Accounts Payable (Unpaid Bills)</span>
                     </div>
-                    <span className="text-sm font-bold text-destructive">{formatCurrencyValue(outstandingPayables, currency)}</span>
+                    <span className="text-sm font-bold text-destructive"><FormattedCurrency amount={outstandingPayables} currency={currency} /></span>
                   </div>
                   <div className="flex items-center justify-between p-3 rounded-lg border-2 border-red-500/40 bg-red-50/20 dark:bg-red-950/10">
                     <span className="text-sm font-bold text-foreground">Total Liabilities</span>
-                    <span className="text-sm font-bold text-destructive">{formatCurrencyValue(totalLiabilities, currency)}</span>
+                    <span className="text-sm font-bold text-destructive"><FormattedCurrency amount={totalLiabilities} currency={currency} /></span>
                   </div>
                   {outstandingPayables === 0 && (
                     <p className="text-xs text-muted-foreground">All vendor bills are currently settled.</p>
@@ -538,7 +674,7 @@ export function FinancialDetailSheet({
                         <div className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
                         <span className="text-sm font-medium text-foreground">{item.label}</span>
                       </div>
-                      <span className="text-sm font-bold text-foreground">{formatCurrencyValue(item.value, currency)}</span>
+                      <span className="text-sm font-bold text-foreground"><FormattedCurrency amount={item.value} currency={currency} /></span>
                     </div>
                   ))}
                 </div>
@@ -552,7 +688,7 @@ export function FinancialDetailSheet({
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-sm text-foreground font-medium truncate min-w-0">{cat.name}</span>
                         <div className="text-right shrink-0 whitespace-nowrap">
-                          <span className="text-sm font-bold text-foreground">{formatCurrencyValue(cat.value, currency)}</span>
+                          <span className="text-sm font-bold text-foreground"><FormattedCurrency amount={cat.value} currency={currency} /></span>
                           <span className="text-xs text-muted-foreground ml-2">{cat.pct.toFixed(1)}%</span>
                         </div>
                       </div>
@@ -601,7 +737,7 @@ export function FinancialDetailSheet({
                           </div>
                           <div className="text-right whitespace-nowrap self-center">
                             <p className={`text-sm font-bold ${isBill ? "text-red-500" : "text-green-600"}`}>
-                              {isBill ? "-" : "+"}{formatCurrencyValue(amount, currency)}
+                              {isBill ? "-" : "+"}<FormattedCurrency amount={amount} currency={currency} />
                             </p>
                             <span className={`text-xs capitalize px-1.5 py-0.5 rounded-full ${
                               statusVal === "paid" ? "bg-green-500/10 text-green-600" :
@@ -617,7 +753,8 @@ export function FinancialDetailSheet({
               </ScrollArea>
             </TabsContent>
           </Tabs>
-        </div>
+          </div>{/* right tabs */}
+        </div>{/* body flex */}
       </SheetContent>
     </Sheet>
   );

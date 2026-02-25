@@ -3,40 +3,37 @@ export interface PredefinedSector {
   key: string;
 }
 
+// Canonical sector names — match sectorMapping.ts SECTOR_KEYWORDS exactly.
+// Used in dropdowns for manual categorization (vendor, bill, budget, etc.)
+// Having a single consistent list ensures budget category matching works correctly.
 export const PREDEFINED_SECTORS: PredefinedSector[] = [
-  // --- Bank-statement categories (exact names the backend writes) ---
-  { name: "Internal Transfer", key: "internal" },
+  // --- Income categories ---
   { name: "Salary & Income", key: "salary" },
-  { name: "Food & Dining", key: "food" },
-  { name: "Transportation", key: "transportation" },
-  { name: "Shopping & Retail", key: "shopping" },
+  { name: "Business Income", key: "business_income" },
+  { name: "ATM & Cash Deposits", key: "atm_deposits" },
+
+  // --- Expense categories ---
+  { name: "Food & Beverage", key: "food" },
+  { name: "Transportation & Logistics", key: "transportation" },
+  { name: "Retail & Shopping", key: "shopping" },
   { name: "Healthcare", key: "health" },
-  { name: "Utilities & Bills", key: "utilities" },
-  { name: "Entertainment", key: "entertainment" },
-  { name: "Subscriptions & Digital Services", key: "technology" },
-  { name: "ATM & Cash Withdrawals", key: "banking" },
-  { name: "Banking & Finance", key: "finance" },
-  { name: "Personal Care", key: "fitness" },
-  { name: "Travel", key: "travel" },
-  { name: "Other Expenses", key: "other" },
+  { name: "Utilities", key: "utilities" },
+  { name: "Entertainment & Media", key: "entertainment" },
+  { name: "Technology", key: "technology" },
+  { name: "Finance & Banking", key: "finance" },
+  { name: "Travel & Tourism", key: "travel" },
 
   // --- Business / industry sectors ---
-  { name: "Finance & Banking", key: "banking2" },
-  { name: "Marketing & Advertising", key: "marketing" },
-  { name: "Food & Beverage", key: "food2" },
-  { name: "Retail & Shopping", key: "shopping2" },
-  { name: "Manufacturing", key: "manufacturing" },
-  { name: "Transportation & Logistics", key: "transportation2" },
-  { name: "Education", key: "education" },
   { name: "Real Estate", key: "housing" },
-  { name: "Entertainment & Media", key: "entertainment2" },
-  { name: "Utilities", key: "utilities2" },
   { name: "Professional Services", key: "professional" },
-  { name: "Construction", key: "maintenance" },
-  { name: "Agriculture", key: "environment" },
-  { name: "Travel & Tourism", key: "travel2" },
-  { name: "Healthcare & Pharma", key: "medical" },
-  { name: "Clothing & Fashion", key: "clothing" },
-  { name: "Sports & Fitness", key: "fitness2" },
+  { name: "Marketing & Advertising", key: "marketing" },
+  { name: "Manufacturing", key: "manufacturing" },
+  { name: "Education", key: "education" },
+  { name: "Construction", key: "construction" },
+  { name: "Agriculture", key: "agriculture" },
   { name: "Legal Services", key: "legal" },
+
+  // --- Transfer / catch-all ---
+  { name: "Internal Transfer", key: "internal" },
+  { name: "Other", key: "other" },
 ];

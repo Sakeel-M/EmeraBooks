@@ -19,10 +19,11 @@ import { CategoryManager } from "@/components/shared/CategoryManager";
 import { QuarterNavigator, DateMode } from "@/components/dashboard/QuarterNavigator";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { resolveCategory, guessCategory } from "@/lib/sectorMapping";
+import { getCanonicalCategory, guessCategory } from "@/lib/sectorMapping";
 import { getSectorStyle } from "@/lib/sectorStyles";
 import { useCurrency } from "@/hooks/useCurrency";
 import { formatAmount } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 export default function Vendors() {
   const { currency } = useCurrency();
@@ -86,7 +87,7 @@ export default function Vendors() {
         .order("transaction_date", { ascending: false });
       return (data || []).map((t: any) => ({
         ...t,
-        resolvedCategory: resolveCategory(t.category, t.description) || "Other",
+        resolvedCategory: getCanonicalCategory(t.category, null, t.description),
         absAmount: Math.abs(Number(t.amount || 0)),
       }));
     },
@@ -196,7 +197,7 @@ export default function Vendors() {
     const txnCat = vendorBillCategoryMap.get(v.id);
     if (txnCat) return txnCat;
     // Last resort: stored/resolved category
-    return resolveCategory(v.category, v.name) || "Other";
+    return getCanonicalCategory(v.category, v.name, null);
   };
 
   // Dynamic vendor balance: sum of (total_amount - amount_paid) across all bills for each vendor
@@ -263,7 +264,7 @@ export default function Vendors() {
       accessorKey: "balance", header: "Balance",
       cell: ({ row }) => {
         const balance = getVendorBalance(row.original);
-        return <span className={balance > 0 ? "text-destructive font-medium" : ""}>{formatAmount(balance, currency)}</span>;
+        return <span className={balance > 0 ? "text-destructive font-medium" : ""}><FormattedCurrency amount={balance} currency={currency} /></span>;
       },
     },
     { id: "actions", cell: ({ row }) => <DataTableRowActions onView={() => handleView(row.original)} onEdit={() => handleEdit(row.original)} onDelete={() => handleDelete(row.original.id)} /> },

@@ -21,7 +21,8 @@ import {
 import { MoreHorizontal, Edit, Check, Eye, Trash2 } from "lucide-react";
 import { PayableForm } from "./PayableForm";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
-import { formatCurrency, isOverdue, type PayableReceivable } from "@/lib/payables";
+import { isOverdue, type PayableReceivable } from "@/lib/payables";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
 
@@ -215,7 +216,7 @@ export function PayablesTable({ items, type, isLoading }: PayablesTableProps) {
                 </TableCell>
                 <TableCell>{item.category || "-"}</TableCell>
                 <TableCell className="text-right font-medium">
-                  {formatCurrency(item.amount, item.currency)}
+                  <FormattedCurrency amount={item.amount} currency={item.currency} />
                 </TableCell>
                 <TableCell>
                   {item.due_date ? format(new Date(item.due_date), "MMM d, yyyy") : "-"}

@@ -16,7 +16,8 @@ import { CategoryManager } from "@/components/shared/CategoryManager";
 import { toast } from "sonner";
 import { useCurrency } from "@/hooks/useCurrency";
 import { formatAmount, cn } from "@/lib/utils";
-import { resolveCategory } from "@/lib/sectorMapping";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
+import { getCanonicalCategory } from "@/lib/sectorMapping";
 import { getSectorStyle } from "@/lib/sectorStyles";
 
 export default function Bills() {
@@ -48,7 +49,7 @@ export default function Bills() {
       if (error) throw error;
       return (data || []).map((t: any) => ({
         ...t,
-        resolvedCategory: resolveCategory(t.category, t.description) || "Other",
+        resolvedCategory: getCanonicalCategory(t.category, null, t.description),
         displayAmount: Math.abs(t.amount),
       }));
     },
@@ -162,7 +163,7 @@ export default function Bills() {
       header: "Amount",
       cell: ({ row }) => (
         <span className="font-medium text-destructive">
-          {formatAmount(row.original.displayAmount, currency)}
+          <FormattedCurrency amount={row.original.displayAmount} currency={currency} />
         </span>
       ),
     },
@@ -173,7 +174,7 @@ export default function Bills() {
     { accessorKey: "bill_number", header: "Bill #" },
     { accessorKey: "vendors.name", header: "Vendor", cell: ({ row }) => row.original.vendors?.name || "-" },
     { accessorKey: "bill_date", header: "Date", cell: ({ row }) => new Date(row.original.bill_date).toLocaleDateString() },
-    { accessorKey: "total_amount", header: "Amount", cell: ({ row }) => formatAmount(row.original.total_amount, currency) },
+    { accessorKey: "total_amount", header: "Amount", cell: ({ row }) => <FormattedCurrency amount={row.original.total_amount} currency={currency} /> },
     { accessorKey: "status", header: "Status", cell: ({ row }) => <Badge variant="outline">{row.original.status}</Badge> },
     { id: "actions", cell: ({ row }) => (
       <DataTableRowActions

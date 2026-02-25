@@ -4,14 +4,15 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { FileText, CheckCircle, AlertTriangle, Download, Info, Upload } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { FileText, CheckCircle, AlertTriangle, Download, Info, Upload, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { EnhancedDateRangePicker } from "@/components/shared/EnhancedDateRangePicker";
 import { startOfYear, endOfYear, format } from "date-fns";
 import { useCurrency } from "@/hooks/useCurrency";
-import { formatAmount } from "@/lib/utils";
 import { fetchAllRows } from "@/lib/fetchAllRows";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 const TYPE_ORDER = ["asset", "liability", "equity", "revenue", "expense"];
 const TYPE_LABELS: Record<string, string> = {
@@ -29,11 +30,74 @@ const typeColors: Record<string, string> = {
   expense: "bg-yellow-100 text-yellow-700",
 };
 
+function getAccountRule(type: string): string {
+  if (type === "asset") return "Assets have a normal Debit balance. Debits increase assets (e.g., cash in); Credits decrease assets (e.g., cash paid out).";
+  if (type === "expense") return "Expenses have a normal Debit balance. Debits record costs incurred; Credits reverse/reduce expenses.";
+  if (type === "liability") return "Liabilities have a normal Credit balance. Credits increase what you owe; Debits reduce liabilities (e.g., repayments).";
+  if (type === "equity") return "Equity has a normal Credit balance. Credits increase owner equity; Debits decrease it (e.g., drawings).";
+  if (type === "revenue") return "Revenue has a normal Credit balance. Credits record income earned; Debits are reversals or refunds.";
+  return "Balance = Total Debits − Total Credits from journal entries in this period.";
+}
+
 export function TrialBalanceTab() {
   const [dateFrom, setDateFrom] = useState<Date>(startOfYear(new Date()));
   const [dateTo, setDateTo] = useState<Date>(endOfYear(new Date()));
   const { currency } = useCurrency();
-  const fmtVal = (v: number) => formatAmount(v, currency);
+
+  // Reason sheet state
+  const [reasonOpen, setReasonOpen] = useState(false);
+  const [reasonAccount, setReasonAccount] = useState<any>(null);
+  const [reasonSide, setReasonSide] = useState<"debit" | "credit" | "net">("debit");
+  const [reasonLines, setReasonLines] = useState<any[]>([]);
+  const [reasonLoading, setReasonLoading] = useState(false);
+
+  const openReason = async (account: any, side: "debit" | "credit" | "net") => {
+    setReasonAccount(account);
+    setReasonSide(side);
+    setReasonLines([]);
+    setReasonOpen(true);
+    setReasonLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setReasonLoading(false); return; }
+      const fromStr = format(dateFrom, "yyyy-MM-dd");
+      const toStr = format(dateTo, "yyyy-MM-dd");
+
+      // Fetch journal entry IDs in the selected date range
+      const entries = await fetchAllRows(
+        supabase
+          .from("journal_entries")
+          .select("id, entry_date, description, entry_number")
+          .eq("user_id", user.id)
+          .gte("entry_date", fromStr)
+          .lte("entry_date", toStr)
+      );
+      const entryIds = entries.map((e: any) => e.id);
+      const entryMap = new Map(entries.map((e: any) => [e.id, e]));
+
+      if (entryIds.length === 0) { setReasonLines([]); setReasonLoading(false); return; }
+
+      // Fetch lines for this account within those entries
+      const lines: any[] = [];
+      for (let i = 0; i < entryIds.length; i += 200) {
+        const batch = entryIds.slice(i, i + 200);
+        const { data } = await supabase
+          .from("journal_entry_lines")
+          .select("debit_amount, credit_amount, journal_entry_id")
+          .eq("account_id", account.id)
+          .in("journal_entry_id", batch);
+        if (data) {
+          lines.push(...data.map((l: any) => ({ ...l, entry: entryMap.get(l.journal_entry_id) })));
+        }
+      }
+      // Sort by date desc
+      lines.sort((a, b) => (b.entry?.entry_date || "").localeCompare(a.entry?.entry_date || ""));
+      setReasonLines(lines);
+    } catch {
+      setReasonLines([]);
+    }
+    setReasonLoading(false);
+  };
 
   const { data: hasFiles = false } = useQuery({
     queryKey: ["has-uploaded-files"],
@@ -195,6 +259,7 @@ export function TrialBalanceTab() {
   };
 
   return (
+    <>
     <Card>
       <CardContent className="pt-6 space-y-4">
         <div className="flex flex-col sm:flex-row gap-2 justify-between items-start sm:items-center">
@@ -271,7 +336,7 @@ export function TrialBalanceTab() {
               ) : !isBalanced ? (
                 <Badge variant="destructive" className="gap-1">
                   <AlertTriangle className="w-3 h-3" />
-                  Out of balance by {fmtVal(Math.abs(totalDebit - totalCredit))}
+                  Out of balance by <FormattedCurrency amount={Math.abs(totalDebit - totalCredit)} currency={currency} />
                 </Badge>
               ) : null}
               {hasActivity && (
@@ -308,11 +373,19 @@ export function TrialBalanceTab() {
                       ...grp.map((a: any) => (
                         <TableRow key={a.id}>
                           <TableCell className="text-sm pl-6">{a.account_name}</TableCell>
-                          <TableCell className="text-right font-mono text-sm">
-                            {a.computed_debit > 0 ? fmtVal(a.computed_debit) : "—"}
+                          <TableCell
+                            className={`text-right font-mono text-sm ${a.computed_debit > 0 ? "cursor-pointer hover:bg-muted/50 transition-colors" : ""}`}
+                            title={a.computed_debit > 0 ? "Click to see debit breakdown" : undefined}
+                            onClick={() => a.computed_debit > 0 && openReason(a, "debit")}
+                          >
+                            {a.computed_debit > 0 ? <FormattedCurrency amount={a.computed_debit} currency={currency} /> : "—"}
                           </TableCell>
-                          <TableCell className="text-right font-mono text-sm">
-                            {a.computed_credit > 0 ? fmtVal(a.computed_credit) : "—"}
+                          <TableCell
+                            className={`text-right font-mono text-sm ${a.computed_credit > 0 ? "cursor-pointer hover:bg-muted/50 transition-colors" : ""}`}
+                            title={a.computed_credit > 0 ? "Click to see credit breakdown" : undefined}
+                            onClick={() => a.computed_credit > 0 && openReason(a, "credit")}
+                          >
+                            {a.computed_credit > 0 ? <FormattedCurrency amount={a.computed_credit} currency={currency} /> : "—"}
                           </TableCell>
                         </TableRow>
                       )),
@@ -322,10 +395,10 @@ export function TrialBalanceTab() {
                           Subtotal {TYPE_LABELS[type]}
                         </TableCell>
                         <TableCell className="text-right font-mono text-sm">
-                          {sub.debit > 0 ? fmtVal(sub.debit) : "—"}
+                          {sub.debit > 0 ? <FormattedCurrency amount={sub.debit} currency={currency} /> : "—"}
                         </TableCell>
                         <TableCell className="text-right font-mono text-sm">
-                          {sub.credit > 0 ? fmtVal(sub.credit) : "—"}
+                          {sub.credit > 0 ? <FormattedCurrency amount={sub.credit} currency={currency} /> : "—"}
                         </TableCell>
                       </TableRow>,
                     ];
@@ -333,17 +406,21 @@ export function TrialBalanceTab() {
 
                   {/* Net Income row */}
                   {hasActivity && (
-                    <TableRow className="border-t-2 bg-muted/10">
+                    <TableRow
+                      className="border-t-2 bg-muted/10 cursor-pointer hover:bg-muted/30 transition-colors"
+                      title="Click to see net income explanation"
+                      onClick={() => openReason({ account_name: "Net Income", account_type: "equity", account_number: "—", id: "__net__", computed_debit: netIncome < 0 ? Math.abs(netIncome) : 0, computed_credit: netIncome >= 0 ? netIncome : 0 }, "net")}
+                    >
                       <TableCell colSpan={2} className="font-semibold text-sm">
                         Net Income (Revenue − Expenses)
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm font-semibold">
-                        {netIncome < 0 ? fmtVal(Math.abs(netIncome)) : "—"}
+                        {netIncome < 0 ? <FormattedCurrency amount={Math.abs(netIncome)} currency={currency} /> : "—"}
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm font-semibold">
                         {netIncome >= 0 ? (
                           <span className="text-green-600">
-                            {fmtVal(netIncome)}
+                            <FormattedCurrency amount={netIncome} currency={currency} />
                           </span>
                         ) : "—"}
                       </TableCell>
@@ -356,10 +433,10 @@ export function TrialBalanceTab() {
                       Grand Total
                     </TableCell>
                     <TableCell className="text-right font-mono">
-                      {fmtVal(totalDebit)}
+                      <FormattedCurrency amount={totalDebit} currency={currency} />
                     </TableCell>
                     <TableCell className="text-right font-mono">
-                      {fmtVal(totalCredit)}
+                      <FormattedCurrency amount={totalCredit} currency={currency} />
                     </TableCell>
                   </TableRow>
                 </TableBody>
@@ -369,5 +446,121 @@ export function TrialBalanceTab() {
         )}
       </CardContent>
     </Card>
+
+    {/* Reason Sheet */}
+    <Sheet open={reasonOpen} onOpenChange={setReasonOpen}>
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>
+            {reasonSide === "net" ? "Net Income Explanation" : `${reasonSide === "debit" ? "Debit" : "Credit"} Breakdown`}
+          </SheetTitle>
+        </SheetHeader>
+
+        {reasonAccount && (
+          <div className="mt-4 space-y-4">
+            {/* Account info */}
+            <div className="flex items-center gap-2">
+              <Badge className={typeColors[reasonAccount.account_type] || ""}>{reasonAccount.account_type}</Badge>
+              <span className="font-semibold">{reasonAccount.account_name}</span>
+              <span className="text-xs text-muted-foreground">#{reasonAccount.account_number}</span>
+            </div>
+
+            {/* Formula / explanation */}
+            {reasonSide === "net" ? (
+              <div className="bg-muted/40 rounded-lg p-4 space-y-2">
+                <p className="text-xs uppercase font-semibold text-muted-foreground">Formula</p>
+                <p className="font-mono text-sm">Net Income = Revenue Credits − Revenue Debits − (Expense Debits − Expense Credits)</p>
+                <div className="space-y-1 pt-2 border-t border-muted text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Revenue (net credits)</span>
+                    <span className="font-mono"><FormattedCurrency amount={subtotals.revenue.credit - subtotals.revenue.debit} currency={currency} /></span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Expenses (net debits)</span>
+                    <span className="font-mono text-red-500">−<FormattedCurrency amount={subtotals.expense.debit - subtotals.expense.credit} currency={currency} /></span>
+                  </div>
+                  <div className="flex justify-between font-bold border-t pt-1">
+                    <span>Net Income</span>
+                    <span className={netIncome >= 0 ? "text-green-600" : "text-red-500"}><FormattedCurrency amount={netIncome} currency={currency} /></span>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground pt-1">
+                  {netIncome >= 0
+                    ? "Profit — your revenue exceeds your expenses for this period."
+                    : "Loss — your expenses exceed your revenue for this period."}
+                </p>
+              </div>
+            ) : (
+              <div className="bg-muted/40 rounded-lg p-4 space-y-2">
+                <p className="text-xs uppercase font-semibold text-muted-foreground">
+                  {reasonSide === "debit" ? "Debit Total" : "Credit Total"} for this period
+                </p>
+                <p className="text-2xl font-bold font-mono">
+                  <FormattedCurrency amount={reasonSide === "debit" ? reasonAccount.computed_debit : reasonAccount.computed_credit} currency={currency} />
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Sum of all {reasonSide === "debit" ? "debit" : "credit"} amounts posted to <strong>{reasonAccount.account_name}</strong> in journal entries from{" "}
+                  {format(dateFrom, "MMM d, yyyy")} to {format(dateTo, "MMM d, yyyy")}.
+                </p>
+              </div>
+            )}
+
+            {/* Accounting rule (skip for net income) */}
+            {reasonSide !== "net" && (
+              <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-4 space-y-1">
+                <p className="text-xs uppercase font-semibold text-muted-foreground">Accounting Rule</p>
+                <p className="text-sm">{getAccountRule(reasonAccount.account_type)}</p>
+              </div>
+            )}
+
+            {/* Journal entry lines (skip for net income virtual row) */}
+            {reasonSide !== "net" && reasonAccount.id !== "__net__" && (
+              <div>
+                <p className="text-xs uppercase font-semibold text-muted-foreground mb-2">
+                  Contributing Journal Entry Lines {!reasonLoading && `(${reasonLines.length})`}
+                </p>
+                {reasonLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="animate-spin w-5 h-5 text-muted-foreground" />
+                  </div>
+                ) : reasonLines.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4">No journal entries found for this account in the selected period.</p>
+                ) : (
+                  <div className="space-y-0 divide-y rounded-md border overflow-hidden">
+                    {reasonLines
+                      .filter((l: any) => reasonSide === "debit" ? (l.debit_amount || 0) > 0 : (l.credit_amount || 0) > 0)
+                      .slice(0, 50)
+                      .map((line: any, i: number) => (
+                        <div key={i} className="flex items-start justify-between px-3 py-2 text-sm hover:bg-muted/30">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs text-muted-foreground">
+                              {line.entry?.entry_date
+                                ? format(new Date(line.entry.entry_date + "T00:00:00"), "MMM d, yyyy")
+                                : ""} · {line.entry?.entry_number}
+                            </p>
+                            <p className="truncate max-w-[220px]">{line.entry?.description || "—"}</p>
+                          </div>
+                          <div className="text-right ml-3 shrink-0">
+                            {reasonSide === "debit" && (
+                              <p className="text-green-600 font-mono text-xs font-semibold">Dr <FormattedCurrency amount={line.debit_amount} currency={currency} /></p>
+                            )}
+                            {reasonSide === "credit" && (
+                              <p className="text-red-500 font-mono text-xs font-semibold">Cr <FormattedCurrency amount={line.credit_amount} currency={currency} /></p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    {reasonLines.filter((l: any) => reasonSide === "debit" ? (l.debit_amount || 0) > 0 : (l.credit_amount || 0) > 0).length > 50 && (
+                      <p className="text-xs text-muted-foreground text-center py-2">Showing top 50 entries</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
+    </>
   );
 }

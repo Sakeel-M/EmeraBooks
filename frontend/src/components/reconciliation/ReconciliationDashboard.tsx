@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useCurrency } from "@/hooks/useCurrency";
-import { formatAmount } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface UploadedFile {
   id: string;
@@ -284,7 +284,7 @@ export function ReconciliationDashboard({ uploadedFiles, reconciliations, isLoad
                   <div className="flex items-center gap-4">
                     {r.unreconciled_difference !== 0 && (
                       <span className="text-sm font-medium text-destructive flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" />{formatAmount(Math.abs(r.unreconciled_difference), currency)}
+                        <AlertCircle className="w-3 h-3" /><FormattedCurrency amount={Math.abs(r.unreconciled_difference)} currency={currency} />
                       </span>
                     )}
                     {getStatusBadge(r.status)}

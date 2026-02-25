@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getSectorStyle } from "@/lib/sectorStyles";
-import { formatAmount } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface LedgerRow {
   id: string;
@@ -107,7 +107,7 @@ export function LedgerEntryDetailSheet({ open, onOpenChange, entry, currency }: 
                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Debit</span>
               </div>
               <p className={`text-lg font-bold ${entry.debit > 0 ? "text-primary" : "text-muted-foreground"}`}>
-                {entry.debit > 0 ? formatAmount(entry.debit, currency) : "—"}
+                {entry.debit > 0 ? <FormattedCurrency amount={entry.debit} currency={currency} /> : "—"}
               </p>
             </div>
 
@@ -118,7 +118,7 @@ export function LedgerEntryDetailSheet({ open, onOpenChange, entry, currency }: 
                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Credit</span>
               </div>
               <p className={`text-lg font-bold ${entry.credit > 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                {entry.credit > 0 ? formatAmount(entry.credit, currency) : "—"}
+                {entry.credit > 0 ? <FormattedCurrency amount={entry.credit} currency={currency} /> : "—"}
               </p>
             </div>
           </div>
@@ -127,7 +127,7 @@ export function LedgerEntryDetailSheet({ open, onOpenChange, entry, currency }: 
           <div className={`rounded-xl p-4 border ${net >= 0 ? "bg-green-500/5 border-green-500/20" : "bg-destructive/5 border-destructive/20"}`}>
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Net Position (Dr − Cr)</p>
             <p className={`text-xl font-bold ${net >= 0 ? "text-green-600" : "text-destructive"}`}>
-              {net >= 0 ? "+" : ""}{formatAmount(Math.abs(net), currency)}
+              {net >= 0 ? "+" : ""}<FormattedCurrency amount={Math.abs(net)} currency={currency} />
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">{net >= 0 ? "Debit surplus" : "Credit surplus"}</p>
           </div>

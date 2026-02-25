@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ChevronDown, ChevronRight, Calendar, TrendingDown } from "lucide-react";
 import type { Transaction } from "@/lib/database";
-import { replaceAedSymbol } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface TrendsTabProps {
   transactions: Transaction[];
@@ -12,9 +12,6 @@ interface TrendsTabProps {
 
 const TrendsTab = ({ transactions, currency }: TrendsTabProps) => {
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
-
-  const fmt = (amount: number) =>
-    replaceAedSymbol(new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 2 }).format(amount), currency);
 
   // Group by year
   const yearMap = new Map<string, { total: number; count: number }>();
@@ -47,7 +44,7 @@ const TrendsTab = ({ transactions, currency }: TrendsTabProps) => {
             {yearData.map(([year, data]) => (
               <div key={year} className="p-4 rounded-lg bg-muted">
                 <p className="text-sm text-muted-foreground">{year}</p>
-                <p className="text-lg font-bold text-foreground">{fmt(data.total)}</p>
+                <p className="text-lg font-bold text-foreground"><FormattedCurrency amount={data.total} currency={currency} /></p>
                 <p className="text-xs text-muted-foreground">{data.count} transactions</p>
               </div>
             ))}
@@ -79,7 +76,7 @@ const TrendsTab = ({ transactions, currency }: TrendsTabProps) => {
                     <span className="font-medium text-foreground">{label}</span>
                     <Badge variant="secondary" className="text-xs">{txns.length} txns</Badge>
                   </div>
-                  <span className="font-semibold text-foreground">{fmt(total)}</span>
+                  <span className="font-semibold text-foreground"><FormattedCurrency amount={total} currency={currency} /></span>
                 </button>
                 {isExpanded && (
                   <div className="border-t px-4 py-2 space-y-1 max-h-60 overflow-y-auto">
@@ -92,7 +89,7 @@ const TrendsTab = ({ transactions, currency }: TrendsTabProps) => {
                           <span className="truncate text-foreground">{t.description}</span>
                         </div>
                         <span className={`font-medium whitespace-nowrap ml-2 ${t.amount < 0 ? "text-destructive" : "text-green-600"}`}>
-                          {fmt(t.amount)}
+                          <FormattedCurrency amount={t.amount} currency={currency} />
                         </span>
                       </div>
                     ))}

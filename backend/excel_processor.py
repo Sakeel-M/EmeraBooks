@@ -56,7 +56,7 @@ class UAEBankExcelProcessor:
                 'reimbursement', 'refund', 'credit from', 'deposit from', 'payment from',
                 'received from', 'dividend', 'interest credit', 'profit share',
             ],
-            'Food & Dining': [
+            'Food & Beverage': [
                 'carrefour', 'lulu', 'spinneys', 'choithrams', 'union coop', 'waitrose',
                 'restaurant', 'cafe', 'kfc', 'mcdonald', 'pizza', 'subway', 'dominos',
                 'starbucks', 'costa', 'dunkin', 'burger', 'food', 'dining', 'eat',
@@ -68,6 +68,7 @@ class UAEBankExcelProcessor:
                 'ralphs', 'albertsons', 'vons', 'pavilions', 'publix', 'wegmans', 'harris teeter',
                 'noon food', 'kcal', 'just eat', 'hunger station', 'marsool', 'mrsool',
                 'jahez', 'tikka', 'shawarma', 'manoushe', 'falafel', 'hummus',
+                'baqala', 'chaat', 'karak', 'cafetera',
                 'moongoat', 'dutch bros', "peet's coffee", 'peets coffee', 'blue bottle',
                 'instacart', 'fresh direct', 'imperfect foods', 'misfit market',
                 'chick-fil-a', 'chickfila', 'taco bell', 'five guys', 'shake shack',
@@ -75,55 +76,60 @@ class UAEBankExcelProcessor:
                 'olive garden', 'red lobster', 'applebees', 'chilis', 'ihop', 'dennys',
                 'wingstop', 'buffalo wild wings', 'raising canes', 'culvers',
             ],
-            'Transportation': [
+            'Transportation & Logistics': [
                 'adnoc', 'eppco', 'enoc', 'petrol', 'fuel', 'gas', 'gasoline',
                 'taxi', 'uber', 'careem', 'metro', 'bus', 'rta', 'parking',
                 'salik', 'toll', 'car wash', 'transport', 'emirates', 'etihad',
                 'flydubai', 'air arabia', 'airline', 'flight', 'airport',
                 'chevron', 'shell', 'bp', '76', 'exxon', 'mobil', 'lyft',
-                'parking services', 'toll roads', 'valet'
+                'parking services', 'toll roads', 'valet', 'bolt', 'indrive', 'yango',
+                'aramex', 'dhl', 'fedex', 'ups', 'courier', 'shipping', 'freight',
             ],
-            'Shopping & Retail': [
+            'Retail & Shopping': [
                 'mall', 'centrepoint', 'max', 'home centre', 'ikea', 'ace',
                 'sharaf dg', 'jumbo', 'electronics', 'clothing', 'fashion',
                 'shop', 'store', 'retail', 'amazon', 'noon', 'souq', 'namshi',
-                'h&m', 'zara', 'nike', 'adidas', 'apple', 'samsung', 'virgin',
+                'h&m', 'zara', 'nike', 'adidas', 'apple store', 'samsung', 'virgin',
                 'uniqlo', 'target', 'walmart', 'costco', 'best buy', 'macy',
-                'nordstrom', 'kohls', 'tj maxx', 'ross', 'marshalls'
+                'nordstrom', 'kohls', 'tj maxx', 'ross', 'marshalls',
+                'shein', 'bosta',
             ],
             'Healthcare': [
                 'hospital', 'clinic', 'pharmacy', 'medical', 'doctor', 'health',
                 'dental', 'medicare', 'aster', 'nmc', 'mediclinic', 'life pharmacy',
-                'boots', 'aster pharmacy', 'day today pharmacy'
+                'boots', 'aster pharmacy', 'day today pharmacy',
+                'seha', 'dha', 'nmc healthcare', 'thumbay', 'daman',
+                'salon', 'spa', 'barbershop', 'beauty', 'cosmetics', 'skincare',
+                'haircut', 'manicure', 'pedicure', 'massage', 'gym', 'fitness',
+                '24hourfitness', 'planet fitness', 'la fitness', 'crunch', 'equinox',
+                'flex fitness', 'orangetheory',
             ],
-            'Utilities & Bills': [
+            'Utilities': [
                 'dewa', 'addc', 'sewa', 'fewa', 'etisalat', 'du', 'internet',
-                'mobile', 'telecom', 'electricity', 'water', 'gas', 'utility', 'bill',
-                'wifi', 'broadband', 'phone bill', 'electric bill'
+                'mobile', 'telecom', 'electricity', 'water', 'utility', 'bill',
+                'wifi', 'broadband', 'phone bill', 'electric bill',
             ],
-            'Entertainment': [
-                'cinema', 'movie', 'vox', 'reel', 'netflix', 'osn', 'gaming',
+            'Entertainment & Media': [
+                'cinema', 'movie', 'vox', 'reel', 'osn', 'gaming',
                 'entertainment', 'park', 'beach', 'attraction', 'ticket', 'event',
-                'spotify', 'youtube', 'disney', 'amazon prime', 'hulu', 'shahid',
-                'disneyland', 'balloon museum', 'sawdust festival', 'museum', 'amusement'
+                'youtube', 'disney', 'hulu', 'shahid',
+                'disneyland', 'balloon museum', 'sawdust festival', 'museum', 'amusement',
             ],
-            'Subscriptions & Digital Services': [
+            'Technology': [
                 'netflix', 'spotify', 'youtube premium', 'amazon prime', 'disney+',
                 'adobe', 'microsoft', 'google', 'icloud', 'dropbox', 'zoom',
                 'subscription', 'monthly', 'annual', 'recurring', 'saas',
                 'software', 'app store', 'play store', 'itunes', 'office 365',
-                'hulu', 'hbo', 'peacock', 'paramount+', 'apple tv', 'apple one',
+                'hbo', 'peacock', 'paramount+', 'apple tv', 'apple one',
                 'slack', 'github', 'figma', 'notion', 'canva', 'grammarly',
                 'dashlane', '1password', 'nordvpn', 'expressvpn', 'duolingo',
                 'headspace', 'calm', 'audible', 'kindle unlimited',
             ],
-            'ATM & Cash Withdrawals': [
+            'Finance & Banking': [
                 'atm', 'cash withdrawal', 'withdrawal', 'atm withdrawal',
-                'cash advance', 'atm fee', 'withdrawal fee'
-            ],
-            'Banking & Finance': [
+                'cash advance', 'atm fee', 'withdrawal fee',
                 'bank fee', 'service charge', 'maintenance fee', 'overdraft', 'annual fee',
-                'interest charge', 'finance charge', 'late payment fee', 'atm fee',
+                'interest charge', 'finance charge', 'late payment fee',
                 'wire transfer', 'remittance', 'foreign exchange', 'forex', 'currency exchange',
                 'uae exchange', 'al ansari exchange', 'lulu exchange', 'wall street exchange',
                 'zelle', 'venmo', 'paypal', 'western union', 'moneygram',
@@ -131,12 +137,7 @@ class UAEBankExcelProcessor:
                 'ach debit', 'ach credit', 'direct debit', 'direct deposit',
                 'pos purchase', 'checkcard', 'wire to', 'wire from',
                 'cash app', 'apple pay', 'google pay', 'samsung pay',
-            ],
-            'Personal Care': [
-                'salon', 'spa', 'barbershop', 'beauty', 'cosmetics', 'skincare',
-                'haircut', 'manicure', 'pedicure', 'massage', 'gym', 'fitness',
-                '24hourfitness', 'planet fitness', 'la fitness', 'crunch', 'equinox',
-                'flex fitness', 'orangetheory'
+                'tabby', 'spotii', 'cashew', 'tamara',
             ]
         }
 
@@ -244,9 +245,9 @@ class UAEBankExcelProcessor:
         if sq_match:
             merchant_after_sq = sq_match.group(1).strip()
             cat = self.categorize_transaction(merchant_after_sq)
-            if cat != 'Other Expenses':
+            if cat != 'Other':
                 return cat
-            return 'Shopping & Retail'  # Default for unknown Square merchants
+            return 'Retail & Shopping'  # Default for unknown Square merchants
 
         # --- UAE-specific pre-checks ---
         # MOBN = Mobile Banking transfer; hex refs = IBFT/bank transfer
@@ -264,16 +265,14 @@ class UAEBankExcelProcessor:
         category_priority = [
             'Internal Transfer',
             'Salary & Income',
-            'ATM & Cash Withdrawals',
-            'Subscriptions & Digital Services',
-            'Food & Dining',
-            'Transportation',
+            'Finance & Banking',
+            'Technology',
+            'Food & Beverage',
+            'Transportation & Logistics',
             'Healthcare',
-            'Utilities & Bills',
-            'Entertainment',
-            'Shopping & Retail',
-            'Personal Care',
-            'Banking & Finance',
+            'Utilities',
+            'Entertainment & Media',
+            'Retail & Shopping',
         ]
 
         # Check for exact keyword matches in priority order
@@ -281,83 +280,86 @@ class UAEBankExcelProcessor:
             keywords = self.categories.get(category, [])
             for keyword in keywords:
                 if keyword in desc_lower:
-                    if category == 'ATM & Cash Withdrawals':
-                        if any(term in desc_lower for term in ['atm', 'withdrawal', 'cash']):
+                    if category == 'Finance & Banking':
+                        if any(term in desc_lower for term in ['atm', 'withdrawal', 'cash', 'fee',
+                                'charge', 'interest', 'maintenance', 'remittance', 'exchange',
+                                'zelle', 'venmo', 'paypal', 'western union', 'forex', 'overdraft',
+                                'tabby', 'spotii', 'tamara']):
                             return category
-                    elif category == 'Subscriptions & Digital Services':
+                    elif category == 'Technology':
                         if any(term in desc_lower for term in ['subscription', 'monthly', 'netflix',
                                 'spotify', 'prime', 'office', 'adobe', 'google', 'microsoft', 'icloud']):
-                            return category
-                    elif category == 'Banking & Finance':
-                        if any(term in desc_lower for term in ['fee', 'charge', 'interest',
-                                'maintenance', 'remittance', 'exchange', 'zelle', 'venmo',
-                                'paypal', 'western union', 'forex', 'overdraft']):
                             return category
                     else:
                         return category
 
         # Additional pattern matching for common transaction types
-        if any(word in desc_lower for word in ['taxi', 'uber', 'careem', 'rta', 'bolt']):
-            return 'Transportation'
+        if any(word in desc_lower for word in ['taxi', 'uber', 'careem', 'rta', 'bolt', 'indrive', 'yango']):
+            return 'Transportation & Logistics'
 
         if any(word in desc_lower for word in ['restaurant', 'cafe', 'food', 'dining', 'eat',
-                                                'talabat', 'zomato', 'deliveroo', 'mrsool']):
-            return 'Food & Dining'
+                                                'talabat', 'zomato', 'deliveroo', 'mrsool', 'marsool']):
+            return 'Food & Beverage'
 
         if any(word in desc_lower for word in ['mall', 'shop', 'store', 'retail', 'noon', 'amazon']):
-            return 'Shopping & Retail'
+            return 'Retail & Shopping'
 
         # Merchant shorthand map
         merchant_patterns = {
-            'careem': 'Transportation',
-            'talabat': 'Food & Dining',
-            'zomato': 'Food & Dining',
-            'mrsool': 'Food & Dining',
-            'marsool': 'Food & Dining',
-            'netflix': 'Subscriptions & Digital Services',
-            'spotify': 'Subscriptions & Digital Services',
-            'amazon': 'Shopping & Retail',
-            'noon': 'Shopping & Retail',
-            'adnoc': 'Transportation',
-            'enoc': 'Transportation',
-            'eppco': 'Transportation',
-            'salik': 'Transportation',
-            'rta': 'Transportation',
-            'dewa': 'Utilities & Bills',
-            'etisalat': 'Utilities & Bills',
-            'e&': 'Utilities & Bills',
-            'du telecom': 'Utilities & Bills',
-            'addc': 'Utilities & Bills',
-            'sewa': 'Utilities & Bills',
+            'careem': 'Transportation & Logistics',
+            'talabat': 'Food & Beverage',
+            'zomato': 'Food & Beverage',
+            'mrsool': 'Food & Beverage',
+            'marsool': 'Food & Beverage',
+            'netflix': 'Technology',
+            'spotify': 'Technology',
+            'amazon': 'Retail & Shopping',
+            'noon': 'Retail & Shopping',
+            'namshi': 'Retail & Shopping',
+            'adnoc': 'Transportation & Logistics',
+            'enoc': 'Transportation & Logistics',
+            'eppco': 'Transportation & Logistics',
+            'salik': 'Transportation & Logistics',
+            'rta': 'Transportation & Logistics',
+            'dewa': 'Utilities',
+            'etisalat': 'Utilities',
+            'e&': 'Utilities',
+            'du telecom': 'Utilities',
+            'addc': 'Utilities',
+            'sewa': 'Utilities',
+            'tabby': 'Finance & Banking',
+            'spotii': 'Finance & Banking',
+            'tamara': 'Finance & Banking',
         }
 
         for merchant, cat in merchant_patterns.items():
             if merchant in desc_lower:
                 return cat
 
-        return 'Other Expenses'
+        return 'Other'
 
     def ai_categorize_transactions(self, transactions):
         """Use AI to intelligently categorize transactions in batches"""
         if not openai.api_key or not transactions:
             return transactions
 
-        # Define available categories
+        # Define available categories — exact frontend sector names (no mapping needed)
         categories = [
             'Internal Transfer',
             'Salary & Income',
-            'Food & Dining',
-            'Transportation',
-            'Shopping & Retail',
+            'Food & Beverage',
+            'Transportation & Logistics',
+            'Retail & Shopping',
             'Healthcare',
-            'Utilities & Bills',
-            'Entertainment',
-            'Subscriptions & Digital Services',
-            'ATM & Cash Withdrawals',
-            'Banking & Finance',
-            'Personal Care',
-            'Travel',
-            'Other Expenses',
+            'Utilities',
+            'Entertainment & Media',
+            'Technology',
+            'Finance & Banking',
+            'Travel & Tourism',
+            'Professional Services',
+            'Real Estate',
+            'Education',
+            'Other',
         ]
 
         try:
@@ -392,81 +394,90 @@ STRICT RULES:
    ✓ Direct deposit credits, employer payments
    ✓ Refunds and reimbursements
 
-3. Food & Dining — RESTAURANTS, CAFES, GROCERIES:
-   ✓ Carrefour, Lulu, Spinneys, Choithrams, Union Coop
-   ✓ Talabat, Zomato, Deliveroo, Mrsool, Marsool, Hunger Station
+3. Food & Beverage — RESTAURANTS, CAFES, GROCERIES:
+   ✓ Carrefour, Lulu, Spinneys, Choithrams, Union Coop, Baqala, Chaat, Karak
+   ✓ Talabat, Zomato, Deliveroo, Mrsool, Marsool, Hunger Station, Jahez
    ✓ McDonald's, KFC, Pizza Hut, Subway, Starbucks, Costa
    ✓ Any restaurant, cafe, bakery, food delivery
 
-4. Transportation — GAS, PARKING, RIDESHARE, SALIK:
+4. Transportation & Logistics — GAS, PARKING, RIDESHARE, SALIK:
    ✓ ADNOC, ENOC, EPPCO (fuel stations)
-   ✓ Careem, Uber (rides), Bolt, RTA, Salik (Dubai toll)
+   ✓ Careem, Uber (rides), Bolt, inDrive, Yango, RTA, Salik (Dubai toll)
    ✓ Parking, airport transfers, Emirates, Flydubai, Air Arabia (short trips)
+   ✓ DHL, FedEx, Aramex, UPS (courier/shipping)
 
-5. Utilities & Bills — DEWA, ETISALAT, DU:
+5. Utilities — DEWA, ETISALAT, DU:
    ✓ DEWA, ADDC, SEWA, FEWA (electricity/water)
    ✓ Etisalat / e&, du Telecom (phone/internet)
    ✓ Any utility bill payment
 
-6. Subscriptions & Digital Services:
+6. Technology — SOFTWARE SUBSCRIPTIONS & DIGITAL:
    ✓ Netflix, Spotify, Disney+, OSN, Shahid
    ✓ Adobe, Microsoft 365, iCloud, Dropbox, Zoom
-   ✓ Any monthly/annual subscription
+   ✓ Any monthly/annual software subscription
 
-7. Shopping & Retail:
-   ✓ Noon, Amazon, Namshi, Souq
+7. Retail & Shopping:
+   ✓ Noon, Amazon, Namshi, Souq, Shein
    ✓ H&M, Zara, Nike, Adidas, Sharaf DG, Jumbo
-   ✓ Mall purchases, IKEA, Home Centre
+   ✓ Mall purchases, IKEA, Home Centre, Target, Walmart
 
 8. Healthcare:
-   ✓ Aster, NMC, Mediclinic, Life Pharmacy, Boots
+   ✓ Aster, NMC, Mediclinic, Life Pharmacy, Boots, SEHA, DHA
    ✓ Doctors, dentists, hospitals, clinics, pharmacies
+   ✓ Gyms, salons, spas, fitness centers
 
-9. ATM & Cash Withdrawals:
-   ✓ ATM Withdrawal, Cash Advance only
-
-10. Banking & Finance — BANK FEES ONLY:
+9. Finance & Banking — BANK FEES & ATM:
+   ✓ ATM Withdrawal, Cash Advance
    ✓ Annual fee, service charge, overdraft fee, interest charge
    ✓ UAE Exchange, Al Ansari (money exchange/remittance)
-   ✓ Zelle, Western Union, MoneyGram (third-party transfers)
+   ✓ Zelle, Western Union, MoneyGram, Tabby, Spotii, Tamara
    ✗ NOT own-account transfers (those are Internal Transfer)
 
-11. Entertainment:
+10. Entertainment & Media:
    ✓ Vox Cinemas, IMAX, concerts, theme parks, VOX, Expo
    ✓ Gaming, sports events, museums, attractions
 
-12. Personal Care:
-   ✓ Gym memberships, salons, spas, barbershops
-
-13. Travel:
+11. Travel & Tourism:
    ✓ Hotels, Airbnb, Booking.com, Agoda
    ✓ Long-haul airlines, rental cars, travel agencies
 
-14. Other Expenses — ONLY if truly cannot be identified
+12. Professional Services:
+   ✓ Consulting, legal, accounting, HR, advisory, audit firms
+
+13. Education:
+   ✓ Schools, universities, tuition, courses, training
+
+14. Real Estate:
+   ✓ Rent payment, property management, real estate agencies
+
+15. Other — ONLY if truly cannot be identified
 
 CRITICAL UAE EXAMPLES:
 - "530P79B7E39A6295 - M" → Internal Transfer (hex bank reference ID)
 - "MOBN TRANSFER FROM 12345" → Internal Transfer (Mobile Banking)
 - "FT25239ABC123456" → Internal Transfer (Faster Payment reference)
-- "DEWA BILL PAYMENT" → Utilities & Bills
-- "SALIK RECHARGE" → Transportation
-- "TALABAT AE" → Food & Dining
-- "CARREFOUR HYPERMARKET" → Food & Dining
+- "DEWA BILL PAYMENT" → Utilities
+- "SALIK RECHARGE" → Transportation & Logistics
+- "TALABAT AE" → Food & Beverage
+- "CARREFOUR HYPERMARKET" → Food & Beverage
 - "SALARY - ACME LLC" → Salary & Income
-- "ADNOC DISTRIBUTION" → Transportation
-- "ETISALAT POSTPAID" → Utilities & Bills
-- "VOX CINEMAS" → Entertainment
-- "AL ANSARI EXCHANGE" → Banking & Finance
-- "TARGET ST 4255" → Check description - food items = Food & Dining, else Shopping & Retail
-- "RALPHS #0299" → Food & Dining (grocery store)
-- "Netflix" → Subscriptions & Digital Services
-- "Verizon Wireless" → Utilities & Bills (phone service)
+- "ADNOC DISTRIBUTION" → Transportation & Logistics
+- "ETISALAT POSTPAID" → Utilities
+- "VOX CINEMAS" → Entertainment & Media
+- "AL ANSARI EXCHANGE" → Finance & Banking
+- "ATM WITHDRAWAL" → Finance & Banking
+- "TARGET ST 4255" → Retail & Shopping
+- "RALPHS #0299" → Food & Beverage (grocery store)
+- "Netflix" → Technology
+- "Verizon Wireless" → Utilities (phone service)
+- "AMAZON.COM" → Retail & Shopping
+- "TABBY" → Finance & Banking (BNPL)
 
 Transactions to categorize:
 {chr(10).join(descriptions)}
 
 Respond ONLY with a JSON array of category names in the EXACT order of transactions, nothing else.
-Example format: ["Food & Dining", "Transportation", "Shopping & Retail"]"""
+Example format: ["Food & Beverage", "Transportation & Logistics", "Retail & Shopping"]"""
 
                 try:
                     response = openai.chat.completions.create(
@@ -494,7 +505,7 @@ Example format: ["Food & Dining", "Transportation", "Shopping & Retail"]"""
 
                     # Pad with rule-based fallbacks if AI returned fewer than batch size
                     while len(ai_categories) < len(batch):
-                        ai_categories.append(batch[len(ai_categories)].get('Category', 'Other Expenses'))
+                        ai_categories.append(batch[len(ai_categories)].get('Category', 'Other'))
 
                     # Apply AI categories to batch
                     for idx, tx in enumerate(batch):
@@ -745,7 +756,7 @@ Example format: ["Food & Dining", "Transportation", "Shopping & Retail"]"""
 
                         # Categorize using clean merchant name for better accuracy
                         category = self.categorize_transaction(merchant_name)
-                        if category == 'Other Expenses':
+                        if category == 'Other':
                             # Fallback: try raw description too
                             category = self.categorize_transaction(raw_description)
 

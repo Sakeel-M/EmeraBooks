@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { useCurrency } from "@/hooks/useCurrency";
-import { formatAmount } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface Props {
   open: boolean;
@@ -27,7 +27,6 @@ interface LineItem {
 
 export function JournalEntryDialog({ open, onOpenChange, onSaved }: Props) {
   const { currency } = useCurrency();
-  const fmt = (v: number) => formatAmount(v, currency);
   const [entryNumber, setEntryNumber] = useState("");
   const [entryDate, setEntryDate] = useState(new Date().toISOString().split("T")[0]);
   const [description, setDescription] = useState("");
@@ -152,14 +151,14 @@ export function JournalEntryDialog({ open, onOpenChange, onSaved }: Props) {
                 ))}
                 <TableRow className="font-bold">
                   <TableCell colSpan={2} className="text-right">Totals</TableCell>
-                  <TableCell>{fmt(totalDebit)}</TableCell>
-                  <TableCell>{fmt(totalCredit)}</TableCell>
+                  <TableCell><FormattedCurrency amount={totalDebit} currency={currency} /></TableCell>
+                  <TableCell><FormattedCurrency amount={totalCredit} currency={currency} /></TableCell>
                   <TableCell />
                 </TableRow>
               </TableBody>
             </Table>
             {!isBalanced && totalDebit > 0 && (
-              <div className="flex items-center gap-2 text-destructive text-sm"><AlertCircle className="w-4 h-4" />Debits ({fmt(totalDebit)}) must equal credits ({fmt(totalCredit)})</div>
+              <div className="flex items-center gap-2 text-destructive text-sm"><AlertCircle className="w-4 h-4" />Debits (<FormattedCurrency amount={totalDebit} currency={currency} />) must equal credits (<FormattedCurrency amount={totalCredit} currency={currency} />)</div>
             )}
           </div>
 

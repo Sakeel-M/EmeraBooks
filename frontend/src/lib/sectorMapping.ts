@@ -1,3 +1,56 @@
+// ── User Category Registry ──────────────────────────────────────────────────────────
+// Maps lowercase category name → proper-cased name (for exact stored-category match)
+const userCategoryRegistry = new Map<string, string>();
+// Maps user category name → compiled keyword regex (for description matching)
+const userKeywordRules: Array<{ name: string; regex: RegExp }> = [];
+
+/**
+ * Register user-defined custom categories so resolveCategory / resolveIncomeCategory
+ * return the user's exact category name instead of a built-in mapping.
+ * Call this on app startup with rules loaded from localStorage.
+ * @param rules Array of {name, keywords} where keywords is an array of keyword strings
+ */
+export function registerUserCategories(rules: Array<{ name: string; keywords: string[] }>): void {
+  userCategoryRegistry.clear();
+  userKeywordRules.length = 0;
+  for (const rule of rules) {
+    if (!rule.name?.trim()) continue;
+    const name = rule.name.trim();
+    userCategoryRegistry.set(name.toLowerCase(), name);
+    if (rule.keywords?.length) {
+      const pattern = rule.keywords
+        .filter(k => k.trim())
+        .map(k => k.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('|');
+      if (pattern) {
+        userKeywordRules.push({ name, regex: new RegExp(`\\b(${pattern})\\b`, 'i') });
+      }
+    }
+  }
+}
+
+/** Load persisted rules from localStorage and register them. */
+export function loadAndRegisterUserCategories(): void {
+  try {
+    const stored = localStorage.getItem('userCategoryRules');
+    if (stored) registerUserCategories(JSON.parse(stored));
+  } catch { /* ignore */ }
+}
+
+/** Save rules to localStorage and register them. */
+export function saveUserCategories(rules: Array<{ name: string; keywords: string[] }>): void {
+  localStorage.setItem('userCategoryRules', JSON.stringify(rules));
+  registerUserCategories(rules);
+}
+
+/** Get current user category rules from localStorage. */
+export function getUserCategoryRules(): Array<{ name: string; keywords: string[] }> {
+  try {
+    const stored = localStorage.getItem('userCategoryRules');
+    return stored ? JSON.parse(stored) : [];
+  } catch { return []; }
+}
+
 /**
  * Smart keyword-to-sector mapping.
  * Given any name/description string, returns the best matching sector name or null.
@@ -229,6 +282,18 @@ export function resolveCategory(
     return "Finance & Banking";
   }
 
+  // ── User category registry: check exact stored-category name first ──
+  if (rawCategory) {
+    const normRaw = rawCategory.toLowerCase().trim();
+    if (userCategoryRegistry.has(normRaw)) return userCategoryRegistry.get(normRaw)!;
+  }
+  // ── User keyword rules: check description against user-defined keywords ──
+  if (fallbackName) {
+    for (const rule of userKeywordRules) {
+      if (rule.regex.test(fallbackName)) return rule.name;
+    }
+  }
+
   if (rawCategory) {
     const mapped = mapRawBankCategory(rawCategory);
     if (mapped) return mapped;
@@ -265,10 +330,12 @@ const INCOME_SAFE_SECTORS = new Set([
 ]);
 
 // Raw category values that map to Internal Transfer for income
+// NOTE: "bank transfer", "wire transfer", "ibft" removed — these can be payments FROM real customers
+// NOTE: "internal transfer" also removed — stored category is unreliable for existing IBFT data;
+//       rely on description-based signals (mobn, own transfer, inter-account) only.
 const INCOME_TRANSFER_RAW = new Set([
-  "internal transfer", "inter-account transfer", "own transfer",
-  "bank transfer", "wire transfer", "ibft", "mobn", "mobn transfer",
-  "online transfer", "mobile transfer", "transfer between accounts",
+  "inter-account transfer", "own transfer",
+  "mobn transfer", "transfer between accounts",
 ]);
 
 export function resolveIncomeCategory(
@@ -278,13 +345,26 @@ export function resolveIncomeCategory(
   const desc = (description || "").toLowerCase();
   const raw  = (rawCategory  || "").toLowerCase().trim();
 
+  // ── User category registry check ──
+  if (raw) {
+    const normRaw = raw;
+    if (userCategoryRegistry.has(normRaw)) return userCategoryRegistry.get(normRaw)!;
+  }
+  if (desc) {
+    for (const rule of userKeywordRules) {
+      if (rule.regex.test(desc)) return rule.name;
+    }
+  }
+
   // 1. ATM / CCDM cash deposits
   if (/\b(ccdm|cdm\s*deposit|atm\s*deposit|cash\s*deposit|deposit\s*machine)\b/i.test(desc)) {
     return "ATM & Cash Deposits";
   }
 
-  // 2. Internal transfer / IBFT / MOBN
-  if (/\b(ibft|mobn|rtgs|imps|neft|inter.?account|own\s*transfer|self\s*transfer|inward\s*transfer|online\s*transfer)\b/i.test(desc)
+  // 2. Internal transfer — own-account movements only (MOBN always = own account in UAE)
+  // NOTE: IBFT/NEFT/RTGS are inter-bank payment methods also used for customer payments,
+  // so they are NOT classified as Internal Transfer here — they fall through to Business Income.
+  if (/\b(mobn|inter.?account|own\s*transfer|self\s*transfer|between\s*accounts)\b/i.test(desc)
     || INCOME_TRANSFER_RAW.has(raw)) {
     return "Internal Transfer";
   }
@@ -308,4 +388,41 @@ export function resolveIncomeCategory(
 
   // 7. Default for unclassified income
   return "Business Income";
+}
+
+/**
+ * THE canonical category resolver — use on every page for consistent display.
+ *
+ * Priority order (name-first):
+ * 1. guessCategory(entityName)  — merchant/vendor/customer name (most reliable)
+ * 2. guessCategory(description) — raw bank description fallback
+ * 3. resolveCategory(rawCategory, description) — stored category as last resort
+ *
+ * This ensures that even if the DB has a wrong stored category (e.g. "Technology"
+ * for Amazon from a bad AI call), the name-based guess wins and returns
+ * the correct "Retail & Shopping".
+ */
+export function getCanonicalCategory(
+  rawCategory: string | null | undefined,
+  entityName: string | null | undefined,   // vendor / customer / merchant name
+  description: string | null | undefined   // raw bank description
+): string {
+  // ATM Withdrawal always overrides everything — stored category is unreliable for ATMs
+  const fallback = entityName ?? description ?? "";
+  if (/\batm\s+withdrawal\b/i.test(fallback)) return "Finance & Banking";
+
+  // Priority 1: merchant / vendor / customer name
+  if (entityName) {
+    const nameCat = guessCategory(entityName);
+    if (nameCat) return nameCat;
+  }
+
+  // Priority 2: raw bank description (catches "AMAZON.COM 12345" style strings)
+  if (description && description !== entityName) {
+    const descCat = guessCategory(description);
+    if (descCat) return descCat;
+  }
+
+  // Priority 3: stored / mapped category
+  return resolveCategory(rawCategory, description ?? entityName);
 }

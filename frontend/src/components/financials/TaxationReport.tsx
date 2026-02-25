@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { DollarSign, Percent, TrendingDown, Calculator, Download, FileSpreadsheet, Receipt, ShieldCheck, Info } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { DonutChart } from "@/components/charts/DonutChart";
-import { CHART_COLORS, formatCurrencyValue } from "@/lib/chartColors";
+import { CHART_COLORS } from "@/lib/chartColors";
+import { CurrencyAxisTick } from "@/components/shared/CurrencyAxisTick";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 import { exportToCSV } from "@/lib/export";
 import { downloadTaxationPDF } from "./TaxationReportPDF";
 import { useQuery } from "@tanstack/react-query";
@@ -47,7 +49,7 @@ interface MonthlySummary {
 
 export function TaxationReport({ totalRevenue, totalExpenses, netIncome, currency, invoices = [], bills = [] }: TaxationReportProps) {
   const { toast } = useToast();
-  const fmt = (v: number) => formatCurrencyValue(v, currency);
+  const fmt = (v: number) => <FormattedCurrency amount={v} currency={currency} />;
 
   const { data: companyName = "" } = useQuery({
     queryKey: ["company-name"],
@@ -347,7 +349,7 @@ export function TaxationReport({ totalRevenue, totalExpenses, netIncome, currenc
                     {row.label}
                   </TableCell>
                   <TableCell className={`text-right ${row.bold ? "font-semibold" : ""} ${row.value < 0 ? "text-destructive" : ""}`}>
-                    {row.value < 0 ? `(${fmt(Math.abs(row.value))})` : fmt(row.value)}
+                    {row.value < 0 ? <span>(<FormattedCurrency amount={Math.abs(row.value)} currency={currency} />)</span> : fmt(row.value)}
                   </TableCell>
                 </TableRow>
               ))}
@@ -405,7 +407,7 @@ export function TaxationReport({ totalRevenue, totalExpenses, netIncome, currenc
             <div className="p-4 rounded-lg border bg-primary/5 border-primary/20">
               <p className="text-sm text-muted-foreground">Net VAT Payable</p>
               <p className={`text-xl font-bold mt-1 ${netVATPayable >= 0 ? "text-destructive" : "text-green-600"}`}>
-                {netVATPayable >= 0 ? fmt(netVATPayable) : `(${fmt(Math.abs(netVATPayable))})`}
+                {netVATPayable >= 0 ? fmt(netVATPayable) : <span>(<FormattedCurrency amount={Math.abs(netVATPayable)} currency={currency} />)</span>}
               </p>
             </div>
           </div>
@@ -517,7 +519,7 @@ export function TaxationReport({ totalRevenue, totalExpenses, netIncome, currenc
                     <TableCell className="text-right text-amber-600">{fmt(row.vat)}</TableCell>
                     <TableCell className="text-right text-destructive">{fmt(row.expenses)}</TableCell>
                     <TableCell className={`text-right ${row.taxableProfit < 0 ? "text-destructive" : ""}`}>
-                      {row.taxableProfit < 0 ? `(${fmt(Math.abs(row.taxableProfit))})` : fmt(row.taxableProfit)}
+                      {row.taxableProfit < 0 ? <span>(<FormattedCurrency amount={Math.abs(row.taxableProfit)} currency={currency} />)</span> : fmt(row.taxableProfit)}
                     </TableCell>
                     <TableCell className="text-right">{fmt(row.corpTax)}</TableCell>
                   </TableRow>
@@ -539,14 +541,14 @@ export function TaxationReport({ totalRevenue, totalExpenses, netIncome, currenc
               <BarChart data={barChartData} barGap={8}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
-                <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} tickFormatter={(v) => fmt(v)} />
+                <YAxis tick={<CurrencyAxisTick currency={currency} anchor="end" />} />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: "hsl(var(--popover))",
                     border: "1px solid hsl(var(--border))",
                     borderRadius: "8px",
                   }}
-                  formatter={(value: number, name: string) => [fmt(value), name]}
+                  formatter={(value: number, name: string) => [<FormattedCurrency amount={value} currency={currency} />, name]}
                 />
                 <Legend />
                 <Bar dataKey="revenue" name="Before Tax" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
@@ -564,7 +566,7 @@ export function TaxationReport({ totalRevenue, totalExpenses, netIncome, currenc
               <DonutChart
                 data={donutData}
                 centerLabel="Total Tax"
-                centerValue={fmt(totalTaxBurden)}
+                centerValue={totalTaxBurden}
                 height={250}
                 isCurrency
               />

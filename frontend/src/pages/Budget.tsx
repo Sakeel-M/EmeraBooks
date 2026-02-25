@@ -13,9 +13,10 @@ import { Target, AlertCircle, CheckCircle, Save } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { useToast } from "@/hooks/use-toast";
 import { EnhancedDateRangePicker } from "@/components/shared/EnhancedDateRangePicker";
-import { resolveCategory } from "@/lib/sectorMapping";
+import { getCanonicalCategory } from "@/lib/sectorMapping";
 import { startOfMonth, endOfMonth, format } from "date-fns";
 import { formatAmount } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 const Budget = () => {
   const { toast } = useToast();
@@ -84,7 +85,7 @@ const Budget = () => {
           // Only count expenses (negative amounts) — exclude income transactions
           if (t.amount >= 0) continue;
           // Resolve raw category to sector name so it matches budget category keys
-          const cat = resolveCategory(t.category || "", t.description) || t.category || "Uncategorized";
+          const cat = getCanonicalCategory(t.category, null, t.description);
           spending[cat] = (spending[cat] || 0) + Math.abs(t.amount);
         }
       }
@@ -182,13 +183,13 @@ const Budget = () => {
               <div>
                 <p className="text-sm text-muted-foreground">Total Budget</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {formatAmount(totalBudget, currency)}
+                  <FormattedCurrency amount={totalBudget} currency={currency} />
                 </p>
               </div>
               <div className="text-right">
                 <p className="text-sm text-muted-foreground">Total Spent</p>
                 <p className={`text-2xl font-bold ${totalProgress >= 90 ? "text-destructive" : "text-foreground"}`}>
-                  {formatAmount(totalSpent, currency)}
+                  <FormattedCurrency amount={totalSpent} currency={currency} />
                 </p>
               </div>
             </div>
@@ -224,7 +225,7 @@ const Budget = () => {
                         <div>
                           <h3 className="font-semibold text-foreground">{category}</h3>
                           <p className="text-sm text-muted-foreground">
-                            Spent: {formatAmount(spent, currency)}
+                            Spent: <FormattedCurrency amount={spent} currency={currency} />
                           </p>
                         </div>
                       </div>
@@ -249,7 +250,7 @@ const Budget = () => {
                       <div className="space-y-2">
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">
-                            Remaining: {formatAmount(Math.max(0, budget - spent), currency)}
+                            Remaining: <FormattedCurrency amount={Math.max(0, budget - spent)} currency={currency} />
                           </span>
                           <span className={getStatusColor(category)}>{progress.toFixed(1)}%</span>
                         </div>

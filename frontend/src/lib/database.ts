@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { mapRawBankCategory, resolveCategory, resolveIncomeCategory, guessCategory } from "@/lib/sectorMapping";
+import { mapRawBankCategory, resolveCategory, resolveIncomeCategory, guessCategory, getCanonicalCategory } from "@/lib/sectorMapping";
 
 // Helper to get current authenticated user ID
 const getCurrentUserId = async (): Promise<string> => {
@@ -309,7 +309,7 @@ export const database = {
         user_id: userId,
         transaction_date: dateStr,
         description: desc,
-        category: resolveCategory(rawCat, desc),
+        category: getCanonicalCategory(rawCat, null, desc),
         amount: parseFloat(t.Amount || t.amount || 0),
       };
     });
@@ -547,9 +547,9 @@ export const database = {
 
     // Categories that represent non-business events — should not generate bills/invoices
     const NON_BUSINESS = new Set([
-      "internal transfer", "atm & cash withdrawals", "atm", "atm withdrawal",
-      "cash withdrawal", "cash advance", "bank transfer", "wire transfer",
-      "inter-account transfer",
+      "internal transfer", "atm & cash withdrawals", "atm & cash deposits",
+      "atm", "atm withdrawal", "cash withdrawal", "cash advance",
+      "bank transfer", "wire transfer", "inter-account transfer",
     ]);
 
     // ── PASS 1: Classify transactions and collect unique vendor/customer names ──
@@ -565,14 +565,16 @@ export const database = {
       const rawCat = (t.Category || t.category || "Uncategorized");
       const description = t.Description || t.description || "";
       // Income uses income-specific categorization (prevents food/tech/retail on invoices)
-      // Expenses use the standard expense categorization
+      // Expenses: name-first canonical resolver (guessCategory(name) wins over stored category)
+      const rawName = this.extractPayeeName(t.MerchantName || t.merchantName || description);
       const category = rawAmt >= 0
         ? resolveIncomeCategory(rawCat, description)
-        : resolveCategory(rawCat, description);
-      // Only skip NON_BUSINESS for expenses — income transactions (all categories) become invoices
+        : getCanonicalCategory(rawCat, rawName, description);
+      // Skip non-business expense categories (ATM withdrawals, internal transfers, etc.)
       if (rawAmt < 0 && (NON_BUSINESS.has(rawCat.toLowerCase().trim()) || NON_BUSINESS.has(category.toLowerCase()))) continue;
+      // Skip income that is clearly own-account movement — these are NOT customer payments
+      if (rawAmt >= 0 && (category.toLowerCase() === "internal transfer" || category.toLowerCase() === "atm & cash deposits")) continue;
 
-      const rawName = this.extractPayeeName(t.MerchantName || t.merchantName || description);
       const normName = this.normalizeEntityName(rawName);
       const enriched: EnrichedTxn = { ...t, _category: category, _rawName: rawName, _normName: normName, _amount: Math.abs(rawAmt) };
 
@@ -752,7 +754,7 @@ export const database = {
       .from("transactions").select("id, category, description").eq("user_id", userId);
     if (txns && txns.length > 0) {
       const updates = txns
-        .map(t => ({ id: t.id, category: resolveCategory(t.category, t.description) }))
+        .map(t => ({ id: t.id, category: getCanonicalCategory(t.category, null, t.description) }))
         .filter(u => u.category && u.category !== "Other" && u.category !== (txns.find(t => t.id === u.id)?.category));
       for (let i = 0; i < updates.length; i += 500) {
         await supabase.from("transactions").upsert(updates.slice(i, i + 500));
@@ -766,13 +768,10 @@ export const database = {
     if (bills && bills.length > 0) {
       const updates = (bills as any[])
         .map(b => {
-          // Vendor name first — catches mis-tagged bills (e.g. Amazon → Technology vs Retail)
+          // Use getCanonicalCategory: vendor name first → description → stored category
           const vendorName = (b as any).vendors?.name;
-          const vendorCat = vendorName ? guessCategory(vendorName) : null;
-          if (vendorCat && vendorCat !== "Internal Transfer") return { id: b.id, category: vendorCat };
-          // Fall back: notes description → stored category
           const noteDesc = b.notes?.split(" - ").slice(1).join(" - ").trim() || "";
-          const resolved = resolveCategory(b.category, noteDesc || vendorName);
+          const resolved = getCanonicalCategory(b.category, vendorName, noteDesc);
           return { id: b.id, category: resolved };
         })
         .filter(u => u.category && u.category !== "Other" && u.category !== (bills as any[]).find((b: any) => b.id === u.id)?.category);
@@ -789,10 +788,8 @@ export const database = {
       const updates = (invoices as any[])
         .map(i => {
           const customerName = (i as any).customers?.name;
-          const customerCat = customerName ? guessCategory(customerName) : null;
-          if (customerCat && customerCat !== "Internal Transfer") return { id: i.id, category: customerCat };
           const noteDesc = i.notes?.split(" - ").slice(1).join(" - ").trim() || "";
-          const resolved = resolveCategory(i.category, noteDesc || customerName);
+          const resolved = resolveIncomeCategory(i.category, noteDesc || customerName);
           return { id: i.id, category: resolved };
         })
         .filter(u => u.category && u.category !== "Other" && u.category !== (invoices as any[]).find((b: any) => b.id === u.id)?.category);
@@ -842,6 +839,14 @@ export const database = {
     if (!description) return "Unknown";
 
     let s = description.trim();
+
+    // UAE bank reference format: "Ln42012546429376:- Description" or "542552608:- Name"
+    // Extract the part after the reference number and ":-"
+    const uaeRefMatch = s.match(/^(?:[A-Za-z]{0,3})?\d{6,}:-\s*(.+)/);
+    if (uaeRefMatch) s = uaeRefMatch[1].trim();
+
+    // Strip leading 3-letter bank type code (e.g. "Com ", "Edu ", "Fam ", "Str ", "Sal ")
+    s = s.replace(/^(?:Com|Edu|Fam|Str|Sal|Pur|Ref|Int|Ext|Own)\s+/i, "").trim();
 
     // Strip US bank transaction prefixes (with optional 4-digit date MMDD)
     const prefixPatterns = [

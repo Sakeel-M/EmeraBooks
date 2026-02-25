@@ -9,7 +9,8 @@ import { Search, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { replaceAedSymbol } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
+import { CurrencyAxisTick } from "@/components/shared/CurrencyAxisTick";
 
 interface CategoryDetailPanelProps {
   open: boolean;
@@ -23,8 +24,7 @@ interface CategoryDetailPanelProps {
 }
 
 export function CategoryDetailPanel({ open, onClose, category, invoices, bills, quarterLabels, quarterRanges, currency = "USD" }: CategoryDetailPanelProps) {
-  const fmt = (v: number) =>
-    replaceAedSymbol(new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v), currency);
+  const fc = (v: number) => <FormattedCurrency amount={v} currency={currency} />;
   const [search, setSearch] = useState("");
 
   const isRevenue = category.startsWith("rev-") || invoices.some(inv => (inv.category || "Other Revenue") === category);
@@ -99,7 +99,7 @@ export function CategoryDetailPanel({ open, onClose, category, invoices, bills, 
         <SheetHeader>
           <SheetTitle>{category}</SheetTitle>
           <SheetDescription className="flex items-center gap-2">
-            <span className="text-lg font-bold text-foreground">{fmt(currentAmount)}</span>
+            <span className="text-lg font-bold text-foreground"><FormattedCurrency amount={currentAmount} currency={currency} /></span>
             {changePct !== null && (
               <Badge variant={changePct >= 0 ? "default" : "destructive"} className="text-xs">
                 {changePct >= 0 ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
@@ -122,8 +122,8 @@ export function CategoryDetailPanel({ open, onClose, category, invoices, bills, 
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={quarterlyData}>
                   <XAxis dataKey="quarter" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 11 }} />
-                  <YAxis stroke="hsl(var(--muted-foreground))" tickFormatter={v => fmt(v)} />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => fmt(v)} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" tick={<CurrencyAxisTick currency={currency} anchor="end" />} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => fc(v)} />
                   <Bar dataKey="amount" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -131,7 +131,7 @@ export function CategoryDetailPanel({ open, onClose, category, invoices, bills, 
                 <Card className="p-4">
                   <p className="text-sm text-muted-foreground">
                     You {isRevenue ? "earned" : "spent"} {changePct >= 0 ? "more" : "less"} on <strong>{category}</strong> this quarter
-                    compared to the prior quarter ({fmt(Math.abs(currentAmount - prevAmount))} {changePct >= 0 ? "increase" : "decrease"}).
+                    compared to the prior quarter (<FormattedCurrency amount={Math.abs(currentAmount - prevAmount)} currency={currency} /> {changePct >= 0 ? "increase" : "decrease"}).
                   </p>
                 </Card>
               )}
@@ -140,13 +140,13 @@ export function CategoryDetailPanel({ open, onClose, category, invoices, bills, 
             <TabsContent value="ytd" className="space-y-4">
               <Card className="p-4 text-center">
                 <p className="text-sm text-muted-foreground">Year-to-Date Total</p>
-                <p className="text-2xl font-bold text-foreground">{fmt(ytdAmount)}</p>
+                <p className="text-2xl font-bold text-foreground"><FormattedCurrency amount={ytdAmount} currency={currency} /></p>
               </Card>
               <div className="space-y-2">
                 {quarterlyData.map(q => (
                   <div key={q.quarter} className="flex items-center justify-between py-2 px-3 rounded bg-muted/30">
                     <span className="text-sm text-foreground">{q.quarter}</span>
-                    <span className="text-sm font-semibold text-foreground">{fmt(q.amount)}</span>
+                    <span className="text-sm font-semibold text-foreground"><FormattedCurrency amount={q.amount} currency={currency} /></span>
                   </div>
                 ))}
               </div>
@@ -159,7 +159,7 @@ export function CategoryDetailPanel({ open, onClose, category, invoices, bills, 
                     <span className="text-xs font-bold text-muted-foreground w-5">{i + 1}.</span>
                     <span className="text-sm text-foreground">{name}</span>
                   </div>
-                  <span className="text-sm font-semibold text-foreground">{fmt(amount)}</span>
+                  <span className="text-sm font-semibold text-foreground"><FormattedCurrency amount={amount} currency={currency} /></span>
                 </div>
               ))}
               {topEntities.length === 0 && <p className="text-sm text-muted-foreground text-center py-8">No data available</p>}
@@ -180,7 +180,7 @@ export function CategoryDetailPanel({ open, onClose, category, invoices, bills, 
                         <span className="text-xs text-muted-foreground">{t.description}</span>
                       </div>
                     </div>
-                    <span className="text-sm font-medium ml-2 text-foreground">{fmt(t.amount)}</span>
+                    <span className="text-sm font-medium ml-2 text-foreground"><FormattedCurrency amount={t.amount} currency={currency} /></span>
                   </div>
                 ))}
                 {allTransactions.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No transactions found</p>}

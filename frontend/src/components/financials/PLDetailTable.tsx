@@ -3,8 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ArrowUpRight, ArrowDownRight } from "lucide-react";
-import { replaceAedSymbol } from "@/lib/utils";
 import { resolveCategory } from "@/lib/sectorMapping";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface PLRow {
   id: string;
@@ -26,8 +26,6 @@ interface PLDetailTableProps {
 }
 
 export function PLDetailTable({ invoices, bills, accounts, quarterLabels, quarterRanges, onRowClick, currency = "USD" }: PLDetailTableProps) {
-  const fmt = (v: number) =>
-    replaceAedSymbol(new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v), currency);
   const rows = useMemo(() => {
     const result: PLRow[] = [];
 
@@ -142,7 +140,7 @@ export function PLDetailTable({ invoices, bills, accounts, quarterLabels, quarte
                 </TableCell>
                 {row.quarters.map((val, qi) => (
                   <TableCell key={qi} className={`text-right ${row.isTotal ? "font-bold" : ""} ${val < 0 ? "text-destructive" : ""}`}>
-                    {fmt(val)}
+                    <FormattedCurrency amount={val} currency={currency} />
                   </TableCell>
                 ))}
                 {row.isHeader ? (

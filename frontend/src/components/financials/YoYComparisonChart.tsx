@@ -2,7 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from "recharts";
 import { ArrowUpRight, ArrowDownRight, TrendingUp } from "lucide-react";
 import { CHART_COLORS } from "@/lib/chartColors";
-import { formatAmount, formatCompactCurrency } from "@/lib/utils";
+import { CurrencyAxisTick } from "@/components/shared/CurrencyAxisTick";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface YoYData {
   month: string;
@@ -34,7 +35,7 @@ const CustomTooltip = ({ active, payload, label, currency = "USD" }: any) => {
                 <span className="text-sm text-muted-foreground">{item.name}</span>
               </div>
               <span className="text-sm font-bold text-foreground">
-                {formatAmount(item.value, currency)}
+                <FormattedCurrency amount={item.value} currency={currency} />
               </span>
             </div>
           ))}
@@ -102,8 +103,8 @@ export function YoYComparisonChart({
               </div>
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold">{formatAmount(revenueStats.currentTotal, currency)}</span>
-              <span className="text-sm text-muted-foreground">vs {formatAmount(revenueStats.previousTotal, currency)}</span>
+              <span className="text-2xl font-bold"><FormattedCurrency amount={revenueStats.currentTotal} currency={currency} /></span>
+              <span className="text-sm text-muted-foreground">vs <FormattedCurrency amount={revenueStats.previousTotal} currency={currency} /></span>
             </div>
           </div>
           
@@ -116,8 +117,8 @@ export function YoYComparisonChart({
               </div>
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold">{formatAmount(expenseStats.currentTotal, currency)}</span>
-              <span className="text-sm text-muted-foreground">vs {formatAmount(expenseStats.previousTotal, currency)}</span>
+              <span className="text-2xl font-bold"><FormattedCurrency amount={expenseStats.currentTotal} currency={currency} /></span>
+              <span className="text-sm text-muted-foreground">vs <FormattedCurrency amount={expenseStats.previousTotal} currency={currency} /></span>
             </div>
           </div>
         </div>
@@ -141,7 +142,7 @@ export function YoYComparisonChart({
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11 }} tickFormatter={(v) => formatCompactCurrency(v, currency)} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11 }} tick={<CurrencyAxisTick currency={currency} anchor="end" />} />
                 <Tooltip content={<CustomTooltip currency={currency} />} />
                 <Bar dataKey="currentYear" name={currentYearLabel} fill="url(#currentRevenue)" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="previousYear" name={previousYearLabel} fill="url(#previousRevenue)" radius={[4, 4, 0, 0]} />
@@ -166,7 +167,7 @@ export function YoYComparisonChart({
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11 }} tickFormatter={(v) => formatCompactCurrency(v, currency)} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11 }} tick={<CurrencyAxisTick currency={currency} anchor="end" />} />
                 <Tooltip content={<CustomTooltip currency={currency} />} />
                 <Bar dataKey="currentYear" name={currentYearLabel} fill="url(#currentExpense)" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="previousYear" name={previousYearLabel} fill="url(#previousExpense)" radius={[4, 4, 0, 0]} />

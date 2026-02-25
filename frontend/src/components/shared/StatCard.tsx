@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 interface StatCardProps {
   title: string;
-  value: string;
+  value: React.ReactNode;
   change?: string;
   trend?: "up" | "down";
   icon: LucideIcon;

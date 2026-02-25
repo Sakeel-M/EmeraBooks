@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import type { FlaggedItem } from "@/lib/reconciliation";
 import { useCurrency } from "@/hooks/useCurrency";
-import { formatAmount } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface Props {
   flag: FlaggedItem | null;
@@ -143,7 +143,7 @@ export function FlagDetailSheet({ flag, onClose }: Props) {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Amount</p>
-                  <p className="text-sm font-medium">{formatAmount(statementAmount, currency)}</p>
+                  <p className="text-sm font-medium"><FormattedCurrency amount={statementAmount} currency={currency} /></p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Description</p>
@@ -167,7 +167,7 @@ export function FlagDetailSheet({ flag, onClose }: Props) {
                     <div>
                       <p className="text-xs text-muted-foreground">Amount</p>
                       <p className={`text-sm font-medium ${flag.flagType === "amount_mismatch" ? "text-destructive" : ""}`}>
-                        {ledgerAmount != null ? formatAmount(ledgerAmount, currency) : "—"}
+                        {ledgerAmount != null ? <FormattedCurrency amount={ledgerAmount} currency={currency} /> : "—"}
                       </p>
                     </div>
                     <div>
@@ -186,7 +186,7 @@ export function FlagDetailSheet({ flag, onClose }: Props) {
               <div className="border-t border-border bg-destructive/5 px-4 py-2 flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">Difference</span>
                 <span className="text-sm font-semibold text-destructive">
-                  {formatAmount(Math.abs(flag.difference), currency)}
+                  <FormattedCurrency amount={Math.abs(flag.difference)} currency={currency} />
                 </span>
               </div>
             )}

@@ -1,7 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { AnalysisData } from "@/pages/Index";
-import { replaceAedSymbol } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface SpendingChartsProps {
   analysisData: AnalysisData;
@@ -26,17 +26,7 @@ const SpendingCharts = ({ analysisData }: SpendingChartsProps) => {
     amount: amount,
   }));
 
-  const formatCurrency = (value: number) => {
-    return replaceAedSymbol(
-      new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: currency,
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-      }).format(value),
-      currency
-    );
-  };
+  const formatCurrency = (value: number) => <FormattedCurrency amount={value} currency={currency} />;
 
   return (
     <div className="grid lg:grid-cols-2 gap-6">

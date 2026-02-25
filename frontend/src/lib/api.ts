@@ -88,4 +88,32 @@ export const api = {
     const response = await fetch(`${API_BASE_URL}/health`, { headers: apiHeaders() });
     return response.json();
   },
+
+  async aiInsights(payload: {
+    totalIncome: number;
+    totalExpenses: number;
+    netSavings: number;
+    transactionCount: number;
+    topCategories: { name: string; amount: number }[];
+    currency: string;
+    periodFrom: string;
+    periodTo: string;
+  }): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/ai-insights`, {
+      method: "POST",
+      headers: apiHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      let msg = `Server error ${response.status}`;
+      try {
+        const body = await response.json();
+        if (body?.error) msg = body.error;
+      } catch {}
+      throw new Error(msg);
+    }
+
+    return response.json();
+  },
 };

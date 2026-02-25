@@ -677,6 +677,104 @@ def analyze_data():
         print(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Analysis error: {str(e)}"}), 500
 
+@app.route('/api/ai-insights', methods=['POST'])
+def ai_insights():
+    """Generate dynamic AI financial insights for a given date range and financial summary."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        total_income    = float(data.get('totalIncome', 0))
+        total_expenses  = float(data.get('totalExpenses', 0))
+        net_savings     = float(data.get('netSavings', 0))
+        txn_count       = int(data.get('transactionCount', 0))
+        top_categories  = data.get('topCategories', [])
+        currency        = data.get('currency', 'USD')
+        period_from     = data.get('periodFrom', '')
+        period_to       = data.get('periodTo', '')
+
+        if not openai.api_key:
+            return jsonify({"error": "OpenAI API key not configured on server"}), 503
+
+        savings_rate  = (net_savings / total_income * 100) if total_income > 0 else 0
+        expense_ratio = (total_expenses / total_income * 100) if total_income > 0 else 0
+
+        cat_lines = "\n".join(
+            f"  • {c['name']}: {float(c['amount']):.2f} {currency}  ({float(c['amount'])/total_expenses*100:.1f}% of expenses)"
+            if total_expenses > 0 else f"  • {c['name']}: {float(c['amount']):.2f} {currency}"
+            for c in top_categories
+        ) or "  (no expense data)"
+
+        period_label = f"{period_from} to {period_to}" if period_from and period_to else "the selected period"
+
+        prompt = f"""You are a financial analyst. Analyze the following REAL financial data.
+
+Period: {period_label}
+Total Income:    {total_income:.2f} {currency}
+Total Expenses:  {total_expenses:.2f} {currency}
+Net Savings:     {net_savings:.2f} {currency}
+Savings Rate:    {savings_rate:.1f}%
+Expense/Income:  {expense_ratio:.1f}%
+Transactions:    {txn_count}
+Top Spending Categories:
+{cat_lines}
+
+RULES — you MUST follow all of them:
+1. Every insight, pattern, and recommendation MUST reference at least one specific number or category name from the data above.
+2. Do NOT use vague phrases like "your spending" or "your income" without quoting the actual value.
+3. Derive financial_health_score from savings rate: >20% → 70-100, 5-20% → 40-69, <5% or negative → 0-39.
+4. Return ONLY a valid JSON object — no markdown, no explanation, no code fences.
+
+JSON structure:
+{{
+  "financial_health_score": <integer 0-100>,
+  "score_category": "<Excellent|Good|Fair|Poor>",
+  "key_insights": ["<insight with actual number>", "<insight>", "<insight>"],
+  "spending_patterns": ["<pattern with actual category/number>", "<pattern>", "<pattern>"],
+  "recommendations": ["<recommendation>", "<recommendation>", "<recommendation>"]
+}}"""
+
+        response = openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a precise financial analyst. Always reference real numbers. Return only valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=1200,
+            temperature=0.7,
+        )
+
+        raw = response.choices[0].message.content or ""
+        # Strip markdown fences
+        clean = raw.strip()
+        if clean.startswith("```"):
+            clean = clean.split("```")[1]
+            if clean.startswith("json"):
+                clean = clean[4:]
+            clean = clean.strip()
+        if clean.endswith("```"):
+            clean = clean[:-3].strip()
+
+        insights = json.loads(clean)
+
+        # Basic validation
+        required = ["financial_health_score", "score_category", "key_insights", "spending_patterns", "recommendations"]
+        for field in required:
+            if field not in insights:
+                raise ValueError(f"Missing field: {field}")
+
+        return jsonify(insights)
+
+    except json.JSONDecodeError as e:
+        print(f"AI insights JSON parse error: {e}")
+        return jsonify({"error": "AI returned invalid JSON. Please try again."}), 500
+    except Exception as e:
+        import traceback
+        print(f"AI insights error: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": str(e)}), 500
+
+
 if __name__ == '__main__':
     print("Starting Universal Finance Analytics API...")
     print("Features: Excel + PDF Processing + OpenAI Analysis + Multi-Currency Support")

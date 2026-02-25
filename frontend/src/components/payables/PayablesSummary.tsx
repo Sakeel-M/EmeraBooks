@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowDownCircle, ArrowUpCircle, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
-import { formatCurrency } from "@/lib/payables";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface PayablesSummaryProps {
   totalPayable: number;
@@ -37,7 +37,7 @@ export function PayablesSummary({
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold text-destructive">
-            {formatCurrency(totalPayable, currency)}
+            <FormattedCurrency amount={totalPayable} currency={currency} />
           </div>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-xs text-muted-foreground">
@@ -63,7 +63,7 @@ export function PayablesSummary({
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold text-primary">
-            {formatCurrency(totalReceivable, currency)}
+            <FormattedCurrency amount={totalReceivable} currency={currency} />
           </div>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-xs text-muted-foreground">
@@ -93,7 +93,7 @@ export function PayablesSummary({
         </CardHeader>
         <CardContent>
           <div className={`text-2xl font-bold ${isPositive ? 'text-primary' : 'text-destructive'}`}>
-            {isPositive ? '+' : ''}{formatCurrency(netPosition, currency)}
+            {isPositive ? '+' : ''}<FormattedCurrency amount={netPosition} currency={currency} />
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             {isPositive ? 'Expected surplus' : 'Expected deficit'}

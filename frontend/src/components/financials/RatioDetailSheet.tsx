@@ -2,7 +2,6 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { RadialGauge } from "@/components/charts/RadialGauge";
-import { replaceAedSymbol } from "@/lib/utils";
 import {
   CheckCircle2,
   AlertTriangle,
@@ -44,7 +43,7 @@ const fmt = (n: number, decimals = 2) =>
   n.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 
 const fmtCurrency = (n: number, currency: string = "USD") =>
-  replaceAedSymbol(new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(n), currency);
+  new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(n);
 
 type StatusLevel = "green" | "amber" | "red";
 

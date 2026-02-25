@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search } from "lucide-react";
 import type { Transaction } from "@/lib/database";
-import { replaceAedSymbol } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface TransactionsTabProps {
   transactions: Transaction[];
@@ -25,9 +25,6 @@ const TransactionsTab = ({ transactions, currency }: TransactionsTabProps) => {
         t.transaction_date.includes(q)
     );
   }, [transactions, search]);
-
-  const fmt = (amount: number) =>
-    replaceAedSymbol(new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 2 }).format(Math.abs(amount)), currency);
 
   return (
     <Card>
@@ -69,7 +66,7 @@ const TransactionsTab = ({ transactions, currency }: TransactionsTabProps) => {
                   </TableCell>
                   <TableCell className="text-right font-medium">
                     <span className={t.amount < 0 ? "text-destructive" : "text-green-600"}>
-                      {t.amount < 0 ? "-" : "+"}{fmt(t.amount)}
+                      {t.amount < 0 ? "-" : "+"}<FormattedCurrency amount={Math.abs(t.amount)} currency={currency} maxDecimals={2} />
                     </span>
                   </TableCell>
                   <TableCell>

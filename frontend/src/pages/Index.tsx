@@ -9,7 +9,7 @@ import { formatAmount } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
-import { Loader2, RefreshCw, Download, FilePlus, FolderOpen } from "lucide-react";
+import { Loader2, RefreshCw, Download, FilePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
 import { QuarterNavigator, getCurrentQuarter, useQuarterDates, type DateMode } from "@/components/dashboard/QuarterNavigator";
@@ -23,7 +23,7 @@ import TransactionsTab from "@/components/dashboard/TransactionsTab";
 import AIInsightsTab from "@/components/dashboard/AIInsightsTab";
 import BasicInsightsTab from "@/components/dashboard/BasicInsightsTab";
 import AddReportTab from "@/components/dashboard/AddReportTab";
-import ManageReportsTab from "@/components/dashboard/ManageReportsTab";
+import { loadAndRegisterUserCategories } from "@/lib/sectorMapping";
 import MetricDetailSheet from "@/components/dashboard/MetricDetailSheet";
 import MetricCards from "@/components/dashboard/MetricCards";
 import BankInfoCard from "@/components/dashboard/BankInfoCard";
@@ -144,6 +144,7 @@ const Index = () => {
 
   useEffect(() => {
     if (!user) return;
+    loadAndRegisterUserCategories();
     setDataLoading(true);
     const init = async () => {
       try {
@@ -408,10 +409,6 @@ const Index = () => {
               <FilePlus className="w-3 h-3" />
               Add Bank Statement
             </TabsTrigger>
-            <TabsTrigger value="manage-reports" className="gap-1">
-              <FolderOpen className="w-3 h-3" />
-              Manage Bank Statements
-            </TabsTrigger>
           </TabsList>
 
           {hasData && (
@@ -444,12 +441,11 @@ const Index = () => {
           <TabsContent value="add-report">
             <AddReportTab
               onUploadSuccess={handleFileUpload}
-              existingFiles={files}
-              onManageReports={() => setActiveTab("manage-reports")}
+              files={files}
+              currentFileId={currentFileId}
+              onSelectFile={handleSelectFile}
+              onDeleteFile={handleDeleteFile}
             />
-          </TabsContent>
-          <TabsContent value="manage-reports">
-            <ManageReportsTab files={files} currentFileId={currentFileId} onSelectFile={handleSelectFile} onDeleteFile={handleDeleteFile} />
           </TabsContent>
         </Tabs>
 

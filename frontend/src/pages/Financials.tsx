@@ -1,11 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Download, TrendingUp, TrendingDown, DollarSign, Wallet, ArrowUpRight, ArrowDownRight, PieChart, BarChart3, AlertTriangle, FileUp, Upload } from "lucide-react";
+import { Download, TrendingUp, TrendingDown, DollarSign, Wallet, ArrowUpRight, ArrowDownRight, PieChart, BarChart3, AlertTriangle, FileUp, Upload, HelpCircle, X, ChevronRight } from "lucide-react";
 import { EnhancedDateRangePicker } from "@/components/shared/EnhancedDateRangePicker";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { exportToCSV, formatCurrency, formatDate } from "@/lib/export";
@@ -21,11 +21,12 @@ import { CategoryDetailPanel } from "@/components/financials/CategoryDetailPanel
 import { TaxationReport } from "@/components/financials/TaxationReport";
 import { FinancialDetailSheet, type FinancialDetailType } from "@/components/financials/FinancialDetailSheet";
 import { QuarterNavigator, getCurrentQuarter, useQuarterDates } from "@/components/dashboard/QuarterNavigator";
-import { CHART_COLORS, formatCurrencyValue } from "@/lib/chartColors";
+import { CHART_COLORS } from "@/lib/chartColors";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 import { format, getMonth, getYear, parseISO } from "date-fns";
 import { useCurrency } from "@/hooks/useCurrency";
 import { database } from "@/lib/database";
-import { resolveCategory } from "@/lib/sectorMapping";
+import { resolveIncomeCategory, getCanonicalCategory } from "@/lib/sectorMapping";
 
 // Cash flow category classifiers (module-level, compiled once)
 const INVESTING_PATTERN = /invest|capital expenditure|capex|asset purchase|equipment|machinery|acquisition|securities|real estate purchase|property purchase|fixed asset|plant|depreciation credit|r&d|patent|trademark/i;
@@ -67,6 +68,9 @@ export default function Financials() {
       to: new Date(now.getFullYear(), 11, 31),    // Dec 31 of current year
     };
   });
+
+  const [showReasonPanel, setShowReasonPanel] = useState(false);
+  const [dateRangeInitialized, setDateRangeInitialized] = useState(false);
 
   // P&L detail state
   const [selectedPLCategory, setSelectedPLCategory] = useState<string | null>(null);
@@ -152,11 +156,11 @@ export default function Financials() {
 
   // Normalized all-time bills/invoices for PLDetailTable (quarterly P&L detail tab)
   const normalizedAllBills = useMemo(
-    () => allBills.map(b => ({ ...b, category: resolveCategory(b.category, b.vendors?.name) || b.category })),
+    () => allBills.map(b => ({ ...b, category: getCanonicalCategory(b.category, b.vendors?.name, b.notes) })),
     [allBills]
   );
   const normalizedAllInvoices = useMemo(
-    () => allInvoices.map(i => ({ ...i, category: resolveCategory(i.category, i.customers?.name) || i.category })),
+    () => allInvoices.map(i => ({ ...i, category: resolveIncomeCategory(i.category, i.notes) })),
     [allInvoices]
   );
 
@@ -179,10 +183,41 @@ export default function Financials() {
       const { data } = await q;
       return (data || []).map((t: any) => ({
         ...t,
-        resolvedCategory: resolveCategory(t.category, t.description) || "Other",
+        // Income: use resolveIncomeCategory (matches Home Revenue tab, avoids guessCategory on descriptions)
+        // Expenses: use getCanonicalCategory (matches Home Overview/Expenses tab)
+        resolvedCategory: t.amount > 0
+          ? resolveIncomeCategory(t.category, t.description)
+          : getCanonicalCategory(t.category, null, t.description),
       }));
     },
   });
+
+  // Auto-detect date range: fetch first and last transaction dates
+  const { data: txnDateBounds } = useQuery({
+    queryKey: ["txn-date-bounds"],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+      const { data: first } = await supabase
+        .from("transactions").select("transaction_date").eq("user_id", user.id)
+        .order("transaction_date", { ascending: true }).limit(1);
+      const { data: last } = await supabase
+        .from("transactions").select("transaction_date").eq("user_id", user.id)
+        .order("transaction_date", { ascending: false }).limit(1);
+      if (!first?.length || !last?.length) return null;
+      return { min: first[0].transaction_date, max: last[0].transaction_date };
+    },
+  });
+
+  // Set date range to full span of actual data (runs once on first load)
+  useEffect(() => {
+    if (!dateRangeInitialized && txnDateBounds) {
+      // Parse date strings as local dates (not UTC) to avoid timezone-shift off-by-one
+      const parseLocal = (s: string) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+      setDateRange({ from: parseLocal(txnDateBounds.min), to: parseLocal(txnDateBounds.max) });
+      setDateRangeInitialized(true);
+    }
+  }, [txnDateBounds, dateRangeInitialized]);
 
   // Transactions for cash flow classification (scoped to file + date range)
   const { data: cashFlowTxns = [] } = useQuery({
@@ -249,6 +284,34 @@ export default function Financials() {
   const totalExpenses = plExpenseTxns.reduce((sum: number, t: any) => sum + Math.abs(Number(t.amount || 0)), 0);
   const netIncome = totalRevenue - totalExpenses;
   const profitMargin = totalRevenue > 0 ? (netIncome / totalRevenue) * 100 : 0;
+
+  // Reason panel: top income/expense categories + excluded counts
+  const topIncomeCategories = useMemo(() => {
+    const map = new Map<string, number>();
+    plIncomeTxns.forEach((t: any) => {
+      const cat = t.resolvedCategory || "Other";
+      map.set(cat, (map.get(cat) || 0) + Number(t.amount));
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  }, [plIncomeTxns]);
+
+  const topExpenseCategories = useMemo(() => {
+    const map = new Map<string, number>();
+    plExpenseTxns.forEach((t: any) => {
+      const cat = t.resolvedCategory || "Other";
+      map.set(cat, (map.get(cat) || 0) + Math.abs(Number(t.amount)));
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  }, [plExpenseTxns]);
+
+  const excludedIncomeTxns = useMemo(() =>
+    plTxns.filter((t: any) => t.amount > 0 && NON_PL_CATEGORIES.has(t.resolvedCategory.toLowerCase())),
+    [plTxns]
+  );
+  const excludedExpenseTxns = useMemo(() =>
+    plTxns.filter((t: any) => t.amount < 0 && NON_PL_CATEGORIES.has(t.resolvedCategory.toLowerCase())),
+    [plTxns]
+  );
 
   // Real assets/liabilities from accounts table, with fallback estimates
   const accountAssets = accounts
@@ -446,7 +509,7 @@ export default function Financials() {
 
   const StatCard = ({ title, value, icon: Icon, trend, trendValue, colorClass, onClick }: {
     title: string;
-    value: string;
+    value: ReactNode;
     icon: any;
     trend?: "up" | "down";
     trendValue?: string;
@@ -487,17 +550,144 @@ export default function Financials() {
             <h1 className="text-3xl font-bold">Financials</h1>
             <p className="text-muted-foreground">Comprehensive financial overview and analysis</p>
           </div>
-          <Button variant="outline" onClick={() => exportToCSV(plData, "financial-report")}>
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
+          <div className="flex gap-2">
+            <Button variant={showReasonPanel ? "default" : "outline"} onClick={() => setShowReasonPanel(v => !v)}>
+              <HelpCircle className="w-4 h-4 mr-2" />
+              Explain
+            </Button>
+            <Button variant="outline" onClick={() => exportToCSV(plData, "financial-report")}>
+              <Download className="w-4 h-4 mr-2" />
+              Export
+            </Button>
+          </div>
         </div>
 
         <EnhancedDateRangePicker
+          key={dateRangeInitialized ? `${dateRange.from.toISOString()}-${dateRange.to.toISOString()}` : "default"}
           onRangeChange={(from, to) => setDateRange({ from, to })}
           defaultRange={dateRange}
         />
 
+        <div className="flex gap-6 items-start">
+        {/* ── Reason / Explanation Panel ── */}
+        {showReasonPanel && (
+          <div className="w-72 shrink-0 space-y-3 sticky top-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <HelpCircle className="h-4 w-4 text-primary" />
+                How These Are Calculated
+              </h3>
+              <button onClick={() => setShowReasonPanel(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
+              Period: {format(dateRange.from, "MMM dd, yyyy")} – {format(dateRange.to, "MMM dd, yyyy")}
+            </div>
+
+            {/* Total Revenue */}
+            <Card>
+              <CardContent className="p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                  <span className="text-xs font-semibold uppercase text-muted-foreground">Total Revenue</span>
+                </div>
+                <p className="text-xl font-bold text-green-600"><FormattedCurrency amount={totalRevenue} currency={currency} /></p>
+                <p className="text-xs text-muted-foreground">
+                  Sum of <strong>{plIncomeTxns.length}</strong> income transactions in this period.
+                </p>
+                {excludedIncomeTxns.length > 0 && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    <strong>{excludedIncomeTxns.length}</strong> transactions excluded as Internal Transfers /
+                    ATM Deposits (<FormattedCurrency amount={excludedIncomeTxns.reduce((s: number, t: any) => s + Number(t.amount), 0)} currency={currency} />).
+                  </p>
+                )}
+                {topIncomeCategories.length > 0 && (
+                  <div className="space-y-1 pt-1 border-t border-border/40">
+                    <p className="text-xs font-medium">Top sources:</p>
+                    {topIncomeCategories.map(([cat, amt]) => (
+                      <div key={cat} className="flex justify-between text-xs">
+                        <span className="text-muted-foreground truncate">{cat}</span>
+                        <span className="font-medium ml-2 shrink-0"><FormattedCurrency amount={amt} currency={currency} /></span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Total Expenses */}
+            <Card>
+              <CardContent className="p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                  <span className="text-xs font-semibold uppercase text-muted-foreground">Total Expenses</span>
+                </div>
+                <p className="text-xl font-bold text-destructive"><FormattedCurrency amount={totalExpenses} currency={currency} /></p>
+                <p className="text-xs text-muted-foreground">
+                  Sum of <strong>{plExpenseTxns.length}</strong> expense transactions in this period.
+                </p>
+                {excludedExpenseTxns.length > 0 && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    <strong>{excludedExpenseTxns.length}</strong> transactions excluded as Internal Transfers /
+                    ATM Withdrawals (<FormattedCurrency amount={excludedExpenseTxns.reduce((s: number, t: any) => s + Math.abs(Number(t.amount)), 0)} currency={currency} />).
+                  </p>
+                )}
+                {topExpenseCategories.length > 0 && (
+                  <div className="space-y-1 pt-1 border-t border-border/40">
+                    <p className="text-xs font-medium">Top categories:</p>
+                    {topExpenseCategories.map(([cat, amt]) => (
+                      <div key={cat} className="flex justify-between text-xs">
+                        <span className="text-muted-foreground truncate">{cat}</span>
+                        <span className="font-medium ml-2 shrink-0"><FormattedCurrency amount={amt} currency={currency} /></span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Net Income */}
+            <Card>
+              <CardContent className="p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                  <span className="text-xs font-semibold uppercase text-muted-foreground">Net Income</span>
+                </div>
+                <p className={`text-xl font-bold ${netIncome >= 0 ? "text-blue-600" : "text-destructive"}`}><FormattedCurrency amount={netIncome} currency={currency} /></p>
+                <div className="text-xs text-muted-foreground font-mono space-y-0.5">
+                  <p>= Revenue − Expenses</p>
+                  <p>= <FormattedCurrency amount={totalRevenue} currency={currency} /> − <FormattedCurrency amount={totalExpenses} currency={currency} /></p>
+                  <p className="font-semibold text-foreground">= <FormattedCurrency amount={netIncome} currency={currency} /></p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Profit Margin */}
+            <Card>
+              <CardContent className="p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-purple-500 shrink-0" />
+                  <span className="text-xs font-semibold uppercase text-muted-foreground">Profit Margin</span>
+                </div>
+                <p className={`text-xl font-bold ${profitMargin >= 20 ? "text-green-600" : profitMargin >= 10 ? "text-amber-500" : "text-destructive"}`}>{profitMargin.toFixed(1)}%</p>
+                <div className="text-xs text-muted-foreground font-mono space-y-0.5">
+                  <p>= Net Income / Revenue × 100</p>
+                  <p>= <FormattedCurrency amount={netIncome} currency={currency} /> / <FormattedCurrency amount={totalRevenue} currency={currency} /> × 100</p>
+                  <p className="font-semibold text-foreground">= {profitMargin.toFixed(1)}%</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="text-xs text-muted-foreground bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+              <ChevronRight className="inline h-3 w-3 mr-1" />
+              <strong>Why Home page differs:</strong> Home includes Internal Transfers on both sides. This P&L report excludes them for accurate business income/expense reporting.
+            </div>
+          </div>
+        )}
+
+        <div className="flex-1 min-w-0">
         <Tabs defaultValue="overview" className="w-full">
           <TabsList className="grid w-full grid-cols-7 h-auto">
             <TabsTrigger value="overview" className="py-2.5">Overview</TabsTrigger>
@@ -522,7 +712,7 @@ export default function Financials() {
                 <div className="grid gap-4 md:grid-cols-4">
                   <StatCard
                     title="Total Revenue"
-                    value={formatCurrencyValue(totalRevenue, currency)}
+                    value={<FormattedCurrency amount={totalRevenue} currency={currency} />}
                     icon={DollarSign}
                     trend={trends.revenue !== null ? (trends.revenue >= 0 ? "up" : "down") : undefined}
                     trendValue={trends.revenue !== null ? `${trends.revenue >= 0 ? "+" : ""}${trends.revenue.toFixed(1)}%` : undefined}
@@ -531,7 +721,7 @@ export default function Financials() {
                   />
                   <StatCard
                     title="Total Expenses"
-                    value={formatCurrencyValue(totalExpenses, currency)}
+                    value={<FormattedCurrency amount={totalExpenses} currency={currency} />}
                     icon={Wallet}
                     trend={trends.expenses !== null ? (trends.expenses >= 0 ? "up" : "down") : undefined}
                     trendValue={trends.expenses !== null ? `${trends.expenses >= 0 ? "+" : ""}${trends.expenses.toFixed(1)}%` : undefined}
@@ -540,7 +730,7 @@ export default function Financials() {
                   />
                   <StatCard
                     title="Net Income"
-                    value={formatCurrencyValue(netIncome, currency)}
+                    value={<FormattedCurrency amount={netIncome} currency={currency} />}
                     icon={netIncome >= 0 ? TrendingUp : TrendingDown}
                     trend={netIncome >= 0 ? "up" : "down"}
                     trendValue={`${Math.abs(profitMargin).toFixed(1)}% margin`}
@@ -590,9 +780,9 @@ export default function Financials() {
             ) : (
               <>
                 <div className="grid gap-4 md:grid-cols-4">
-                  <StatCard title="Total Revenue" value={formatCurrencyValue(totalRevenue, currency)} icon={DollarSign} colorClass="text-green-600" onClick={() => openDetail("revenue")} />
-                  <StatCard title="Total Expenses" value={formatCurrencyValue(totalExpenses, currency)} icon={Wallet} colorClass="text-destructive" onClick={() => openDetail("expenses")} />
-                  <StatCard title="Net Income" value={formatCurrencyValue(netIncome, currency)} icon={TrendingUp} colorClass={netIncome >= 0 ? "text-blue-600" : "text-destructive"} onClick={() => openDetail("net-income")} />
+                  <StatCard title="Total Revenue" value={<FormattedCurrency amount={totalRevenue} currency={currency} />} icon={DollarSign} colorClass="text-green-600" onClick={() => openDetail("revenue")} />
+                  <StatCard title="Total Expenses" value={<FormattedCurrency amount={totalExpenses} currency={currency} />} icon={Wallet} colorClass="text-destructive" onClick={() => openDetail("expenses")} />
+                  <StatCard title="Net Income" value={<FormattedCurrency amount={netIncome} currency={currency} />} icon={TrendingUp} colorClass={netIncome >= 0 ? "text-blue-600" : "text-destructive"} onClick={() => openDetail("net-income")} />
                   <StatCard title="Profit Margin" value={`${profitMargin.toFixed(1)}%`} icon={PieChart} onClick={() => openDetail("profit-margin")} />
                 </div>
                 <div className="grid md:grid-cols-2 gap-6">
@@ -635,9 +825,9 @@ export default function Financials() {
               /* ── STATE 2: Chart of Accounts set up — show real balance sheet ── */
               <>
                 <div className="grid gap-4 md:grid-cols-3">
-                  <StatCard title="Total Assets" value={formatCurrencyValue(totalAssets, currency)} icon={DollarSign} colorClass="text-green-600" onClick={() => openDetail("assets")} />
-                  <StatCard title="Total Liabilities" value={formatCurrencyValue(totalLiabilities, currency)} icon={Wallet} colorClass="text-destructive" onClick={() => openDetail("liabilities")} />
-                  <StatCard title="Equity" value={formatCurrencyValue(equity, currency)} icon={TrendingUp} colorClass="text-purple-600" onClick={() => openDetail("equity")} />
+                  <StatCard title="Total Assets" value={<FormattedCurrency amount={totalAssets} currency={currency} />} icon={DollarSign} colorClass="text-green-600" onClick={() => openDetail("assets")} />
+                  <StatCard title="Total Liabilities" value={<FormattedCurrency amount={totalLiabilities} currency={currency} />} icon={Wallet} colorClass="text-destructive" onClick={() => openDetail("liabilities")} />
+                  <StatCard title="Equity" value={<FormattedCurrency amount={equity} currency={currency} />} icon={TrendingUp} colorClass="text-purple-600" onClick={() => openDetail("equity")} />
                 </div>
                 <div className="grid md:grid-cols-2 gap-6">
                   <Card className="chart-enter">
@@ -669,9 +859,9 @@ export default function Financials() {
 
                 {/* P&L Summary Cards */}
                 <div className="grid gap-4 md:grid-cols-3">
-                  <StatCard title="Total Revenue" value={formatCurrencyValue(totalRevenue, currency)} icon={DollarSign} colorClass="text-green-600" onClick={() => openDetail("revenue")} />
-                  <StatCard title="Total Expenses" value={formatCurrencyValue(totalExpenses, currency)} icon={Wallet} colorClass="text-destructive" onClick={() => openDetail("expenses")} />
-                  <StatCard title="Net Income (P&L)" value={formatCurrencyValue(netIncome, currency)} icon={netIncome >= 0 ? TrendingUp : TrendingDown} colorClass={netIncome >= 0 ? "text-purple-600" : "text-destructive"} onClick={() => openDetail("net-income")} />
+                  <StatCard title="Total Revenue" value={<FormattedCurrency amount={totalRevenue} currency={currency} />} icon={DollarSign} colorClass="text-green-600" onClick={() => openDetail("revenue")} />
+                  <StatCard title="Total Expenses" value={<FormattedCurrency amount={totalExpenses} currency={currency} />} icon={Wallet} colorClass="text-destructive" onClick={() => openDetail("expenses")} />
+                  <StatCard title="Net Income (P&L)" value={<FormattedCurrency amount={netIncome} currency={currency} />} icon={netIncome >= 0 ? TrendingUp : TrendingDown} colorClass={netIncome >= 0 ? "text-purple-600" : "text-destructive"} onClick={() => openDetail("net-income")} />
                 </div>
 
                 {/* Statement Breakdown Table */}
@@ -689,11 +879,11 @@ export default function Financials() {
                         </tr>
                         <tr className="border-t border-border/40 hover:bg-muted/20">
                           <td className="px-6 py-3 pl-10 text-muted-foreground">P&L Revenue (excl. internal transfers)</td>
-                          <td className="px-6 py-3 text-right font-medium text-green-600">{formatCurrencyValue(totalRevenue, currency)}</td>
+                          <td className="px-6 py-3 text-right font-medium text-green-600"><FormattedCurrency amount={totalRevenue} currency={currency} /></td>
                         </tr>
                         <tr className="border-t border-border/40 hover:bg-muted/20">
                           <td className="px-6 py-3 pl-10 text-muted-foreground">Accounts Receivable (Unpaid Invoices)</td>
-                          <td className="px-6 py-3 text-right font-medium text-green-600">{formatCurrencyValue(outstandingReceivables, currency)}</td>
+                          <td className="px-6 py-3 text-right font-medium text-green-600"><FormattedCurrency amount={outstandingReceivables} currency={currency} /></td>
                         </tr>
 
                         {/* EXPENSES */}
@@ -702,11 +892,11 @@ export default function Financials() {
                         </tr>
                         <tr className="border-t border-border/40 hover:bg-muted/20">
                           <td className="px-6 py-3 pl-10 text-muted-foreground">P&L Expenses (excl. internal transfers)</td>
-                          <td className="px-6 py-3 text-right font-medium text-destructive">{formatCurrencyValue(totalExpenses, currency)}</td>
+                          <td className="px-6 py-3 text-right font-medium text-destructive"><FormattedCurrency amount={totalExpenses} currency={currency} /></td>
                         </tr>
                         <tr className="border-t border-border/40 hover:bg-muted/20">
                           <td className="px-6 py-3 pl-10 text-muted-foreground">Accounts Payable (Pending Bills)</td>
-                          <td className="px-6 py-3 text-right font-medium text-destructive">{formatCurrencyValue(outstandingPayables, currency)}</td>
+                          <td className="px-6 py-3 text-right font-medium text-destructive"><FormattedCurrency amount={outstandingPayables} currency={currency} /></td>
                         </tr>
 
                         {/* NET */}
@@ -715,7 +905,7 @@ export default function Financials() {
                         </tr>
                         <tr className="border-t-2 border-border font-bold bg-purple-50/30 dark:bg-purple-950/10">
                           <td className="px-6 py-3 text-foreground">Net Income (Revenue − Expenses)</td>
-                          <td className={`px-6 py-3 text-right ${netIncome >= 0 ? "text-purple-600" : "text-destructive"}`}>{formatCurrencyValue(netIncome, currency)}</td>
+                          <td className={`px-6 py-3 text-right ${netIncome >= 0 ? "text-purple-600" : "text-destructive"}`}><FormattedCurrency amount={netIncome} currency={currency} /></td>
                         </tr>
                       </tbody>
                     </table>
@@ -745,9 +935,9 @@ export default function Financials() {
             ) : (
               <>
                 <div className="grid gap-4 md:grid-cols-3">
-                  <StatCard title="Operating Activities" value={formatCurrencyValue(cashFromOperations, currency)} icon={TrendingUp} colorClass={cashFromOperations >= 0 ? "text-green-600" : "text-destructive"} onClick={() => openDetail("operating")} />
-                  <StatCard title="Investing Activities" value={formatCurrencyValue(cashFromInvesting, currency)} icon={Wallet} colorClass="text-blue-600" onClick={() => openDetail("investing")} />
-                  <StatCard title="Financing Activities" value={formatCurrencyValue(cashFromFinancing, currency)} icon={DollarSign} colorClass="text-purple-600" onClick={() => openDetail("financing")} />
+                  <StatCard title="Operating Activities" value={<FormattedCurrency amount={cashFromOperations} currency={currency} />} icon={TrendingUp} colorClass={cashFromOperations >= 0 ? "text-green-600" : "text-destructive"} onClick={() => openDetail("operating")} />
+                  <StatCard title="Investing Activities" value={<FormattedCurrency amount={cashFromInvesting} currency={currency} />} icon={Wallet} colorClass="text-blue-600" onClick={() => openDetail("investing")} />
+                  <StatCard title="Financing Activities" value={<FormattedCurrency amount={cashFromFinancing} currency={currency} />} icon={DollarSign} colorClass="text-purple-600" onClick={() => openDetail("financing")} />
                 </div>
                 <div className="grid md:grid-cols-2 gap-6">
                   <Card className="chart-enter">
@@ -833,6 +1023,8 @@ export default function Financials() {
             )}
           </TabsContent>
         </Tabs>
+        </div>{/* flex-1 min-w-0 */}
+        </div>{/* flex gap-6 */}
       </div>
 
       <FinancialDetailSheet

@@ -9,7 +9,9 @@ import {
   Legend,
 } from "recharts";
 import { CHART_COLORS } from "@/lib/chartColors";
-import { formatAmount, formatCompactCurrency } from "@/lib/utils";
+import { formatAmount } from "@/lib/utils";
+import { CurrencyAxisTick } from "@/components/shared/CurrencyAxisTick";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface AreaTrendChartProps {
   data: Array<Record<string, any>>;
@@ -40,7 +42,7 @@ const CustomTooltip = ({ active, payload, label, isCurrency, currency = "USD" }:
                 <span className="text-sm text-muted-foreground">{item.name}</span>
               </div>
               <span className="text-sm font-bold" style={{ color: item.color }}>
-                {isCurrency ? formatAmount(item.value, currency) : item.value.toLocaleString()}
+                {isCurrency ? <FormattedCurrency amount={item.value} currency={currency} /> : item.value.toLocaleString()}
               </span>
             </div>
           ))}
@@ -86,10 +88,7 @@ export function AreaTrendChart({
         <YAxis
           axisLine={false}
           tickLine={false}
-          tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-          tickFormatter={(value) =>
-            isCurrency ? formatCompactCurrency(value, currency) : value.toLocaleString()
-          }
+          tick={isCurrency ? <CurrencyAxisTick currency={currency} anchor="end" /> : { fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
         />
         <Tooltip content={<CustomTooltip isCurrency={isCurrency} currency={currency} />} />
         <Legend

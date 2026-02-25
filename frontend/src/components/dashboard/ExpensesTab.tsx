@@ -10,7 +10,9 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from "recharts";
 import type { Transaction } from "@/lib/database";
-import { replaceAedSymbol } from "@/lib/utils";
+import { getCanonicalCategory } from "@/lib/sectorMapping";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
+import { CurrencyAxisTick } from "@/components/shared/CurrencyAxisTick";
 
 interface ExpensesTabProps {
   transactions: Transaction[];
@@ -22,14 +24,12 @@ const ExpensesTab = ({ transactions, currency, quarterLabel }: ExpensesTabProps)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
-  const fmt = (v: number) =>
-    replaceAedSymbol(new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v), currency);
 
   const categoryAnalysis = useMemo(() => {
     const categories = new Map<string, number>();
     transactions.forEach((t) => {
       if (t.amount < 0) {
-        const cat = t.category || "Uncategorized";
+        const cat = getCanonicalCategory(t.category, null, t.description);
         categories.set(cat, (categories.get(cat) || 0) + Math.abs(t.amount));
       }
     });
@@ -69,7 +69,7 @@ const ExpensesTab = ({ transactions, currency, quarterLabel }: ExpensesTabProps)
   const categoryTransactions = useMemo(() => {
     if (!selectedCategory) return [];
     return transactions
-      .filter(t => t.amount < 0 && (t.category || "Uncategorized") === selectedCategory)
+      .filter(t => t.amount < 0 && getCanonicalCategory(t.category, null, t.description) === selectedCategory)
       .filter(t => !search || t.description.toLowerCase().includes(search.toLowerCase()))
       .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
   }, [transactions, selectedCategory, search]);
@@ -86,7 +86,7 @@ const ExpensesTab = ({ transactions, currency, quarterLabel }: ExpensesTabProps)
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold">{fmt(totalExpenses)}</span>
+              <span className="text-2xl font-bold"><FormattedCurrency amount={totalExpenses} currency={currency} /></span>
               <Badge variant="secondary" className="text-xs">
                 {transactions.filter(t => t.amount < 0).length} transactions
               </Badge>
@@ -102,7 +102,7 @@ const ExpensesTab = ({ transactions, currency, quarterLabel }: ExpensesTabProps)
                     <span className="text-xs font-bold text-muted-foreground w-5">{i + 1}.</span>
                     <span className="text-sm">{cat.name}</span>
                   </div>
-                  <span className="text-sm font-semibold">{fmt(cat.amount)}</span>
+                  <span className="text-sm font-semibold"><FormattedCurrency amount={cat.amount} currency={currency} /></span>
                 </div>
               ))}
             </div>
@@ -116,9 +116,9 @@ const ExpensesTab = ({ transactions, currency, quarterLabel }: ExpensesTabProps)
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={categoryAnalysis} layout="vertical" margin={{ left: 80 }}>
-                <XAxis type="number" stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => fmt(v)} />
+                <XAxis type="number" stroke="hsl(var(--muted-foreground))" tick={<CurrencyAxisTick currency={currency} />} />
                 <YAxis type="category" dataKey="name" stroke="hsl(var(--muted-foreground))" width={80} tick={{ fontSize: 11 }} />
-                <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => fmt(v)} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => <FormattedCurrency amount={v} currency={currency} />} />
                 <Bar
                   dataKey="amount"
                   fill="hsl(var(--primary))"
@@ -140,8 +140,8 @@ const ExpensesTab = ({ transactions, currency, quarterLabel }: ExpensesTabProps)
           <ResponsiveContainer width="100%" height={250}>
             <AreaChart data={cashTrend}>
               <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" />
-              <YAxis stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => fmt(v)} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => fmt(v)} />
+              <YAxis stroke="hsl(var(--muted-foreground))" tick={<CurrencyAxisTick currency={currency} anchor="end" />} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => <FormattedCurrency amount={v} currency={currency} />} />
               <defs>
                 <linearGradient id="cashGradient" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
@@ -160,7 +160,7 @@ const ExpensesTab = ({ transactions, currency, quarterLabel }: ExpensesTabProps)
           <SheetHeader>
             <SheetTitle>{selectedCategory}</SheetTitle>
             <SheetDescription>
-              {categoryTransactions.length} transactions · {fmt(categoryTotal)} total
+              {categoryTransactions.length} transactions · <FormattedCurrency amount={categoryTotal} currency={currency} /> total
             </SheetDescription>
           </SheetHeader>
           <div className="mt-4 space-y-4">
@@ -182,7 +182,7 @@ const ExpensesTab = ({ transactions, currency, quarterLabel }: ExpensesTabProps)
                     <TableRow key={i}>
                       <TableCell className="whitespace-nowrap text-muted-foreground">{new Date(t.transaction_date).toLocaleDateString()}</TableCell>
                       <TableCell className="max-w-[200px] truncate">{t.description}</TableCell>
-                      <TableCell className="text-right font-semibold text-destructive">{fmt(Math.abs(t.amount))}</TableCell>
+                      <TableCell className="text-right font-semibold text-destructive"><FormattedCurrency amount={Math.abs(t.amount)} currency={currency} /></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

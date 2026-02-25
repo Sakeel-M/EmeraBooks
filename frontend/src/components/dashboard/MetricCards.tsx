@@ -1,7 +1,7 @@
 import { TrendingUp, TrendingDown, PiggyBank, Calculator } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { replaceAedSymbol } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface MetricCardsProps {
   totalIncome: number;
@@ -20,22 +20,10 @@ const MetricCards = ({
   totalIncome, totalExpenses, netSavings, avgTransaction,
   incomeCount, expenseCount, savingsRate, totalCount, currency, onCardClick,
 }: MetricCardsProps) => {
-  const fmt = (amount: number) =>
-    replaceAedSymbol(
-      new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency,
-        minimumFractionDigits: 0,
-        maximumFractionDigits: amount >= 1000 ? 1 : 2,
-        notation: amount >= 10000 ? "compact" : "standard",
-      }).format(amount),
-      currency
-    );
-
   const cards = [
     {
       label: "Total Income",
-      value: fmt(totalIncome),
+      value: <FormattedCurrency amount={totalIncome} currency={currency} compact={totalIncome >= 10000} />,
       badge: `${incomeCount} txns`,
       icon: TrendingUp,
       borderColor: "border-l-green-500",
@@ -44,7 +32,7 @@ const MetricCards = ({
     },
     {
       label: "Total Expenses",
-      value: fmt(totalExpenses),
+      value: <FormattedCurrency amount={totalExpenses} currency={currency} compact={totalExpenses >= 10000} />,
       badge: `${expenseCount} txns`,
       icon: TrendingDown,
       borderColor: "border-l-red-500",
@@ -53,7 +41,7 @@ const MetricCards = ({
     },
     {
       label: "Profit",
-      value: fmt(netSavings),
+      value: <FormattedCurrency amount={netSavings} currency={currency} compact={netSavings >= 10000} />,
       badge: `${savingsRate.toFixed(1)}%`,
       icon: PiggyBank,
       borderColor: "border-l-green-500",
@@ -62,7 +50,7 @@ const MetricCards = ({
     },
     {
       label: "Avg Transaction",
-      value: fmt(avgTransaction),
+      value: <FormattedCurrency amount={avgTransaction} currency={currency} compact={avgTransaction >= 10000} />,
       badge: `${totalCount} txns`,
       icon: Calculator,
       borderColor: "border-l-blue-500",
@@ -85,12 +73,12 @@ const MetricCards = ({
           <p className="text-xl font-bold text-foreground mt-1">{card.value}</p>
           {card.type === "income" && (
             <p className="text-[10px] text-muted-foreground mt-0.5">
-              After VAT (5%): {fmt(totalIncome * 0.95)}
+              After VAT (5%): <FormattedCurrency amount={totalIncome * 0.95} currency={currency} compact={totalIncome * 0.95 >= 10000} />
             </p>
           )}
           {card.type === "savings" && (
             <p className="text-[10px] text-muted-foreground mt-0.5">
-              After Corp. Tax (9%): {fmt(netSavings * 0.91)}
+              After Corp. Tax (9%): <FormattedCurrency amount={netSavings * 0.91} currency={currency} compact={netSavings * 0.91 >= 10000} />
             </p>
           )}
         </Card>

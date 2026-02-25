@@ -13,7 +13,8 @@ import {
 } from "recharts";
 import { TrendingUp, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { CHART_COLORS } from "@/lib/chartColors";
-import { formatAmount, formatCompactCurrency } from "@/lib/utils";
+import { CurrencyAxisTick } from "@/components/shared/CurrencyAxisTick";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface TrendData {
   month: string;
@@ -44,7 +45,7 @@ const CustomTooltip = ({ active, payload, label, currency = "USD" }: any) => {
                 <span className="text-sm text-muted-foreground">{item.name}</span>
               </div>
               <span className="text-sm font-bold text-foreground">
-                {formatAmount(item.value, currency)}
+                <FormattedCurrency amount={item.value} currency={currency} />
               </span>
             </div>
           ))}
@@ -86,7 +87,7 @@ export function RevenueExpenseTrend({ data, currency = "USD", onStatClick }: Rev
             title={onStatClick ? "Click for revenue details" : undefined}
           >
             <p className="text-xs text-muted-foreground mb-1">Total Revenue</p>
-            <p className="text-lg font-bold text-green-600">{formatAmount(totalRevenue, currency)}</p>
+            <p className="text-lg font-bold text-green-600"><FormattedCurrency amount={totalRevenue} currency={currency} /></p>
           </div>
           <div
             className={`text-center p-3 rounded-lg bg-muted/30 transition-all ${onStatClick ? "cursor-pointer hover:ring-1 hover:ring-primary/30 hover:bg-muted/50" : ""}`}
@@ -94,7 +95,7 @@ export function RevenueExpenseTrend({ data, currency = "USD", onStatClick }: Rev
             title={onStatClick ? "Click for expenses details" : undefined}
           >
             <p className="text-xs text-muted-foreground mb-1">Total Expenses</p>
-            <p className="text-lg font-bold text-red-500">{formatAmount(totalExpenses, currency)}</p>
+            <p className="text-lg font-bold text-red-500"><FormattedCurrency amount={totalExpenses} currency={currency} /></p>
           </div>
           <div
             className={`text-center p-3 rounded-lg bg-muted/30 transition-all ${onStatClick ? "cursor-pointer hover:ring-1 hover:ring-primary/30 hover:bg-muted/50" : ""}`}
@@ -103,7 +104,7 @@ export function RevenueExpenseTrend({ data, currency = "USD", onStatClick }: Rev
           >
             <p className="text-xs text-muted-foreground mb-1">Net Income</p>
             <p className={`text-lg font-bold ${totalNetIncome >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
-              {formatAmount(totalNetIncome, currency)}
+              <FormattedCurrency amount={totalNetIncome} currency={currency} />
             </p>
           </div>
           <div className="text-center p-3 rounded-lg bg-muted/30">
@@ -139,7 +140,7 @@ export function RevenueExpenseTrend({ data, currency = "USD", onStatClick }: Rev
               axisLine={false}
               tickLine={false}
               tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-              tickFormatter={(value) => formatCompactCurrency(value, currency)}
+              tick={<CurrencyAxisTick currency={currency} anchor="end" />}
             />
             <Tooltip content={<CustomTooltip currency={currency} />} />
             <Legend

@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Eye, Pencil, Trash2, FileText } from "lucide-react";
-import { formatAmount } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface InvoiceCardProps {
   invoice: any;
@@ -13,7 +13,19 @@ interface InvoiceCardProps {
   onDelete: (id: string) => void;
 }
 
+// Clean raw bank-reference names stored in the DB
+// e.g. "Ln42012546429376:- Com Akwad Tech Network" → "Akwad Tech Network"
+function cleanCustomerName(name: string | null | undefined): string {
+  if (!name) return "";
+  let s = name.trim();
+  const refMatch = s.match(/^(?:[A-Za-z]{0,3})?\d{6,}:-\s*(.+)/);
+  if (refMatch) s = refMatch[1].trim();
+  s = s.replace(/^(?:Com|Edu|Fam|Str|Sal|Pur|Ref|Int|Ext|Own)\s+/i, "").trim();
+  return s || name;
+}
+
 export function InvoiceCard({ invoice, logoUrl, currency = "USD", onView, onEdit, onDelete }: InvoiceCardProps) {
+  const customerName = cleanCustomerName(invoice.customers?.name);
   return (
     <Card
       className="group cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 border-border"
@@ -37,7 +49,7 @@ export function InvoiceCard({ invoice, logoUrl, currency = "USD", onView, onEdit
 
         {/* Customer */}
         <div>
-          <p className="text-sm font-medium text-foreground">{invoice.customers?.name || "No Customer"}</p>
+          <p className="text-sm font-medium text-foreground">{customerName || "No Customer"}</p>
         </div>
 
         {/* Dates */}
@@ -49,7 +61,7 @@ export function InvoiceCard({ invoice, logoUrl, currency = "USD", onView, onEdit
         {/* Amount */}
         <div className="text-right">
           <span className="text-xl font-bold text-foreground">
-            {formatAmount(Number(invoice.total_amount), currency)}
+            <FormattedCurrency amount={Number(invoice.total_amount)} currency={currency} />
           </span>
         </div>
 

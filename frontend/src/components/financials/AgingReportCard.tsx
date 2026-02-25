@@ -5,6 +5,7 @@ import { Progress } from "@/components/ui/progress";
 import { Clock, AlertTriangle, CheckCircle2, AlertCircle } from "lucide-react";
 import { CHART_COLORS } from "@/lib/chartColors";
 import { formatAmount } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 import { differenceInDays } from "date-fns";
 
 interface AgingItem {
@@ -57,7 +58,7 @@ function AgingBar({ items, title, type, currency = "USD" }: { items: AgingItem[]
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h4 className="font-medium text-sm">{title}</h4>
-        <span className="text-sm font-bold">{formatAmount(grandTotal, currency)}</span>
+        <span className="text-sm font-bold"><FormattedCurrency amount={grandTotal} currency={currency} /></span>
       </div>
       <div className="flex h-8 rounded-lg overflow-hidden shadow-inner bg-muted/50">
         {bucketTotals.map((bucket, index) => {
@@ -74,7 +75,7 @@ function AgingBar({ items, title, type, currency = "USD" }: { items: AgingItem[]
               }}
               title={`${bucket.label}: ${formatAmount(bucket.total, currency)}`}
             >
-              {percentage > 15 && formatAmount(bucket.total, currency)}
+              {percentage > 15 && <FormattedCurrency amount={bucket.total} currency={currency} />}
             </div>
           );
         })}
@@ -154,7 +155,7 @@ export function AgingReportCard({ invoices, bills, currency = "USD" }: AgingRepo
                         </TableCell>
                         <TableCell className="font-mono text-sm">{item.number}</TableCell>
                         <TableCell className="font-medium">{item.name}</TableCell>
-                        <TableCell className="font-bold">{formatAmount(item.amount, currency)}</TableCell>
+                        <TableCell className="font-bold"><FormattedCurrency amount={item.amount} currency={currency} /></TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Badge

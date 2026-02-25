@@ -9,7 +9,9 @@ import {
   Cell,
 } from "recharts";
 import { CHART_COLORS } from "@/lib/chartColors";
-import { formatAmount, formatCompactCurrency } from "@/lib/utils";
+import { formatAmount } from "@/lib/utils";
+import { CurrencyAxisTick } from "@/components/shared/CurrencyAxisTick";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface GradientBarChartProps {
   data: Array<{ name: string; value: number; color?: string }>;
@@ -28,7 +30,7 @@ const CustomTooltip = ({ active, payload, label, isCurrency, currency = "USD" }:
       <div className="bg-popover/95 backdrop-blur-sm border border-border rounded-lg shadow-xl p-3 animate-in fade-in-0 zoom-in-95">
         <p className="text-sm font-medium text-muted-foreground mb-1">{label}</p>
         <p className="text-lg font-bold text-foreground">
-          {isCurrency ? formatAmount(payload[0].value, currency) : payload[0].value.toLocaleString()}
+          {isCurrency ? <FormattedCurrency amount={payload[0].value} currency={currency} /> : payload[0].value.toLocaleString()}
         </p>
       </div>
     );
@@ -85,10 +87,7 @@ export function GradientBarChart({
         <YAxis
           axisLine={false}
           tickLine={false}
-          tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-          tickFormatter={(value) =>
-            isCurrency ? formatCompactCurrency(value, currency) : value.toLocaleString()
-          }
+          tick={isCurrency ? <CurrencyAxisTick currency={currency} anchor="end" /> : { fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
         />
         <Tooltip content={<CustomTooltip isCurrency={isCurrency} currency={currency} />} cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }} />
         <Bar

@@ -1,4 +1,3 @@
-import { DIRHAM_SYMBOL } from './utils';
 
 // Utility keywords for auto-extraction from bank statements
 export const UTILITY_KEYWORDS = [
@@ -156,8 +155,5 @@ export function formatCurrency(amount: number, currency: string = 'USD'): string
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(amount);
-  if (currency === 'AED') {
-    return formatted.replace(/^AED\s*/, DIRHAM_SYMBOL + '\u00A0');
-  }
   return formatted;
 }

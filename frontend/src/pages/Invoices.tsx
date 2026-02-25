@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 import { useCurrency } from "@/hooks/useCurrency";
 import { formatAmount, cn } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Building2, Tags, LayoutGrid, List, Palette, ChevronLeft, ChevronRight, FileText } from "lucide-react";
@@ -19,7 +20,7 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { DataTableRowActions } from "@/components/shared/DataTableRowActions";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { CategoryManager } from "@/components/shared/CategoryManager";
-import { resolveCategory, resolveIncomeCategory } from "@/lib/sectorMapping";
+import { resolveIncomeCategory } from "@/lib/sectorMapping";
 import { getSectorStyle } from "@/lib/sectorStyles";
 import { toast } from "sonner";
 
@@ -52,24 +53,68 @@ export default function Invoices() {
   const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
   const [yearInitialized, setYearInitialized] = useState(false);
 
-  // ── PRIMARY DATA SOURCE: invoices table (all invoices, synced + manual) ──────
+  // Clean raw bank-reference strings for display (e.g. "Ln42012546429376:- Com Akwad Tech" → "Akwad Tech")
+  const cleanDesc = (desc: string): string => {
+    if (!desc) return "";
+    let s = desc.trim();
+    const refMatch = s.match(/^(?:[A-Za-z]{0,3})?\d{6,}:-\s*(.+)/);
+    if (refMatch) s = refMatch[1].trim();
+    s = s.replace(/^(?:Com|Edu|Fam|Str|Sal|Pur|Ref|Int|Ext|Own)\s+/i, "").trim();
+    return s || desc;
+  };
+
+  // ── PRIMARY DATA SOURCE: transactions table (amount > 0) — same as Home Revenue tab ──
+  // This guarantees the same 44 income transactions shown on Home are shown here.
+  // Manually-created invoices (no source_file_id) are fetched separately and merged.
   const { data: invoices = [], isLoading, refetch: refetchInvoices } = useQuery({
     queryKey: ["invoices-page"],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
-      const { data, error } = await supabase
+
+      // 1. All income transactions (same source as Home page)
+      const { data: txns, error: txnError } = await supabase
+        .from("transactions")
+        .select("*")
+        .eq("user_id", user.id)
+        .gt("amount", 0)
+        .order("transaction_date", { ascending: false });
+      if (txnError) throw txnError;
+
+      // 2. Manually-created invoices only (source_file_id IS NULL = not from sync)
+      const { data: manualInvs, error: invError } = await supabase
         .from("invoices")
         .select("*, customers(name, email)")
         .eq("user_id", user.id)
+        .is("source_file_id", null)
         .order("invoice_date", { ascending: false });
-      if (error) throw error;
-      return (data || []).map((inv: any) => ({
+      if (invError) throw invError;
+
+      // Map income transactions to invoice-like shape
+      const txnRows = (txns || []).map((t: any) => ({
+        id: t.id,
+        invoice_number: `TXN-${t.id.slice(0, 8).toUpperCase()}`,
+        invoice_date: t.transaction_date,
+        due_date: t.transaction_date,
+        total_amount: t.amount,
+        amount_paid: t.amount,
+        status: "paid",
+        category: t.category,
+        notes: t.description,
+        customers: { name: cleanDesc(t.description), email: null },
+        source: "transaction",
+        resolvedCategory: resolveIncomeCategory(t.category, t.description),
+      }));
+
+      // Manual invoices with income categorization
+      const manualRows = (manualInvs || []).map((inv: any) => ({
         ...inv,
-        // Use income-specific categorizer — never returns expense categories
-        // (Technology, Food & Beverage, Retail etc.) for income invoices.
+        source: "manual",
         resolvedCategory: resolveIncomeCategory(inv.category, inv.notes),
       }));
+
+      // Manual invoices first (they have proper invoice numbers/statuses), then synced transactions
+      return [...manualRows, ...txnRows];
     },
   });
 
@@ -94,9 +139,11 @@ export default function Invoices() {
     }
   }, [invoices.length, yearInitialized]);
 
-  // Year-filtered invoices
+  // Year-filtered invoices (all income transactions for the year)
   const filteredByYear = useMemo(() =>
-    invoices.filter((inv: any) => new Date(inv.invoice_date).getFullYear() === currentYear),
+    invoices.filter((inv: any) =>
+      new Date(inv.invoice_date).getFullYear() === currentYear
+    ),
     [invoices, currentYear]
   );
 
@@ -124,7 +171,6 @@ export default function Invoices() {
 
   // Totals
   const totalAmount = filteredByYear.reduce((sum: number, inv: any) => sum + Number(inv.total_amount || 0), 0);
-  const filteredTotal = displayInvoices.reduce((sum: number, inv: any) => sum + Number(inv.total_amount || 0), 0);
   const invoiceSectors = useMemo(() => uniqueCategories.filter(c => c !== "Other"), [uniqueCategories]);
   const hasData = invoices.length > 0;
 
@@ -139,17 +185,30 @@ export default function Invoices() {
   }, [filteredByYear]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────────
-  const handleEdit = (invoice: any) => { navigate(`/invoices/${invoice.id}/edit`); };
+  // Only manually-created invoices can be edited; bank transaction rows are read-only
+  const handleEdit = (invoice: any) => {
+    if (invoice.source === "transaction") { toast.info("Bank transactions cannot be edited here."); return; }
+    navigate(`/invoices/${invoice.id}/edit`);
+  };
   const handleDelete = (id: string) => { setInvoiceToDelete(id); setDeleteDialogOpen(true); };
   const handleView = (invoice: any) => { setDetailInvoice(invoice); setDetailOpen(true); };
 
   const confirmDelete = async () => {
     if (!invoiceToDelete) return;
+    // Find the row to determine if it's a transaction or a manual invoice
+    const row = invoices.find((inv: any) => inv.id === invoiceToDelete);
     try {
-      await supabase.from("invoice_items").delete().eq("invoice_id", invoiceToDelete);
-      const { error } = await supabase.from("invoices").delete().eq("id", invoiceToDelete);
-      if (error) throw error;
-      toast.success("Invoice deleted");
+      if (row?.source === "transaction") {
+        // Delete from transactions table
+        const { error } = await supabase.from("transactions").delete().eq("id", invoiceToDelete);
+        if (error) throw error;
+      } else {
+        // Delete manual invoice
+        await supabase.from("invoice_items").delete().eq("invoice_id", invoiceToDelete);
+        const { error } = await supabase.from("invoices").delete().eq("id", invoiceToDelete);
+        if (error) throw error;
+      }
+      toast.success("Deleted successfully");
       refetchInvoices();
       queryClient.invalidateQueries({ queryKey: ["invoices-page"] });
     } catch { toast.error("Failed to delete"); }
@@ -162,7 +221,15 @@ export default function Invoices() {
     {
       id: "customer",
       header: "Customer",
-      cell: ({ row }) => row.original.customers?.name || "—",
+      cell: ({ row }) => {
+        const name = row.original.customers?.name;
+        if (!name) return "—";
+        let s = name.trim();
+        const refMatch = s.match(/^(?:[A-Za-z]{0,3})?\d{6,}:-\s*(.+)/);
+        if (refMatch) s = refMatch[1].trim();
+        s = s.replace(/^(?:Com|Edu|Fam|Str|Sal|Pur|Ref|Int|Ext|Own)\s+/i, "").trim();
+        return s || name;
+      },
     },
     {
       id: "category",
@@ -192,7 +259,7 @@ export default function Invoices() {
       header: "Amount",
       cell: ({ row }) => (
         <span className="font-medium text-green-600">
-          {formatAmount(Number(row.original.total_amount || 0), currency)}
+          <FormattedCurrency amount={Number(row.original.total_amount || 0)} currency={currency} />
         </span>
       ),
     },
@@ -277,7 +344,7 @@ export default function Invoices() {
           </div>
         )}
 
-        {/* Category filter pills */}
+        {/* Category filter pills — same categories as Home Revenue tab */}
         {!isLoading && filteredByYear.length > 0 && (
           <div className="flex flex-wrap gap-2">
             <button
@@ -310,18 +377,6 @@ export default function Invoices() {
                 </button>
               );
             })}
-          </div>
-        )}
-
-        {/* Category total strip */}
-        {selectedCategory && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>Showing</span>
-            <Badge variant="secondary">{selectedCategory}</Badge>
-            <span>— {displayInvoices.length} invoices · {formatAmount(filteredTotal, currency)}</span>
-            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setSelectedCategory(null)}>
-              Clear
-            </Button>
           </div>
         )}
 

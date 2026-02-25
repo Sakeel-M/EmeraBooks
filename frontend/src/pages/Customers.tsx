@@ -17,9 +17,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCurrency } from "@/hooks/useCurrency";
-import { resolveCategory, guessCategory } from "@/lib/sectorMapping";
+import { resolveIncomeCategory } from "@/lib/sectorMapping";
 import { getSectorStyle } from "@/lib/sectorStyles";
 import { cn, formatAmount } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 
 interface InvoiceSummary {
   id: string;
@@ -110,13 +111,13 @@ export default function Customers() {
     }
   };
 
-  // Resolve category: invoice categories (from resolveCategory in sync) first → stored category → name guess → "Other"
+  // Resolve category from invoice categories using income-specific resolver.
+  // Customer names can be bank reference strings (e.g. MOBN refs), so guessCategory(name) is unreliable.
   const getCustomerCategory = (c: Customer): string => {
-    // Mode-count across all invoice categories (set by syncBankDataToBusinessRecords via resolveCategory)
     const catCounts = new Map<string, number>();
     (c.invoices || []).forEach((i: any) => {
       if (!i.category) return;
-      const resolved = resolveCategory(i.category, undefined);
+      const resolved = resolveIncomeCategory(i.category, (i as any).notes || "");
       if (resolved && resolved !== "Other" && resolved !== "Internal Transfer") {
         catCounts.set(resolved, (catCounts.get(resolved) || 0) + 1);
       }
@@ -124,11 +125,8 @@ export default function Customers() {
     let bestCat = "";
     let maxCount = 0;
     catCounts.forEach((count, cat) => { if (count > maxCount) { maxCount = count; bestCat = cat; } });
-    if (bestCat) return bestCat;
-    // Fallback: stored customer category, then guess from name
-    const fromName = guessCategory(c.name);
-    if (fromName && fromName !== "Internal Transfer") return fromName;
-    return resolveCategory((c as any).category, undefined) || "Other";
+    // Default: customers are income sources — "Business Income" is a better default than "Other"
+    return bestCat || "Business Income";
   };
 
   // Unique categories derived from customers
@@ -176,8 +174,6 @@ export default function Customers() {
       setIsDeleting(false);
     }
   };
-
-  const formatCurrency = (amount: number) => formatAmount(amount, currency);
 
   const columns: ColumnDef<Customer>[] = [
     {
@@ -259,7 +255,7 @@ export default function Customers() {
         return (
           <div>
             <span className={total > 0 ? "font-medium" : "text-muted-foreground"}>
-              {formatCurrency(total)}
+              <FormattedCurrency amount={total} currency={currency} />
             </span>
             {count > 0 && (
               <div className="text-xs text-muted-foreground">{count} invoice{count !== 1 ? "s" : ""}</div>
@@ -275,11 +271,11 @@ export default function Customers() {
         const outstanding = row.original.outstandingReceivable || 0;
         const count = row.original.outstandingCount || 0;
         if (outstanding <= 0) {
-          return <span className="text-muted-foreground">{formatCurrency(0)}</span>;
+          return <span className="text-muted-foreground"><FormattedCurrency amount={0} currency={currency} /></span>;
         }
         return (
           <div>
-            <span className="font-medium text-amber-600">{formatCurrency(outstanding)}</span>
+            <span className="font-medium text-amber-600"><FormattedCurrency amount={outstanding} currency={currency} /></span>
             {count > 0 && (
               <div className="text-xs text-muted-foreground">{count} unpaid</div>
             )}

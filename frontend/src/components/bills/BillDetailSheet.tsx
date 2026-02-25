@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrency } from "@/hooks/useCurrency";
-import { formatAmount } from "@/lib/utils";
+import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 import { Pencil, Trash2, CheckCircle2, FileText, Calendar, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -114,12 +114,12 @@ export function BillDetailSheet({ open, onOpenChange, bill, onEdit, onDelete, on
           <div className="space-y-2">
             <h4 className="text-sm font-semibold">Amount Breakdown</h4>
             <div className="space-y-1.5 text-sm">
-              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatAmount(bill.subtotal, currency)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Tax</span><span>{formatAmount(bill.tax_amount || 0, currency)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span><FormattedCurrency amount={bill.subtotal} currency={currency} /></span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Tax</span><span><FormattedCurrency amount={bill.tax_amount || 0} currency={currency} /></span></div>
               <Separator />
-              <div className="flex justify-between font-semibold"><span>Total</span><span>{formatAmount(bill.total_amount, currency)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Amount Paid</span><span>{formatAmount(bill.amount_paid || 0, currency)}</span></div>
-              <div className="flex justify-between font-semibold text-primary"><span>Balance Due</span><span>{formatAmount(balanceDue, currency)}</span></div>
+              <div className="flex justify-between font-semibold"><span>Total</span><span><FormattedCurrency amount={bill.total_amount} currency={currency} /></span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Amount Paid</span><span><FormattedCurrency amount={bill.amount_paid || 0} currency={currency} /></span></div>
+              <div className="flex justify-between font-semibold text-primary"><span>Balance Due</span><span><FormattedCurrency amount={balanceDue} currency={currency} /></span></div>
             </div>
           </div>
 
@@ -148,8 +148,8 @@ export function BillDetailSheet({ open, onOpenChange, bill, onEdit, onDelete, on
                       <TableRow key={item.id}>
                         <TableCell className="text-xs">{item.description}</TableCell>
                         <TableCell className="text-xs text-right">{item.quantity}</TableCell>
-                        <TableCell className="text-xs text-right">{formatAmount(item.unit_price, currency)}</TableCell>
-                        <TableCell className="text-xs text-right">{formatAmount(item.amount, currency)}</TableCell>
+                        <TableCell className="text-xs text-right"><FormattedCurrency amount={item.unit_price} currency={currency} /></TableCell>
+                        <TableCell className="text-xs text-right"><FormattedCurrency amount={item.amount} currency={currency} /></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
