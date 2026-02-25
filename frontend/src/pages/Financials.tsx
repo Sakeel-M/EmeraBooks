@@ -20,7 +20,6 @@ import { PLDetailTable } from "@/components/financials/PLDetailTable";
 import { CategoryDetailPanel } from "@/components/financials/CategoryDetailPanel";
 import { TaxationReport } from "@/components/financials/TaxationReport";
 import { FinancialDetailSheet, type FinancialDetailType } from "@/components/financials/FinancialDetailSheet";
-import { QuarterNavigator, getCurrentQuarter, useQuarterDates } from "@/components/dashboard/QuarterNavigator";
 import { CHART_COLORS } from "@/lib/chartColors";
 import { FormattedCurrency } from "@/components/shared/FormattedCurrency";
 import { format, getMonth, getYear, parseISO } from "date-fns";
@@ -72,11 +71,22 @@ export default function Financials() {
   const [showReasonPanel, setShowReasonPanel] = useState(false);
   const [dateRangeInitialized, setDateRangeInitialized] = useState(false);
 
-  // P&L detail state
+  // P&L tab has its own independent date range (auto-detected from transaction bounds)
+  const [plDateRange, setPlDateRange] = useState(() => {
+    const now = new Date();
+    return { from: new Date(now.getFullYear(), 0, 1), to: new Date(now.getFullYear(), 11, 31) };
+  });
+  const [plDateRangeInitialized, setPlDateRangeInitialized] = useState(false);
+
+  // P&L Detail tab has its own independent date range (auto-detected from transaction bounds)
+  const [plDetailDateRange, setPlDetailDateRange] = useState(() => {
+    const now = new Date();
+    return { from: new Date(now.getFullYear(), 0, 1), to: new Date(now.getFullYear(), 11, 31) };
+  });
+  const [plDetailDateRangeInitialized, setPlDetailDateRangeInitialized] = useState(false);
+
+  // P&L detail — selected category for drill-down panel
   const [selectedPLCategory, setSelectedPLCategory] = useState<string | null>(null);
-  const { quarter: initQ, year: initY } = getCurrentQuarter();
-  const [plQuarter, setPlQuarter] = useState(initQ);
-  const [plYear, setPlYear] = useState(initY);
 
   // Financial detail sheet state
   const [detailOpen, setDetailOpen] = useState(false);
@@ -192,6 +202,29 @@ export default function Financials() {
     },
   });
 
+  // P&L tab transactions — uses its own plDateRange (independent of global date range)
+  const { data: plTabTxns = [] } = useQuery({
+    queryKey: ["pl-tab-transactions", currentFileId, format(plDateRange.from, "yyyy-MM-dd"), format(plDateRange.to, "yyyy-MM-dd")],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+      let q = supabase
+        .from("transactions")
+        .select("amount, category, description, transaction_date")
+        .eq("user_id", user.id)
+        .gte("transaction_date", format(plDateRange.from, "yyyy-MM-dd"))
+        .lte("transaction_date", format(plDateRange.to, "yyyy-MM-dd"));
+      if (currentFileId) q = q.eq("file_id", currentFileId);
+      const { data } = await q;
+      return (data || []).map((t: any) => ({
+        ...t,
+        resolvedCategory: t.amount > 0
+          ? resolveIncomeCategory(t.category, t.description)
+          : getCanonicalCategory(t.category, null, t.description),
+      }));
+    },
+  });
+
   // Auto-detect date range: fetch first and last transaction dates
   const { data: txnDateBounds } = useQuery({
     queryKey: ["txn-date-bounds"],
@@ -219,6 +252,24 @@ export default function Financials() {
     }
   }, [txnDateBounds, dateRangeInitialized]);
 
+  // P&L tab: auto-detect full span as default (independent from global dateRange)
+  useEffect(() => {
+    if (!plDateRangeInitialized && txnDateBounds) {
+      const parseLocal = (s: string) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+      setPlDateRange({ from: parseLocal(txnDateBounds.min), to: parseLocal(txnDateBounds.max) });
+      setPlDateRangeInitialized(true);
+    }
+  }, [txnDateBounds, plDateRangeInitialized]);
+
+  // P&L Detail tab: auto-detect full span as default
+  useEffect(() => {
+    if (!plDetailDateRangeInitialized && txnDateBounds) {
+      const parseLocal = (s: string) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+      setPlDetailDateRange({ from: parseLocal(txnDateBounds.min), to: parseLocal(txnDateBounds.max) });
+      setPlDetailDateRangeInitialized(true);
+    }
+  }, [txnDateBounds, plDetailDateRangeInitialized]);
+
   // Transactions for cash flow classification (scoped to file + date range)
   const { data: cashFlowTxns = [] } = useQuery({
     queryKey: ["cf-txns", currentFileId, format(dateRange.from, "yyyy-MM-dd"), format(dateRange.to, "yyyy-MM-dd")],
@@ -244,7 +295,7 @@ export default function Financials() {
   // Sync in progress: file selected but no bills/invoices/transactions yet loaded
   const syncInProgress = plTxns.length === 0 && !hasAnyBillsOrInvoices && !!currentFileId;
 
-  // P&L income/expense split from transactions (NON_PL filtered)
+  // P&L income/expense split from transactions (NON_PL filtered) — used by Overview tab
   const plIncomeTxns = useMemo(() =>
     plTxns.filter((t: any) => t.amount > 0 && !NON_PL_CATEGORIES.has(t.resolvedCategory.toLowerCase())),
     [plTxns]
@@ -254,29 +305,24 @@ export default function Financials() {
     [plTxns]
   );
 
-  // P&L quarter ranges (4 quarters ending at selected)
-  const plQuarterLabels = useMemo(() => {
-    const labels: string[] = [];
-    let q = plQuarter, y = plYear;
-    for (let i = 3; i >= 0; i--) {
-      let tq = q - i, ty = y;
-      while (tq <= 0) { tq += 4; ty--; }
-      labels.push(`Q${tq} '${String(ty).slice(-2)}`);
-    }
-    return labels;
-  }, [plQuarter, plYear]);
-
-  const plQuarterRanges = useMemo(() => {
-    const ranges: { from: Date; to: Date }[] = [];
-    let q = plQuarter, y = plYear;
-    for (let i = 3; i >= 0; i--) {
-      let tq = q - i, ty = y;
-      while (tq <= 0) { tq += 4; ty--; }
-      const startMonth = (tq - 1) * 3;
-      ranges.push({ from: new Date(ty, startMonth, 1), to: new Date(ty, startMonth + 3, 0, 23, 59, 59) });
-    }
-    return ranges;
-  }, [plQuarter, plYear]);
+  // P&L tab-specific derived values (from plTabTxns, controlled by the P&L tab's own date picker)
+  const plTabIncomeTxns = useMemo(() =>
+    plTabTxns.filter((t: any) => t.amount > 0 && !NON_PL_CATEGORIES.has(t.resolvedCategory.toLowerCase())),
+    [plTabTxns]
+  );
+  const plTabExpenseTxns = useMemo(() =>
+    plTabTxns.filter((t: any) => t.amount < 0 && !NON_PL_CATEGORIES.has(t.resolvedCategory.toLowerCase())),
+    [plTabTxns]
+  );
+  const plTabRevenue = plTabIncomeTxns.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+  const plTabExpenses = plTabExpenseTxns.reduce((sum: number, t: any) => sum + Math.abs(Number(t.amount || 0)), 0);
+  const plTabNetIncome = plTabRevenue - plTabExpenses;
+  const plTabMargin = plTabRevenue > 0 ? (plTabNetIncome / plTabRevenue) * 100 : 0;
+  const plTabData = [
+    { name: "Revenue", value: plTabRevenue, color: CHART_COLORS.success },
+    { name: "Expenses", value: plTabExpenses, color: CHART_COLORS.danger },
+    { name: "Net Income", value: plTabNetIncome, color: plTabNetIncome >= 0 ? CHART_COLORS.info : CHART_COLORS.danger },
+  ];
 
   // Core P&L calculations — from transactions directly (same source as Home page)
   // Gives IDENTICAL categories and amounts to what Home shows
@@ -563,7 +609,7 @@ export default function Financials() {
         </div>
 
         <EnhancedDateRangePicker
-          key={dateRangeInitialized ? `${dateRange.from.toISOString()}-${dateRange.to.toISOString()}` : "default"}
+          key={dateRangeInitialized ? "global-initialized" : "global-default"}
           onRangeChange={(from, to) => setDateRange({ from, to })}
           defaultRange={dateRange}
         />
@@ -779,21 +825,33 @@ export default function Financials() {
               <EmptyState icon={BarChart3} title="No P&L data" description="Create invoices and bills to generate your Profit & Loss statement." />
             ) : (
               <>
+                {/* P&L-specific date range picker */}
+                <div className="space-y-1">
+                  <EnhancedDateRangePicker
+                    key={plDateRangeInitialized ? "pl-initialized" : "pl-default"}
+                    onRangeChange={(from, to) => setPlDateRange({ from, to })}
+                    defaultRange={plDateRange}
+                  />
+                  <p className="text-xs text-muted-foreground pl-1">
+                    {format(plDateRange.from, "MMM yyyy")} – {format(plDateRange.to, "MMM yyyy")} · {plTabTxns.length} transactions
+                  </p>
+                </div>
+
                 <div className="grid gap-4 md:grid-cols-4">
-                  <StatCard title="Total Revenue" value={<FormattedCurrency amount={totalRevenue} currency={currency} />} icon={DollarSign} colorClass="text-green-600" onClick={() => openDetail("revenue")} />
-                  <StatCard title="Total Expenses" value={<FormattedCurrency amount={totalExpenses} currency={currency} />} icon={Wallet} colorClass="text-destructive" onClick={() => openDetail("expenses")} />
-                  <StatCard title="Net Income" value={<FormattedCurrency amount={netIncome} currency={currency} />} icon={TrendingUp} colorClass={netIncome >= 0 ? "text-blue-600" : "text-destructive"} onClick={() => openDetail("net-income")} />
-                  <StatCard title="Profit Margin" value={`${profitMargin.toFixed(1)}%`} icon={PieChart} onClick={() => openDetail("profit-margin")} />
+                  <StatCard title="Total Revenue" value={<FormattedCurrency amount={plTabRevenue} currency={currency} />} icon={DollarSign} colorClass="text-green-600" onClick={() => openDetail("revenue")} />
+                  <StatCard title="Total Expenses" value={<FormattedCurrency amount={plTabExpenses} currency={currency} />} icon={Wallet} colorClass="text-destructive" onClick={() => openDetail("expenses")} />
+                  <StatCard title="Net Income" value={<FormattedCurrency amount={plTabNetIncome} currency={currency} />} icon={TrendingUp} colorClass={plTabNetIncome >= 0 ? "text-blue-600" : "text-destructive"} onClick={() => openDetail("net-income")} />
+                  <StatCard title="Profit Margin" value={`${plTabMargin.toFixed(1)}%`} icon={PieChart} onClick={() => openDetail("profit-margin")} />
                 </div>
                 <div className="grid md:grid-cols-2 gap-6">
                   <Card className="chart-enter">
                     <CardHeader><CardTitle className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-primary" />Profit & Loss Breakdown</CardTitle></CardHeader>
-                    <CardContent><GradientBarChart data={plData} height={300} isCurrency={true} currency={currency} onBarClick={(item) => openDetail(item.name.toLowerCase().replace(/ /g, "-") as FinancialDetailType)} /></CardContent>
+                    <CardContent><GradientBarChart data={plTabData} height={300} isCurrency={true} currency={currency} onBarClick={(item) => openDetail(item.name.toLowerCase().replace(/ /g, "-") as FinancialDetailType)} /></CardContent>
                   </Card>
                   <Card className="chart-enter">
                     <CardHeader><CardTitle className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-primary" />Revenue Distribution</CardTitle></CardHeader>
                     <CardContent className="flex items-center justify-center">
-                      <DonutChart data={plData} centerValue={totalRevenue} centerLabel="Total" height={280} isCurrency={true} currency={currency} onSliceClick={(item) => openDetail(item.name.toLowerCase().replace(/ /g, "-") as FinancialDetailType)} />
+                      <DonutChart data={plTabData} centerValue={plTabRevenue} centerLabel="Total" height={280} isCurrency={true} currency={currency} onSliceClick={(item) => openDetail(item.name.toLowerCase().replace(/ /g, "-") as FinancialDetailType)} />
                     </CardContent>
                   </Card>
                 </div>
@@ -962,19 +1020,23 @@ export default function Financials() {
               <EmptyState icon={BarChart3} title="No P&L data" description="Create invoices and bills to see your detailed P&L." />
             ) : (
               <>
-                <div className="flex items-center justify-between">
-                  <QuarterNavigator
-                    currentQuarter={plQuarter}
-                    currentYear={plYear}
-                    onNavigate={(q, y) => { setPlQuarter(q); setPlYear(y); }}
+                {/* Custom date range picker — replaces quarter navigator */}
+                <div className="space-y-1">
+                  <EnhancedDateRangePicker
+                    key={plDetailDateRangeInitialized ? "pldetail-initialized" : "pldetail-default"}
+                    onRangeChange={(from, to) => setPlDetailDateRange({ from, to })}
+                    defaultRange={plDetailDateRange}
                   />
+                  <p className="text-xs text-muted-foreground pl-1">
+                    {format(plDetailDateRange.from, "MMM yyyy")} – {format(plDetailDateRange.to, "MMM yyyy")}
+                  </p>
                 </div>
                 <PLDetailTable
                   invoices={normalizedAllInvoices}
                   bills={normalizedAllBills}
                   accounts={accounts}
-                  quarterLabels={plQuarterLabels}
-                  quarterRanges={plQuarterRanges}
+                  quarterLabels={[`${format(plDetailDateRange.from, "MMM yyyy")} – ${format(plDetailDateRange.to, "MMM yyyy")}`]}
+                  quarterRanges={[{ from: plDetailDateRange.from, to: plDetailDateRange.to }]}
                   onRowClick={(row) => setSelectedPLCategory(row.label)}
                   currency={currency}
                 />
@@ -984,8 +1046,8 @@ export default function Financials() {
                   category={selectedPLCategory || ""}
                   invoices={normalizedAllInvoices}
                   bills={normalizedAllBills}
-                  quarterLabels={plQuarterLabels}
-                  quarterRanges={plQuarterRanges}
+                  quarterLabels={[`${format(plDetailDateRange.from, "MMM yyyy")} – ${format(plDetailDateRange.to, "MMM yyyy")}`]}
+                  quarterRanges={[{ from: plDetailDateRange.from, to: plDetailDateRange.to }]}
                   currency={currency}
                 />
               </>
