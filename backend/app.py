@@ -1,18 +1,62 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-import json
 import os
 from dotenv import load_dotenv
+load_dotenv()  # Must run before any module reads env vars
+
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from flask_migrate import Migrate
+import json
 import openai
 from datetime import datetime
 import io
 import re
 from excel_processor import processor
 from pdf_processor import pdf_processor
-
-load_dotenv()
+from reconciliation_engine import reconciliation_bp
+from risk_scorer import risk_bp
+from variance_detector import variance_bp
 
 app = Flask(__name__)
+
+# ── Database (SQLAlchemy + Migrate) ───────────────────────────────────────
+app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
+    "DATABASE_URL", "postgresql://emerabooks:changeme@localhost:5433/emerabooks"
+)
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+from models import db
+db.init_app(app)
+migrate = Migrate(app, db)
+
+# ── Register v2 API blueprints (existing: reconciliation engine, risk, variance) ──
+app.register_blueprint(reconciliation_bp)
+app.register_blueprint(risk_bp)
+app.register_blueprint(variance_bp)
+
+# ── Register v2 data CRUD routes ──────────────────────────────────────────
+from routes.tier0 import tier0_bp
+from routes.bank_accounts import bank_accounts_bp
+from routes.files import files_bp
+from routes.transactions import transactions_bp
+from routes.reconciliation_crud import reconciliation_crud_bp
+from routes.matching_rules import matching_rules_bp
+from routes.risk_alerts_crud import risk_alerts_crud_bp
+from routes.entities import entities_bp
+from routes.categories import categories_bp
+from routes.audit import audit_bp
+from routes.control_settings import control_settings_bp
+
+app.register_blueprint(tier0_bp)
+app.register_blueprint(bank_accounts_bp)
+app.register_blueprint(files_bp)
+app.register_blueprint(transactions_bp)
+app.register_blueprint(reconciliation_crud_bp)
+app.register_blueprint(matching_rules_bp)
+app.register_blueprint(risk_alerts_crud_bp)
+app.register_blueprint(entities_bp)
+app.register_blueprint(categories_bp)
+app.register_blueprint(audit_bp)
+app.register_blueprint(control_settings_bp)
 
 # ── Security: restrict CORS to known front-end origins ──────────────────────
 _allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
@@ -29,9 +73,13 @@ _API_SECRET_KEY = os.getenv("API_SECRET_KEY", "")
 
 @app.before_request
 def _check_api_key():
-    """Require X-API-Key header when API_SECRET_KEY env var is set."""
+    """Require X-API-Key or Bearer token when API_SECRET_KEY env var is set."""
     if request.method == "OPTIONS":
         return  # Allow CORS preflight through
+    # Accept Bearer JWT tokens (new auth flow) — route-level @require_auth validates them
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        return  # Let route-level @require_auth handle JWT validation
     if not _API_SECRET_KEY:
         return  # Auth disabled (key not configured)
     provided = request.headers.get("X-API-Key", "")
@@ -41,6 +89,20 @@ def _check_api_key():
 @app.errorhandler(413)
 def _too_large(e):
     return jsonify({"error": "File too large. Maximum allowed size is 50 MB."}), 413
+
+@app.errorhandler(500)
+def _internal_error(e):
+    import traceback
+    tb = traceback.format_exc()
+    app.logger.error(f"500 Internal Server Error: {e}\n{tb}")
+    return jsonify({"error": "Internal server error", "detail": str(e)}), 500
+
+@app.errorhandler(Exception)
+def _unhandled_error(e):
+    import traceback
+    tb = traceback.format_exc()
+    app.logger.error(f"Unhandled exception: {e}\n{tb}")
+    return jsonify({"error": "Internal server error", "detail": str(e)}), 500
 
 # ── Rate limiting (optional — requires flask-limiter) ───────────────────────
 try:
@@ -775,6 +837,74 @@ JSON structure:
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/api/risk-ai-insights', methods=['POST'])
+def risk_ai_insights():
+    """Generate AI-powered risk insights from financial summary data."""
+    try:
+        data = request.get_json()
+        summary = data.get('summary', {})
+
+        if not summary:
+            return jsonify({"error": "No summary provided"}), 400
+
+        if not openai.api_key:
+            return jsonify({"ai_suggestions": []}), 200
+
+        prompt = f"""You are a senior financial risk analyst and forensic accountant. Analyze this financial summary and provide 3-5 highly specific, actionable risk insights.
+
+Financial Summary:
+- Currency: {summary.get('currency', 'USD')}
+- Total Expenses: {summary.get('totalExpenses', 0):,.2f}
+- Total Income: {summary.get('totalIncome', 0):,.2f}
+- Cash Balance: {summary.get('cashBalance', 0):,.2f}
+- Cash Runway: {summary.get('runway', 'N/A')} months
+- Avg Monthly Burn: {summary.get('avgMonthlyBurn', 0):,.2f}
+- Avg Monthly Income: {summary.get('avgMonthlyIncome', 0):,.2f}
+- Overdue Bills: {summary.get('overdueBillsCount', 0)}
+- Overdue Invoices: {summary.get('overdueInvoicesCount', 0)}
+- Possible Duplicate Payments: {summary.get('duplicateCount', 0)}
+- Transaction Count: {summary.get('transactionCount', 0)}
+- Top Spending Categories: {', '.join(summary.get('topCategories', []))}
+- Categories with Spending Spikes: {', '.join(summary.get('spikeCategories', []))}
+
+Respond with a JSON array of exactly 3-5 strings. Each string should be a unique, specific insight or recommendation NOT already obvious from the numbers above. Focus on:
+1. Hidden patterns or correlations between the data points
+2. Industry-specific benchmarking advice
+3. Strategic cash management recommendations
+4. Regulatory or compliance considerations
+5. Predictive warnings based on the trend data
+
+Format: ["insight 1", "insight 2", "insight 3"]
+Only return the JSON array, no other text."""
+
+        response = openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a forensic accountant. Return ONLY a valid JSON array of strings."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=1000,
+            temperature=0.3
+        )
+
+        ai_text = response.choices[0].message.content.strip()
+        # Clean markdown
+        if '```json' in ai_text:
+            ai_text = ai_text.split('```json')[1].split('```')[0].strip()
+        elif '```' in ai_text:
+            ai_text = ai_text.split('```')[1].split('```')[0].strip()
+
+        suggestions = json.loads(ai_text)
+        if not isinstance(suggestions, list):
+            suggestions = []
+
+        return jsonify({"ai_suggestions": suggestions[:5]})
+
+    except Exception as e:
+        print(f"Risk AI insights error: {e}")
+        return jsonify({"ai_suggestions": []}), 200
+
+
 if __name__ == '__main__':
     print("Starting Universal Finance Analytics API...")
     print("Features: Excel + PDF Processing + OpenAI Analysis + Multi-Currency Support")
@@ -783,4 +913,4 @@ if __name__ == '__main__':
     print("OpenAI Integration:", "Enabled" if openai.api_key else "Disabled (Set OPENAI_API_KEY)")
     print("API available at: http://localhost:5000")
     debug_mode = os.getenv("FLASK_DEBUG", "false").lower() == "true"
-    app.run(debug=debug_mode, port=5000)
+    app.run(debug=debug_mode, host="0.0.0.0", port=5000)

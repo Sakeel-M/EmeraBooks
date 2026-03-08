@@ -706,6 +706,33 @@ serve(async (req) => {
         
         console.log(`Total records fetched for ${entity_type}: ${records.length}`);
 
+        // Diagnostic: when 0 records for invoices/bills, check if the opposite type has data
+        let suggestion: string | null = null;
+        if (records.length === 0 && (entity_type === 'invoices' || entity_type === 'bills') && username && password) {
+          const oppDomain = entity_type === 'invoices'
+            ? [['move_type', '=', 'in_invoice'], ['state', '!=', 'cancel']]
+            : [['move_type', '=', 'out_invoice'], ['state', '!=', 'cancel']];
+          const oppLabel = entity_type === 'invoices' ? 'vendor bills' : 'customer invoices';
+          const oppSync = entity_type === 'invoices' ? 'Bills' : 'Invoices';
+          try {
+            const diagSession = await odooSessionAuth(server_url, database, username, password);
+            const diagResult = await odooWebFetch(
+              server_url, diagSession.sessionId, model, 'search_read', [oppDomain],
+              { limit: 5, fields: ['id', 'name'] }
+            );
+            const diagCount = Array.isArray(diagResult) ? diagResult.length : 0;
+            if (diagCount > 0) {
+              suggestion = `No ${entity_type} (Sales) found in Odoo, but ${diagCount} ${oppLabel} exist. Try syncing "${oppSync}" instead.`;
+            } else {
+              suggestion = `No ${entity_type} found in Odoo. Make sure your Odoo account has confirmed ${entity_type} (not drafts or cancelled).`;
+            }
+            console.log(`Diagnostic suggestion: ${suggestion}`);
+          } catch (diagErr) {
+            console.log(`Diagnostic check failed: ${(diagErr as Error).message}`);
+            suggestion = `0 ${entity_type} were returned from Odoo. Ensure you have confirmed ${entity_type} records and your credentials have read access.`;
+          }
+        }
+
         // Create sync log entry
         const { data: syncLog, error: syncLogError } = await supabaseClient
           .from('sync_logs')
@@ -717,6 +744,7 @@ serve(async (req) => {
             records_processed: records.length,
             records_failed: 0,
             status: 'completed',
+            error_message: suggestion,
             started_at: new Date().toISOString(),
             completed_at: new Date().toISOString(),
           })
@@ -792,7 +820,7 @@ serve(async (req) => {
           }
         }
 
-        return new Response(JSON.stringify({ data: records, sync_log_id: syncLog?.id, mapped: mappedCount }), {
+        return new Response(JSON.stringify({ data: records, sync_log_id: syncLog?.id, mapped: mappedCount, suggestion }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }

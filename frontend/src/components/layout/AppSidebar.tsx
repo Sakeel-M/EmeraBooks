@@ -1,21 +1,15 @@
-import { 
-  Home,
-  CreditCard,
-  FileText,
-  Receipt,
-  Users,
-  Building2,
-  BarChart3,
-  Calculator,
-  BookOpen,
-  Settings,
-  Target,
-  LogOut,
-  Plug,
-  ChevronUp,
-  History,
+import {
+  LayoutDashboard,
   GitCompareArrows,
-  Wallet
+  TrendingUp,
+  TrendingDown,
+  Landmark,
+  BarChart3,
+  Plug,
+  ShieldAlert,
+  Settings,
+  LogOut,
+  ChevronUp,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import emaraLogo from "@/assets/emara-logo-new.png";
@@ -44,52 +38,40 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-
+import { useRiskAlerts } from "@/hooks/useRiskAlerts";
 
 const menuItems = [
-  { title: "Home", url: "/", icon: Home },
-  { title: "Banks & Cards", url: "/banks", icon: CreditCard },
-  { title: "Bills", url: "/bills", icon: FileText },
-  { title: "Invoices", url: "/invoices", icon: Receipt },
-  { title: "Vendors", url: "/vendors", icon: Building2 },
-  { title: "Customers", url: "/customers", icon: Users },
-  { title: "Financials", url: "/financials", icon: BarChart3 },
-  { title: "Accounting", url: "/accounting", icon: Calculator },
-  { title: "Ledger", url: "/ledger", icon: BookOpen },
-  { title: "Budget", url: "/budget", icon: Target },
-  { title: "Payables & Receivables", url: "/payables-receivables", icon: Wallet },
+  { title: "Control Center", url: "/", icon: LayoutDashboard },
   { title: "Reconciliation", url: "/reconciliation", icon: GitCompareArrows },
+  { title: "Revenue Integrity", url: "/revenue", icon: TrendingUp },
+  { title: "Expense Integrity", url: "/expenses", icon: TrendingDown },
+  { title: "Cash & Liquidity", url: "/cash", icon: Landmark },
+  { title: "Financial Reports", url: "/reports", icon: BarChart3 },
   { title: "Integrations", url: "/integrations", icon: Plug },
-  { title: "Sync History", url: "/sync-history", icon: History },
-  { title: "Settings", url: "/settings", icon: Settings },
+  { title: "Risk Monitor", url: "/risk", icon: ShieldAlert, showBadge: true },
+  { title: "Control Settings", url: "/settings", icon: Settings },
 ];
 
-interface AppSidebarProps {
-  bankInfo?: {
-    bank_name: string;
-    currency: string;
-    country: string;
-  };
-}
-
-export function AppSidebar({ bankInfo }: AppSidebarProps) {
+export function AppSidebar() {
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
   const navigate = useNavigate();
-  
+  const { totalOpen } = useRiskAlerts();
 
   const { data: user } = useQuery({
-    queryKey: ['current-user'],
+    queryKey: ["current-user"],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       return user;
     },
   });
 
   const getUserName = () => {
     if (user?.user_metadata?.full_name) return user.user_metadata.full_name;
-    if (user?.email) return user.email.split('@')[0];
-    return 'User';
+    if (user?.email) return user.email.split("@")[0];
+    return "User";
   };
 
   const getUserInitials = () => {
@@ -114,31 +96,40 @@ export function AppSidebar({ bankInfo }: AppSidebarProps) {
           <div className="px-4 py-3 flex items-center justify-center">
             {!isCollapsed ? (
               <div className="flex items-center gap-2">
-                <img src={emaraLogo} alt="EMARA" className="h-10 w-auto object-contain flex-shrink-0" />
+                <img
+                  src={emaraLogo}
+                  alt="EMARA"
+                  className="h-10 w-auto object-contain flex-shrink-0"
+                />
                 <div className="flex flex-col leading-tight">
                   <span className="text-xs font-semibold text-sidebar-foreground/80 uppercase tracking-wide">
-                    AI Accounting
+                    Financial Controls
                   </span>
                   <span className="text-xs font-semibold text-sidebar-foreground/80 uppercase tracking-wide">
-                    Partner
+                    Platform
                   </span>
                 </div>
               </div>
             ) : (
-              <img src={emaraLogo} alt="EMARA" className="h-8 w-8 object-contain" />
+              <img
+                src={emaraLogo}
+                alt="EMARA"
+                className="h-8 w-8 object-contain"
+              />
             )}
           </div>
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/70">Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-sidebar-foreground/70">
+            Navigation
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink
-
                       to={item.url}
                       end={item.url === "/"}
                       className="flex items-center gap-3 px-3 py-2 rounded-lg text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
@@ -146,7 +137,17 @@ export function AppSidebar({ bankInfo }: AppSidebarProps) {
                     >
                       <item.icon className="w-5 h-5 flex-shrink-0" />
                       {!isCollapsed && (
-                        <span className="flex-1">{item.title}</span>
+                        <>
+                          <span className="flex-1">{item.title}</span>
+                          {item.showBadge && totalOpen > 0 && (
+                            <Badge
+                              variant="destructive"
+                              className="h-5 min-w-[20px] px-1.5 text-xs"
+                            >
+                              {totalOpen > 99 ? "99+" : totalOpen}
+                            </Badge>
+                          )}
+                        </>
                       )}
                     </NavLink>
                   </SidebarMenuButton>
@@ -158,24 +159,12 @@ export function AppSidebar({ bankInfo }: AppSidebarProps) {
       </SidebarContent>
 
       <SidebarFooter>
-        {bankInfo && !isCollapsed && (
-          <div className="px-4 py-3 border-t border-sidebar-border">
-            <div className="flex items-center gap-2 text-sm">
-              <div className="w-2 h-2 rounded-full bg-sidebar-primary animate-pulse" />
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-sidebar-foreground truncate">{bankInfo.bank_name}</p>
-                <p className="text-xs text-sidebar-foreground/70">
-                  {bankInfo.currency} • {bankInfo.country}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-        
         {user && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <div className={`px-4 py-3 border-t border-sidebar-border cursor-pointer hover:bg-sidebar-accent/50 transition-colors ${!isCollapsed ? '' : 'flex justify-center'}`}>
+              <div
+                className={`px-4 py-3 border-t border-sidebar-border cursor-pointer hover:bg-sidebar-accent/50 transition-colors ${!isCollapsed ? "" : "flex justify-center"}`}
+              >
                 <div className="flex items-center gap-3">
                   <Avatar className="h-8 w-8 flex-shrink-0">
                     <AvatarImage src={user.user_metadata?.avatar_url} />
@@ -199,12 +188,12 @@ export function AppSidebar({ bankInfo }: AppSidebarProps) {
                 </div>
               </div>
             </DropdownMenuTrigger>
-            <DropdownMenuContent 
-              side="top" 
-              align="end" 
+            <DropdownMenuContent
+              side="top"
+              align="end"
               className="w-56 bg-popover z-50"
             >
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 onClick={() => navigate("/settings")}
                 className="cursor-pointer"
               >
@@ -212,7 +201,7 @@ export function AppSidebar({ bankInfo }: AppSidebarProps) {
                 Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 onClick={handleLogout}
                 className="cursor-pointer text-destructive focus:text-destructive"
               >

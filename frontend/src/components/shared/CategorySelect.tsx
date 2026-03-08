@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { flaskApi } from "@/lib/flaskApi";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -22,30 +22,13 @@ export function CategorySelect({ value, onChange, type, placeholder = "Select ca
 
   const { data: categories = [] } = useQuery({
     queryKey: ["categories", type],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("categories")
-        .select("*")
-        .or(`type.eq.${type},type.eq.all`)
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => flaskApi.get<any[]>(`/categories?type=${type}`),
   });
 
   const handleCreate = async () => {
     if (!newCategory.trim()) return;
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      
-      const { error } = await supabase.from("categories").insert({
-        name: newCategory.trim(),
-        type,
-        user_id: user.id,
-      });
-      if (error) throw error;
-      
+      await flaskApi.post("/categories", { name: newCategory.trim(), type });
       onChange(newCategory.trim());
       setNewCategory("");
       setIsCreating(false);
@@ -68,7 +51,7 @@ export function CategorySelect({ value, onChange, type, placeholder = "Select ca
           autoFocus
         />
         <Button type="button" size="sm" onClick={handleCreate}>Add</Button>
-        <Button type="button" size="sm" variant="ghost" onClick={() => setIsCreating(false)}>✕</Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setIsCreating(false)}>&#10005;</Button>
       </div>
     );
   }
@@ -82,7 +65,6 @@ export function CategorySelect({ value, onChange, type, placeholder = "Select ca
         <SelectContent>
           <SelectItem value="uncategorized">Uncategorized</SelectItem>
 
-          {/* Suggested Sectors Group */}
           <SelectGroup>
             <SelectLabel className="text-xs text-muted-foreground">Suggested Sectors</SelectLabel>
             {PREDEFINED_SECTORS.map((sector) => (
@@ -92,11 +74,10 @@ export function CategorySelect({ value, onChange, type, placeholder = "Select ca
             ))}
           </SelectGroup>
 
-          {/* Custom Categories Group */}
           {categories.length > 0 && (
             <SelectGroup>
               <SelectLabel className="text-xs text-muted-foreground">Your Categories</SelectLabel>
-              {categories.map((cat) => (
+              {categories.map((cat: any) => (
                 <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
               ))}
             </SelectGroup>

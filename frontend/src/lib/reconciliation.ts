@@ -1,4 +1,4 @@
-// Reconciliation Logic Utilities — Internal Ledger Matching (Digits-style)
+// Reconciliation Logic Utilities — Multi-Pass Matching Engine
 
 export interface BankTransaction {
   id: string;
@@ -22,7 +22,8 @@ export interface ReconciliationSettings {
   matchByAmount: boolean;
   matchByDate: boolean;
   matchByDescription: boolean;
-  dateTolerance: number;
+  matchSign: boolean;           // income txns match invoices; expense txns match bills
+  dateTolerance: number;        // days: within tolerance = MATCH, not a flag
   amountTolerance: 'exact' | 'cents' | 'percent';
   aiMatching: boolean;
 }
@@ -36,6 +37,8 @@ export interface MatchedItem {
   ledgerDescription: string;
   ledgerAmount: number;
   ledgerEntryId: string;
+  matchQuality: 'exact' | 'near';   // 'near' = matched within date tolerance
+  daysDiff?: number;                  // days offset when matchQuality = 'near'
 }
 
 export interface FlaggedItem {
@@ -43,7 +46,7 @@ export interface FlaggedItem {
   date: string;
   description: string;
   amount: number;
-  flagType: 'missing_in_ledger' | 'missing_in_statement' | 'amount_mismatch' | 'date_mismatch' | 'duplicate';
+  flagType: 'missing_in_ledger' | 'missing_in_statement' | 'amount_mismatch' | 'date_mismatch' | 'duplicate' | 'bank_transfer';
   ledgerEntryId?: string;
   ledgerAmount?: number;
   ledgerDate?: string;
@@ -59,6 +62,8 @@ export interface ReconciliationResults {
   flags: FlaggedItem[];
   unreconciledDifference: number;
 }
+
+// ── Helpers ────────────────────────────────────────────────────────────────
 
 function checkAmountMatch(
   a: number,
@@ -108,6 +113,15 @@ function checkDescriptionMatch(a: string, b: string): boolean {
   return matching.length >= Math.min(wordsA.length, wordsB.length) * 0.5;
 }
 
+/** When matchSign is enabled, statement and ledger entries must share the same sign */
+function sameSign(stmtAmount: number, ledgerAmount: number, settings: ReconciliationSettings): boolean {
+  if (!settings.matchSign) return true;
+  // Both positive (income / invoices) or both negative (expense / bills)
+  return (stmtAmount >= 0 && ledgerAmount >= 0) || (stmtAmount < 0 && ledgerAmount < 0);
+}
+
+// ── Main reconciliation function ────────────────────────────────────────────
+
 export function reconcileTransactions(
   statementTxns: BankTransaction[],
   ledgerEntries: LedgerEntry[],
@@ -119,13 +133,19 @@ export function reconcileTransactions(
   const usedStatementIds = new Set<string>();
   let totalDiscrepancy = 0;
 
-  // Pass 1: exact matches
+  // Wide tolerance for date_mismatch review flags (catches payment-after-invoice patterns)
+  const wideTolerance = Math.max(settings.dateTolerance + 14, 21);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PASS 1: Perfect match — exact amount + exact date (+ desc if enabled)
+  // ─────────────────────────────────────────────────────────────────────────
   for (const stmt of statementTxns) {
     if (usedStatementIds.has(stmt.id)) continue;
     const stmtAmt = Math.abs(stmt.amount);
 
     for (const ledger of ledgerEntries) {
       if (usedLedgerIds.has(ledger.id)) continue;
+      if (!sameSign(stmt.amount, ledger.amount, settings)) continue;
 
       const amtMatch = settings.matchByAmount
         ? checkAmountMatch(stmtAmt, Math.abs(ledger.amount), settings)
@@ -147,14 +167,80 @@ export function reconcileTransactions(
           ledgerDescription: ledger.description,
           ledgerAmount: Math.abs(ledger.amount),
           ledgerEntryId: ledger.id,
+          matchQuality: 'exact',
         });
         usedLedgerIds.add(ledger.id);
         usedStatementIds.add(stmt.id);
         break;
       }
+    }
+  }
 
-      // Amount mismatch
-      if (!amtMatch.isExact && amtMatch.isClose && dateMatch.isExact && descMatch) {
+  // ─────────────────────────────────────────────────────────────────────────
+  // PASS 2: Tolerance match — exact amount + date within dateTolerance
+  // KEY FIX: "within tolerance" = MATCH, not a flag
+  // ─────────────────────────────────────────────────────────────────────────
+  for (const stmt of statementTxns) {
+    if (usedStatementIds.has(stmt.id)) continue;
+    const stmtAmt = Math.abs(stmt.amount);
+
+    for (const ledger of ledgerEntries) {
+      if (usedLedgerIds.has(ledger.id)) continue;
+      if (!sameSign(stmt.amount, ledger.amount, settings)) continue;
+
+      const amtMatch = settings.matchByAmount
+        ? checkAmountMatch(stmtAmt, Math.abs(ledger.amount), settings)
+        : { isExact: true, isClose: true, difference: 0 };
+      const dateMatch = settings.matchByDate
+        ? checkDateMatch(stmt.transaction_date, ledger.date, settings)
+        : { isExact: true, isClose: true, daysDiff: 0 };
+      const descMatch = settings.matchByDescription
+        ? checkDescriptionMatch(stmt.description, ledger.description)
+        : true;
+
+      // Exact amount + date within tolerance → MATCH (not a flag)
+      if (amtMatch.isExact && dateMatch.isClose && !dateMatch.isExact && descMatch) {
+        matched.push({
+          id: stmt.id,
+          statementDate: stmt.transaction_date,
+          statementDescription: stmt.description,
+          statementAmount: stmtAmt,
+          ledgerDate: ledger.date,
+          ledgerDescription: ledger.description,
+          ledgerAmount: Math.abs(ledger.amount),
+          ledgerEntryId: ledger.id,
+          matchQuality: 'near',
+          daysDiff: dateMatch.daysDiff,
+        });
+        usedLedgerIds.add(ledger.id);
+        usedStatementIds.add(stmt.id);
+        break;
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PASS 3: Amount mismatch — close amount + date within tolerance
+  // ─────────────────────────────────────────────────────────────────────────
+  for (const stmt of statementTxns) {
+    if (usedStatementIds.has(stmt.id)) continue;
+    const stmtAmt = Math.abs(stmt.amount);
+
+    for (const ledger of ledgerEntries) {
+      if (usedLedgerIds.has(ledger.id)) continue;
+      if (!sameSign(stmt.amount, ledger.amount, settings)) continue;
+
+      const amtMatch = settings.matchByAmount
+        ? checkAmountMatch(stmtAmt, Math.abs(ledger.amount), settings)
+        : { isExact: true, isClose: true, difference: 0 };
+      const dateMatch = settings.matchByDate
+        ? checkDateMatch(stmt.transaction_date, ledger.date, settings)
+        : { isExact: true, isClose: true, daysDiff: 0 };
+      const descMatch = settings.matchByDescription
+        ? checkDescriptionMatch(stmt.description, ledger.description)
+        : true;
+
+      if (!amtMatch.isExact && amtMatch.isClose && dateMatch.isClose && descMatch) {
         flags.push({
           id: stmt.id,
           date: stmt.transaction_date,
@@ -170,9 +256,28 @@ export function reconcileTransactions(
         usedStatementIds.add(stmt.id);
         break;
       }
+    }
+  }
 
-      // Date mismatch
-      if (amtMatch.isExact && !dateMatch.isExact && dateMatch.isClose && descMatch) {
+  // ─────────────────────────────────────────────────────────────────────────
+  // PASS 4: Wide date match — exact amount + date within wideTolerance
+  // Catches invoices paid 7-21 days after issue — flagged for review, not as error
+  // ─────────────────────────────────────────────────────────────────────────
+  const wideSettings = { ...settings, dateTolerance: wideTolerance };
+  for (const stmt of statementTxns) {
+    if (usedStatementIds.has(stmt.id)) continue;
+    const stmtAmt = Math.abs(stmt.amount);
+
+    for (const ledger of ledgerEntries) {
+      if (usedLedgerIds.has(ledger.id)) continue;
+      if (!sameSign(stmt.amount, ledger.amount, settings)) continue;
+
+      const amtMatch = settings.matchByAmount
+        ? checkAmountMatch(stmtAmt, Math.abs(ledger.amount), settings)
+        : { isExact: true, isClose: true, difference: 0 };
+      const wideDateMatch = checkDateMatch(stmt.transaction_date, ledger.date, wideSettings);
+
+      if (amtMatch.isExact && wideDateMatch.isClose) {
         flags.push({
           id: stmt.id,
           date: stmt.transaction_date,
@@ -181,7 +286,7 @@ export function reconcileTransactions(
           flagType: 'date_mismatch',
           ledgerEntryId: ledger.id,
           ledgerDate: ledger.date,
-          daysDiff: dateMatch.daysDiff,
+          daysDiff: wideDateMatch.daysDiff,
         });
         usedLedgerIds.add(ledger.id);
         usedStatementIds.add(stmt.id);
@@ -190,7 +295,9 @@ export function reconcileTransactions(
     }
   }
 
-  // Missing in ledger
+  // ─────────────────────────────────────────────────────────────────────────
+  // PASS 5: Missing in ledger
+  // ─────────────────────────────────────────────────────────────────────────
   for (const stmt of statementTxns) {
     if (!usedStatementIds.has(stmt.id)) {
       flags.push({
@@ -203,7 +310,9 @@ export function reconcileTransactions(
     }
   }
 
-  // Missing in statement
+  // ─────────────────────────────────────────────────────────────────────────
+  // PASS 6: Missing in statement
+  // ─────────────────────────────────────────────────────────────────────────
   for (const ledger of ledgerEntries) {
     if (!usedLedgerIds.has(ledger.id)) {
       flags.push({
@@ -217,7 +326,9 @@ export function reconcileTransactions(
     }
   }
 
-  // Duplicates in statement
+  // ─────────────────────────────────────────────────────────────────────────
+  // PASS 7: Duplicates in statement
+  // ─────────────────────────────────────────────────────────────────────────
   const seen = new Map<string, { txn: BankTransaction; count: number }>();
   for (const t of statementTxns) {
     const key = `${t.transaction_date}-${Math.abs(t.amount).toFixed(2)}-${t.description.toLowerCase().trim()}`;
@@ -238,6 +349,9 @@ export function reconcileTransactions(
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Results
+  // ─────────────────────────────────────────────────────────────────────────
   const totalStatement = statementTxns.length;
   const matchRate = totalStatement > 0 ? (matched.length / totalStatement) * 100 : 0;
 
@@ -258,6 +372,7 @@ export const defaultSettings: ReconciliationSettings = {
   matchByAmount: true,
   matchByDate: true,
   matchByDescription: false,
+  matchSign: true,
   dateTolerance: 3,
   amountTolerance: 'exact',
   aiMatching: false,

@@ -1,11 +1,19 @@
 // In development the Vite dev-server proxy forwards /api → http://127.0.0.1:5000
 // (no CORS needed). For production, set VITE_API_BASE_URL to the absolute backend URL.
+import { supabase } from "@/integrations/supabase/client";
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 const API_SECRET_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
 
-/** Returns headers that include the API key when one is configured. */
-function apiHeaders(extra?: Record<string, string>): Record<string, string> {
+/** Returns headers with Bearer JWT token (preferred) and optional API key (legacy). */
+async function apiHeaders(extra?: Record<string, string>): Promise<Record<string, string>> {
   const headers: Record<string, string> = { ...extra };
+  // Add Supabase JWT as Bearer token
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.access_token) {
+    headers["Authorization"] = `Bearer ${session.access_token}`;
+  }
+  // Keep API key for backward compat
   if (API_SECRET_KEY) headers["X-API-Key"] = API_SECRET_KEY;
   return headers;
 }
@@ -37,7 +45,7 @@ export const api = {
 
     const response = await fetch(`${API_BASE_URL}/upload`, {
       method: "POST",
-      headers: apiHeaders(),
+      headers: await apiHeaders(),
       body: formData,
     });
 
@@ -60,7 +68,7 @@ export const api = {
     try {
       const response = await fetch(`${API_BASE_URL}/analyze`, {
         method: "POST",
-        headers: apiHeaders({ "Content-Type": "application/json" }),
+        headers: await apiHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           data,
           bank_info: bankInfo,
@@ -85,7 +93,7 @@ export const api = {
   },
 
   async healthCheck(): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/health`, { headers: apiHeaders() });
+    const response = await fetch(`${API_BASE_URL}/health`, { headers: await apiHeaders() });
     return response.json();
   },
 
@@ -101,7 +109,7 @@ export const api = {
   }): Promise<any> {
     const response = await fetch(`${API_BASE_URL}/ai-insights`, {
       method: "POST",
-      headers: apiHeaders({ "Content-Type": "application/json" }),
+      headers: await apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(payload),
     });
 
@@ -114,6 +122,99 @@ export const api = {
       throw new Error(msg);
     }
 
+    return response.json();
+  },
+
+  // ── v2 Reconciliation API ────────────────────────────────────────────
+  async reconcile(payload: {
+    source_a_transactions: { id: string; date: string; description: string; amount: number }[];
+    source_b_transactions: { id: string; date: string; description: string; amount: number }[];
+    bills?: any[];
+    invoices?: any[];
+    rules?: any[];
+  }): Promise<{
+    matched: any[];
+    flagged: any[];
+    match_count: number;
+    flag_count: number;
+    match_rate: number;
+    total_discrepancy: number;
+  }> {
+    const response = await fetch(`${API_BASE_URL}/reconcile`, {
+      method: "POST",
+      headers: await apiHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body?.error || `Reconciliation failed (${response.status})`);
+    }
+    return response.json();
+  },
+
+  // ── v2 Risk Score API ────────────────────────────────────────────────
+  async riskScore(metrics: {
+    recon_match_rate: number;
+    alerts_resolved_pct: number;
+    ar_health_pct: number;
+    ap_health_pct: number;
+    data_freshness_pct: number;
+  }): Promise<{
+    overall_score: number;
+    risk_level: string;
+    breakdown: { category: string; raw_score: number; weight: number; weighted_score: number }[];
+  }> {
+    const response = await fetch(`${API_BASE_URL}/risk/score`, {
+      method: "POST",
+      headers: await apiHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ metrics }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body?.error || `Risk scoring failed (${response.status})`);
+    }
+    return response.json();
+  },
+
+  // ── v2 Variance Detection API ────────────────────────────────────────
+  async varianceDetect(payload: {
+    current_value: number;
+    baseline_value: number;
+    std_deviation: number | null;
+    threshold_sigma?: number;
+  }): Promise<{
+    is_anomaly: boolean;
+    z_score: number;
+    direction: string;
+    severity: string;
+  }> {
+    const response = await fetch(`${API_BASE_URL}/variance/detect`, {
+      method: "POST",
+      headers: await apiHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body?.error || `Variance detection failed (${response.status})`);
+    }
+    return response.json();
+  },
+
+  async varianceBaselines(payload: {
+    transactions: { date: string; amount: number; category: string }[];
+    period_type?: string;
+  }): Promise<{
+    baselines: { metric_name: string; value: number; std_dev: number; sample_count: number }[];
+  }> {
+    const response = await fetch(`${API_BASE_URL}/variance/compute-baselines`, {
+      method: "POST",
+      headers: await apiHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body?.error || `Baseline computation failed (${response.status})`);
+    }
     return response.json();
   },
 };

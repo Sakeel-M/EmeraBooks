@@ -22,7 +22,7 @@ interface IntegrationCardProps {
   } | null;
   onConnect: (credentials: any) => Promise<void>;
   onDisconnect: () => Promise<void>;
-  onSync: (entityType: string, direction: 'import' | 'export') => Promise<void>;
+  onSync: (entityType: string, direction: 'import' | 'export') => Promise<{ suggestion?: string; mapped?: number } | void>;
 }
 
 interface CredentialField {
@@ -205,8 +205,16 @@ export function IntegrationCard({
     const syncKey = `${entityType}_${direction}`;
     setSyncingEntity(syncKey);
     try {
-      await onSync(entityType, direction);
-      toast.success(`${direction === 'import' ? 'Imported' : 'Exported'} ${entityType} successfully!`);
+      const result = await onSync(entityType, direction);
+      if (result?.suggestion) {
+        toast.warning(result.suggestion, { duration: 8000 });
+      } else if (direction === 'import' && result?.mapped === 0) {
+        toast.warning(`No ${entityType} found to import from Odoo.`);
+      } else {
+        const count = result?.mapped;
+        const label = count !== undefined ? ` (${count} records)` : '';
+        toast.success(`${direction === 'import' ? 'Imported' : 'Exported'} ${entityType} successfully${label}!`);
+      }
     } catch (error) {
       toast.error(`Sync failed: ${(error as Error).message}`);
     } finally {
@@ -345,9 +353,16 @@ export function IntegrationCard({
                   </DialogHeader>
                   <div className="space-y-4 py-4">
                     <div className="grid grid-cols-2 gap-4">
-                      {['customers', 'vendors', 'invoices', 'bills', 'payments', 'journal_entries', 'products', 'accounts'].map((entityType) => (
+                      {['customers', 'vendors', 'invoices', 'bills', 'payments', 'journal_entries', 'products', 'accounts'].map((entityType) => {
+                        const entityLabels: Record<string, string> = {
+                          invoices: 'Invoices (Sales)',
+                          bills: 'Bills (Purchases)',
+                          journal_entries: 'Journal Entries',
+                        };
+                        const label = entityLabels[entityType] || entityType.charAt(0).toUpperCase() + entityType.slice(1);
+                        return (
                         <div key={entityType} className="space-y-2">
-                          <p className="text-sm font-medium capitalize">{entityType.replace('_', ' ')}</p>
+                          <p className="text-sm font-medium">{label}</p>
                           <div className="flex gap-2">
                             <Button
                               size="sm"
@@ -367,7 +382,8 @@ export function IntegrationCard({
                             </Button>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </DialogContent>

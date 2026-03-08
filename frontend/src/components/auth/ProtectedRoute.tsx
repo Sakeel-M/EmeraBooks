@@ -1,14 +1,8 @@
-import { useEffect, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
-import { database } from "@/lib/database";
-
-const clearLocalStorageData = () => {
-  localStorage.removeItem("currentFileId");
-  localStorage.removeItem("finance_current_file");
-  localStorage.removeItem("finance_uploaded_files");
-};
+import { flaskApi } from "@/lib/flaskApi";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -18,44 +12,52 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
-  const cleanupRanRef = useRef(false);
 
   useEffect(() => {
+    const checkAuth = async (session: any) => {
+      if (!session) {
+        queryClient.clear();
+        setAuthenticated(false);
+        navigate("/auth", { replace: true });
+        setLoading(false);
+        return;
+      }
+
+      setAuthenticated(true);
+
+      // Check if user has an org (skip if already on /onboarding)
+      if (location.pathname !== "/onboarding") {
+        try {
+          const result = await flaskApi.get<{ has_org: boolean }>("/me/org-membership");
+          if (!result?.has_org) {
+            navigate("/onboarding", { replace: true });
+            setLoading(false);
+            return;
+          }
+        } catch {
+          // If Flask API is down, let user through (graceful degradation)
+        }
+      }
+
+      setLoading(false);
+    };
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      checkAuth(session);
+    });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
         queryClient.clear();
-        clearLocalStorageData();
         setAuthenticated(false);
         navigate("/auth", { replace: true });
-      } else {
-        setAuthenticated(true);
-        // Run cleanup once per session
-        if (!cleanupRanRef.current) {
-          cleanupRanRef.current = true;
-          database.cleanupOrphanedData().catch(console.error);
-        }
       }
-      setLoading(false);
-    });
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        queryClient.clear();
-        clearLocalStorageData();
-        navigate("/auth", { replace: true });
-      } else {
-        setAuthenticated(true);
-        if (!cleanupRanRef.current) {
-          cleanupRanRef.current = true;
-          database.cleanupOrphanedData().catch(console.error);
-        }
-      }
-      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate, queryClient]);
+  }, [navigate, queryClient, location.pathname]);
 
   if (loading) {
     return (
