@@ -13,6 +13,7 @@ services:
       test: ["CMD-SHELL", "pg_isready -U emerabooks"]
       interval: 5s
       retries: 5
+    restart: unless-stopped
 
   flask:
     build: ./backend
@@ -21,15 +22,18 @@ services:
     environment:
       DATABASE_URL: postgresql://emerabooks:${DB_PASSWORD:-changeme}@db:5432/emerabooks
       SUPABASE_URL: ${SUPABASE_URL:-https://hnvwrxkjnnepnchjunel.supabase.co}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      API_SECRET_KEY: ${API_SECRET_KEY}
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080,http://localhost:5173}
+      API_SECRET_KEY: ${API_SECRET_KEY:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://app.emarabooks.com,http://localhost:8080,http://localhost:5173}
       FLASK_DEBUG: ${FLASK_DEBUG:-0}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
     depends_on:
       db:
         condition: service_healthy
     volumes:
       - ./backend:/app
+    restart: unless-stopped
 
 volumes:
   pgdata:

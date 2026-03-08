@@ -90,9 +90,81 @@ systemctl reload nginx
 
 ---
 
+## Docker Deployment (Recommended — PostgreSQL + Flask)
+
+### Step 1 — Create `.env` in project root
+
+```bash
+cd /var/www/finance-app
+nano .env
+```
+
+```env
+DB_PASSWORD=your-strong-db-password
+OPENAI_API_KEY=sk-proj-...
+API_SECRET_KEY=your-api-secret-key
+SECRET_KEY=your-flask-session-secret
+ALLOWED_ORIGINS=https://app.emarabooks.com
+SUPABASE_URL=https://hnvwrxkjnnepnchjunel.supabase.co
+FLASK_DEBUG=0
+```
+
+### Step 2 — Start Docker containers
+
+```bash
+cd /var/www/finance-app
+docker compose up -d --build
+```
+
+This starts:
+- **PostgreSQL 16** on port 5433 (internal 5432)
+- **Flask + Gunicorn** on port 5000 (4 workers, 120s timeout)
+
+### Step 3 — Run database migrations
+
+```bash
+docker compose exec flask flask db upgrade
+```
+
+### Step 4 — Rebuild frontend
+
+```bash
+cd /var/www/finance-app/frontend
+npm install && npm run build
+```
+
+### Step 5 — Reload nginx
+
+```bash
+nginx -t && systemctl reload nginx
+```
+
+### Docker Update Deployment (after code push)
+
+```bash
+cd /var/www/finance-app
+git pull origin main
+docker compose up -d --build              # Rebuild Flask container
+docker compose exec flask flask db upgrade  # Run new migrations if any
+cd frontend && npm install && npm run build  # Rebuild frontend
+```
+
+### Docker Useful Commands
+
+```bash
+docker compose ps                          # Check container status
+docker compose logs flask -f --tail 50     # Follow Flask logs
+docker compose logs db -f --tail 50        # Follow PostgreSQL logs
+docker compose restart flask               # Restart Flask only
+docker compose down                        # Stop all containers
+docker compose down -v                     # Stop + delete database volume (DESTRUCTIVE)
+```
+
+---
+
 ## Environment Variables
 
-### Backend — `/var/www/finance-app/backend/.env`
+### Backend — `/var/www/finance-app/backend/.env` (standalone mode)
 
 ```env
 OPENAI_API_KEY=sk-...          # OpenAI API key (required for AI analysis)
@@ -102,6 +174,7 @@ PORT=5000
 SECRET_KEY=<random-hex>        # Flask session secret
 API_SECRET_KEY=<your-key>      # X-API-Key header auth (frontend must match)
 ALLOWED_ORIGINS=https://app.emarabooks.com
+DATABASE_URL=postgresql://emerabooks:changeme@localhost:5433/emerabooks
 ```
 
 ### Frontend — `/var/www/finance-app/frontend/.env`
