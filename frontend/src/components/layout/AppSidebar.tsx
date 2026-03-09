@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import emaraLogo from "@/assets/emara-logo-new.png";
+import emaraBooksLogo from "@/assets/emara-books-logo.png";
 import { useNavigate } from "react-router-dom";
 import {
   Sidebar,
@@ -93,18 +94,13 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarContent>
         <SidebarGroup>
-          <div className="px-4 py-3 flex items-center justify-center">
+          <div className="px-3 py-3 flex items-center justify-center">
             {!isCollapsed ? (
-              <div className="flex items-center gap-1.5">
-                <img
-                  src={emaraLogo}
-                  alt="EMARA"
-                  className="h-9 w-auto object-contain flex-shrink-0"
-                />
-                <span className="text-xl font-bold text-sidebar-foreground tracking-tight" style={{ fontFamily: "'Poppins', sans-serif" }}>
-                  BOOKS
-                </span>
-              </div>
+              <img
+                src={emaraBooksLogo}
+                alt="EMARA BOOKS"
+                className="h-10 w-auto object-contain"
+              />
             ) : (
               <img
                 src={emaraLogo}
