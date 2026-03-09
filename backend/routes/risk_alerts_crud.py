@@ -126,7 +126,7 @@ def get_risk_alerts_summary(client_id):
         Bill.due_date < today,
     ).count()
 
-    total = risk_total + flagged_count + overdue_inv + overdue_bill
+    total = risk_total  # Only actual risk alerts count as "open alerts"
 
     return jsonify({
         **sev,

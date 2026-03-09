@@ -574,56 +574,59 @@ export default function ControlCenter() {
                 <div
                   className="text-center space-y-1 cursor-pointer hover:bg-muted/30 rounded-lg p-2 -m-2 transition-colors"
                   onClick={() => {
-                    if (totalOpen > 0) {
-                      const openAlerts = riskAlerts.filter((a: any) => a.status === "open" || a.status === "new");
-                      const alertTxns = openAlerts.map((a: any) => ({
-                        id: a.id,
-                        transaction_date: a.created_at?.slice(0, 10),
-                        description: a.title || a.description || a.alert_type || "Risk Alert",
-                        amount: a.amount || 0,
-                        category: a.alert_type === "anomaly" ? "Anomaly" : `Risk: ${a.severity}`,
-                      }));
-                      const flaggedTxns = flaggedItems.map((f: any) => ({
-                        id: f.id,
-                        transaction_date: f.source_a_date,
-                        description: f.source_a_desc || f.flag_type || "Flagged Item",
-                        amount: f.source_a_amount || f.difference || 0,
-                        category: "Flagged Reconciliation",
-                      }));
-                      const overdueInvTxns = invoices
-                        .filter((i: any) => i.status !== "paid" && i.status !== "cancelled" && i.due_date && new Date(i.due_date) < new Date())
-                        .map((i: any) => ({
-                          id: i.id,
-                          transaction_date: i.due_date,
-                          description: `Invoice ${i.invoice_number || ""} — ${i.v2_customers?.name || "Unknown"}`.trim(),
-                          amount: i.total || 0,
-                          category: "Overdue Invoice",
+                    {
+                      const allItemsTotal = totalOpen + (breakdown.flaggedRecon || 0) + (breakdown.overdueInvoices || 0) + (breakdown.overdueBills || 0);
+                      if (allItemsTotal > 0) {
+                        const openAlerts = riskAlerts.filter((a: any) => a.status === "open" || a.status === "new");
+                        const alertTxns = openAlerts.map((a: any) => ({
+                          id: a.id,
+                          transaction_date: a.created_at?.slice(0, 10),
+                          description: a.title || a.description || a.alert_type || "Risk Alert",
+                          amount: a.amount || 0,
+                          category: a.alert_type === "anomaly" ? "Anomaly" : `Risk: ${a.severity}`,
                         }));
-                      const overdueBillTxns = bills
-                        .filter((b: any) => b.status !== "paid" && b.status !== "cancelled" && b.due_date && new Date(b.due_date) < new Date())
-                        .map((b: any) => ({
-                          id: b.id,
-                          transaction_date: b.due_date,
-                          description: `Bill ${b.bill_number || ""} — ${b.v2_vendors?.name || "Unknown"}`.trim(),
-                          amount: b.total || 0,
-                          category: "Overdue Bill",
+                        const flaggedTxns = flaggedItems.map((f: any) => ({
+                          id: f.id,
+                          transaction_date: f.source_a_date,
+                          description: f.source_a_desc || f.flag_type || "Flagged Item",
+                          amount: f.source_a_amount || f.difference || 0,
+                          category: "Flagged Reconciliation",
                         }));
+                        const overdueInvTxns = invoices
+                          .filter((i: any) => i.status !== "paid" && i.status !== "cancelled" && i.due_date && new Date(i.due_date) < new Date())
+                          .map((i: any) => ({
+                            id: i.id,
+                            transaction_date: i.due_date,
+                            description: `Invoice ${i.invoice_number || ""} — ${i.v2_customers?.name || "Unknown"}`.trim(),
+                            amount: i.total || 0,
+                            category: "Overdue Invoice",
+                          }));
+                        const overdueBillTxns = bills
+                          .filter((b: any) => b.status !== "paid" && b.status !== "cancelled" && b.due_date && new Date(b.due_date) < new Date())
+                          .map((b: any) => ({
+                            id: b.id,
+                            transaction_date: b.due_date,
+                            description: `Bill ${b.bill_number || ""} — ${b.v2_vendors?.name || "Unknown"}`.trim(),
+                            amount: b.total || 0,
+                            category: "Overdue Bill",
+                          }));
 
-                      const summaryItems: { label: string; value: string }[] = [];
-                      if (breakdown.riskAlerts > 0) summaryItems.push({ label: "Risk Alerts", value: String(breakdown.riskAlerts) });
-                      if (breakdown.anomalies > 0) summaryItems.push({ label: "Anomalies", value: String(breakdown.anomalies) });
-                      if (breakdown.flaggedRecon > 0) summaryItems.push({ label: "Flagged Reconciliation", value: String(breakdown.flaggedRecon) });
-                      if (breakdown.overdueInvoices > 0) summaryItems.push({ label: "Overdue Invoices", value: String(breakdown.overdueInvoices) });
-                      if (breakdown.overdueBills > 0) summaryItems.push({ label: "Overdue Bills", value: String(breakdown.overdueBills) });
+                        const summaryItems: { label: string; value: string }[] = [];
+                        if (breakdown.riskAlerts > 0) summaryItems.push({ label: "Risk Alerts", value: String(breakdown.riskAlerts) });
+                        if (breakdown.anomalies > 0) summaryItems.push({ label: "Anomalies", value: String(breakdown.anomalies) });
+                        if (breakdown.flaggedRecon > 0) summaryItems.push({ label: "Flagged Reconciliation", value: String(breakdown.flaggedRecon) });
+                        if (breakdown.overdueInvoices > 0) summaryItems.push({ label: "Overdue Invoices", value: String(breakdown.overdueInvoices) });
+                        if (breakdown.overdueBills > 0) summaryItems.push({ label: "Overdue Bills", value: String(breakdown.overdueBills) });
 
-                      setDrillDown({
-                        title: "All Open Alerts",
-                        description: `${totalOpen} item(s) requiring attention`,
-                        transactions: [...alertTxns, ...flaggedTxns, ...overdueInvTxns, ...overdueBillTxns],
-                        summary: summaryItems,
-                      });
-                    } else {
-                      navigate("/risk");
+                        setDrillDown({
+                          title: "All Open Alerts",
+                          description: `${totalOpen} risk alert(s) + ${allItemsTotal - totalOpen} flags requiring attention`,
+                          transactions: [...alertTxns, ...flaggedTxns, ...overdueInvTxns, ...overdueBillTxns],
+                          summary: summaryItems,
+                        });
+                      } else {
+                        navigate("/risk");
+                      }
                     }
                   }}
                 >
@@ -637,7 +640,7 @@ export default function ControlCenter() {
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {totalOpen > 0
-                      ? `${bySeverity.critical > 0 ? `${bySeverity.critical} critical · ` : ""}${breakdown.flaggedRecon > 0 ? `${breakdown.flaggedRecon} flagged` : "Review needed"}`
+                      ? `${bySeverity.critical > 0 ? `${bySeverity.critical} critical · ` : ""}${bySeverity.high > 0 ? `${bySeverity.high} high · ` : ""}${bySeverity.low > 0 ? `${bySeverity.low} low` : "Review needed"}`
                       : "All clear"}
                   </p>
                 </div>
@@ -1407,7 +1410,7 @@ export default function ControlCenter() {
               </div>
             </CardHeader>
             <CardContent>
-              {totalOpen === 0 ? (
+              {totalOpen === 0 && breakdown.flaggedRecon === 0 && breakdown.overdueInvoices === 0 && breakdown.overdueBills === 0 ? (
                 <div className="flex items-center gap-3 py-6 justify-center">
                   <div className="rounded-full bg-green-50 p-3">
                     <CheckCircle2 className="h-6 w-6 text-green-600" />
