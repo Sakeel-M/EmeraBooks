@@ -95,20 +95,15 @@ export function AppSidebar() {
         <SidebarGroup>
           <div className="px-4 py-3 flex items-center justify-center">
             {!isCollapsed ? (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <img
                   src={emaraLogo}
                   alt="EMARA"
-                  className="h-10 w-auto object-contain flex-shrink-0"
+                  className="h-9 w-auto object-contain flex-shrink-0"
                 />
-                <div className="flex flex-col leading-tight">
-                  <span className="text-xs font-semibold text-sidebar-foreground/80 uppercase tracking-wide">
-                    Financial Controls
-                  </span>
-                  <span className="text-xs font-semibold text-sidebar-foreground/80 uppercase tracking-wide">
-                    Platform
-                  </span>
-                </div>
+                <span className="text-xl font-bold text-sidebar-foreground tracking-tight" style={{ fontFamily: "'Poppins', sans-serif" }}>
+                  BOOKS
+                </span>
               </div>
             ) : (
               <img
