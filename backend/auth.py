@@ -1,14 +1,12 @@
 """Auth middleware — verifies Supabase access tokens via Supabase Auth API."""
 import os
-import logging
 from functools import wraps
 import requests
 from flask import request, g, jsonify
 
-logger = logging.getLogger(__name__)
-
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://hnvwrxkjnnepnchjunel.supabase.co")
-SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhudndyeGtqbm5lcG5jaGp1bmVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5NTAwNTksImV4cCI6MjA3ODUyNjA1OX0.O1nrpKaT0zd2KW5CixqyM8GqMQ1FruGn9bTz66Bhxcs")
+_DEFAULT_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhudndyeGtqbm5lcG5jaGp1bmVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5NTAwNTksImV4cCI6MjA3ODUyNjA1OX0.O1nrpKaT0zd2KW5CixqyM8GqMQ1FruGn9bTz66Bhxcs"
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY") or _DEFAULT_ANON_KEY
 
 
 def require_auth(f):
@@ -17,7 +15,6 @@ def require_auth(f):
     def decorated(*args, **kwargs):
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
-            print(f"AUTH FAIL: No Bearer token for {request.path} headers={dict(request.headers)}", flush=True)
             return jsonify({"error": "Missing authorization token"}), 401
 
         token = auth_header[7:]  # strip "Bearer "
@@ -34,7 +31,6 @@ def require_auth(f):
             )
 
             if resp.status_code != 200:
-                print(f"AUTH FAIL: path={request.path} supabase_status={resp.status_code} body={resp.text[:200]} token_start={token[:20]}...", flush=True)
                 return jsonify({"error": "Invalid or expired token"}), 401
 
             user_data = resp.json()
