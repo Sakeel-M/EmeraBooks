@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import emaraLogo from "@/assets/emara-logo.png";
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -84,6 +85,9 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-secondary/20 to-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
+          <div className="flex justify-center mb-4">
+            <img src={emaraLogo} alt="EMARA" className="h-20 w-20 rounded-xl" />
+          </div>
           <CardTitle className="text-2xl font-bold text-center">
             {isLogin ? "Welcome Back" : "Create Account"}
           </CardTitle>
