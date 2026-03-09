@@ -287,7 +287,11 @@ export default function ControlCenter() {
     return { total, overdueCount, count: unpaid.length };
   }, [bills]);
 
+  const hasAnyData = uploadedFiles.length > 0 || recentTxns.length > 0;
+
   const riskScore = useMemo(() => {
+    // No data at all → score is 0 (not applicable)
+    if (!hasAnyData) return 0;
     // 1. Reconciliation (30%): match rate from sessions
     const reconFactor = reconStats.matchRate * 0.3;
     // 2. Alert resolution (20%): 0 open = full score
@@ -303,10 +307,10 @@ export default function ControlCenter() {
     // 5. Data freshness (20%): has uploaded files + recent uploads
     const dataFresh = uploadedFiles.length > 0 ? 20 : 0;
     return Math.min(100, Math.round(reconFactor + alertFactor + arFactor + apFactor + dataFresh));
-  }, [reconStats.matchRate, totalOpen, uploadedFiles, arExposure, apExposure]);
+  }, [hasAnyData, reconStats.matchRate, totalOpen, uploadedFiles, arExposure, apExposure]);
 
   const riskLevel =
-    riskScore >= 81 ? "Low Risk" : riskScore >= 61 ? "Medium Risk" : riskScore >= 41 ? "High Risk" : "Critical Risk";
+    !hasAnyData ? "No Data" : riskScore >= 81 ? "Low Risk" : riskScore >= 61 ? "Medium Risk" : riskScore >= 41 ? "High Risk" : "Critical Risk";
 
   const riskColor =
     riskScore >= 81 ? "text-green-600" : riskScore >= 61 ? "text-emerald-500" : riskScore >= 41 ? "text-amber-500" : "text-red-500";
