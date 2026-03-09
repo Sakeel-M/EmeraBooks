@@ -2735,7 +2735,8 @@ function getCategoryStyle(name: string) {
 }
 
 function CashLedgerTab() {
-  const { clientId, currency } = useActiveClient();
+  const { clientId, currency, client } = useActiveClient();
+  const businessSector = client?.industry || null;
   const { startDate, endDate } = useDateRange();
   const queryClient = useQueryClient();
   const [expandedAccounts, setExpandedAccounts] = useState<Record<string, boolean>>({});
@@ -2818,7 +2819,7 @@ function CashLedgerTab() {
       let cat: string;
       if (t.amount > 0) {
         // Income: use resolveIncomeCategory (matches Revenue Integrity page)
-        cat = resolveIncomeCategory(t.category, t.description) || "Business Income";
+        cat = resolveIncomeCategory(t.category, t.description, businessSector) || "Business Income";
       } else {
         // Expense: use getCanonicalCategory (matches Expense Integrity page)
         cat = getCanonicalCategory(t.category, t.counterparty_name || t.description, t.description) || "Uncategorized";

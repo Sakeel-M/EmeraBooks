@@ -110,7 +110,8 @@ import { LineChart, Line } from "recharts";
 // ── Revenue Overview Tab ──────────────────────────────────────────────────
 
 function RevenueOverviewTab() {
-  const { clientId, currency } = useActiveClient();
+  const { clientId, currency, client } = useActiveClient();
+  const businessSector = client?.industry || null;
   const { startDate, endDate } = useDateRange();
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [drillDown, setDrillDown] = useState<{
@@ -323,20 +324,20 @@ function RevenueOverviewTab() {
   const revenueByCategory = useMemo(() => {
     const map: Record<string, number> = {};
     invoices.forEach((i: any) => {
-      const cat = resolveIncomeCategory(i.category, i.v2_customers?.name) || "Other";
+      const cat = resolveIncomeCategory(i.category, i.v2_customers?.name, businessSector) || "Other";
       map[cat] = (map[cat] || 0) + (i.total || 0);
     });
     return Object.entries(map)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 6)
       .map(([name, value]) => ({ name, value }));
-  }, [invoices]);
+  }, [invoices, businessSector]);
 
   // Lookup: category → income transactions (for chart drill-down)
   const txnsByCategory = useMemo(() => {
     const map: Record<string, any[]> = {};
     incomeTxns.forEach((t: any) => {
-      const cat = resolveIncomeCategory(t.category, t.counterparty_name || t.description) || "Other";
+      const cat = resolveIncomeCategory(t.category, t.counterparty_name || t.description, businessSector) || "Other";
       if (!map[cat]) map[cat] = [];
       map[cat].push(t);
     });
@@ -632,7 +633,7 @@ function RevenueOverviewTab() {
                     onClick={(_data: any, index: number) => {
                       const cat = revenueByCategory[index]?.name;
                       if (!cat) return;
-                      const items = txnsByCategory[cat] || invoices.filter((i: any) => (resolveIncomeCategory(i.category, i.v2_customers?.name) || "Other") === cat);
+                      const items = txnsByCategory[cat] || invoices.filter((i: any) => (resolveIncomeCategory(i.category, i.v2_customers?.name, businessSector) || "Other") === cat);
                       setChartDrill({
                         title: cat,
                         description: `${items.length} transaction${items.length !== 1 ? "s" : ""} · ${formatAmount(revenueByCategory[index]?.value || 0, currency)}`,
@@ -801,7 +802,8 @@ const DEFAULT_TEMPLATE: InvoiceTemplate = {
 };
 
 function InvoicesTab() {
-  const { clientId, currency } = useActiveClient();
+  const { clientId, currency, client } = useActiveClient();
+  const businessSector = client?.industry || null;
   const { startDate, endDate } = useDateRange();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -867,11 +869,11 @@ function InvoicesTab() {
   const categoryCounts = useMemo(() => {
     const map: Record<string, number> = {};
     invoices.forEach((i: any) => {
-      const cat = resolveIncomeCategory(i.category, i.v2_customers?.name) || "Other";
+      const cat = resolveIncomeCategory(i.category, i.v2_customers?.name, businessSector) || "Other";
       map[cat] = (map[cat] || 0) + 1;
     });
     return map;
-  }, [invoices]);
+  }, [invoices, businessSector]);
 
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = { all: invoices.length };
@@ -882,7 +884,7 @@ function InvoicesTab() {
   const filtered = useMemo(() => {
     let result = invoices;
     if (statusFilter !== "all") result = result.filter((i: any) => i.status === statusFilter);
-    if (catFilter !== "all") result = result.filter((i: any) => (resolveIncomeCategory(i.category, i.v2_customers?.name) || "Other") === catFilter);
+    if (catFilter !== "all") result = result.filter((i: any) => (resolveIncomeCategory(i.category, i.v2_customers?.name, businessSector) || "Other") === catFilter);
     return result;
   }, [invoices, statusFilter, catFilter]);
 
@@ -1825,7 +1827,8 @@ function ExposureByCustomerChart({ invoices, currency, totalUnpaid }: { invoices
 // ── Customers Tab ─────────────────────────────────────────────────────────
 
 function CustomersTab() {
-  const { clientId, currency } = useActiveClient();
+  const { clientId, currency, client } = useActiveClient();
+  const businessSector = client?.industry || null;
   const { startDate, endDate } = useDateRange();
   const queryClient = useQueryClient();
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -2483,7 +2486,7 @@ function RevenueDrillDownSheet({
     if (type !== "revenue") return [];
     const m: Record<string, number> = {};
     transactions.forEach((t: any) => {
-      const cat = resolveIncomeCategory(t.category, t.counterparty_name || t.description) || "Other";
+      const cat = resolveIncomeCategory(t.category, t.counterparty_name || t.description, businessSector) || "Other";
       m[cat] = (m[cat] || 0) + t.amount;
     });
     const COLORS = [
@@ -3075,7 +3078,7 @@ function InvoiceDetail({
             Category
           </p>
           <Badge variant="outline" className="text-[10px]">
-            {resolveIncomeCategory(invoice.category, invoice.v2_customers?.name)}
+            {resolveIncomeCategory(invoice.category, invoice.v2_customers?.name, businessSector)}
           </Badge>
         </div>
         <div>
@@ -3784,7 +3787,8 @@ function guessAnomalyReasons(monthTxns: any[], prevMonthTxns: any[], status: str
 }
 
 function RevenueVarianceTab() {
-  const { clientId, currency } = useActiveClient();
+  const { clientId, currency, client } = useActiveClient();
+  const businessSector = client?.industry || null;
   const { startDate, endDate } = useDateRange();
   const [drillDown, setDrillDown] = useState<{ type: string; title: string; description: string; data?: any } | null>(null);
 
@@ -4186,7 +4190,7 @@ function RevenueVarianceTab() {
                 // Category breakdown
                 const catBreak: Record<string, { count: number; total: number }> = {};
                 monthTxns.forEach((t: any) => {
-                  const c = resolveIncomeCategory(t.category, t.counterparty_name) || "Other";
+                  const c = resolveIncomeCategory(t.category, t.counterparty_name, businessSector) || "Other";
                   if (!catBreak[c]) catBreak[c] = { count: 0, total: 0 };
                   catBreak[c].count++;
                   catBreak[c].total += t.amount;

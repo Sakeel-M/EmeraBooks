@@ -340,7 +340,8 @@ const INCOME_TRANSFER_RAW = new Set([
 
 export function resolveIncomeCategory(
   rawCategory: string | null | undefined,
-  description: string | null | undefined
+  description: string | null | undefined,
+  businessSector?: string | null
 ): string {
   const desc = (description || "").toLowerCase();
   const raw  = (rawCategory  || "").toLowerCase().trim();
@@ -362,8 +363,6 @@ export function resolveIncomeCategory(
   }
 
   // 2. Internal transfer — own-account movements only (MOBN always = own account in UAE)
-  // NOTE: IBFT/NEFT/RTGS are inter-bank payment methods also used for customer payments,
-  // so they are NOT classified as Internal Transfer here — they fall through to Business Income.
   if (/\b(mobn|inter.?account|own\s*transfer|self\s*transfer|between\s*accounts)\b/i.test(desc)
     || INCOME_TRANSFER_RAW.has(raw)) {
     return "Internal Transfer";
@@ -380,14 +379,26 @@ export function resolveIncomeCategory(
   }
 
   // 5. rawCategory is already an income-safe sector → keep it
-  if (rawCategory && INCOME_SAFE_SECTORS.has(rawCategory)) return rawCategory;
+  //    BUT if user has a business sector set, replace generic "Professional Services"
+  //    and "Business Income" with their actual sector
+  if (rawCategory && INCOME_SAFE_SECTORS.has(rawCategory)) {
+    if (businessSector && (rawCategory === "Professional Services" || rawCategory === "Business Income")) {
+      return businessSector;
+    }
+    return rawCategory;
+  }
 
   // 6. rawCategory maps to an income-safe sector via RAW_CATEGORY_MAP
   const mapped = mapRawBankCategory(rawCategory);
-  if (mapped && INCOME_SAFE_SECTORS.has(mapped)) return mapped;
+  if (mapped && INCOME_SAFE_SECTORS.has(mapped)) {
+    if (businessSector && (mapped === "Professional Services" || mapped === "Business Income")) {
+      return businessSector;
+    }
+    return mapped;
+  }
 
-  // 7. Default for unclassified income
-  return "Business Income";
+  // 7. Default: use business sector if set, otherwise "Business Income"
+  return businessSector || "Business Income";
 }
 
 /**
