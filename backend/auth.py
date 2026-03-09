@@ -17,7 +17,7 @@ def require_auth(f):
     def decorated(*args, **kwargs):
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
-            logger.warning("AUTH: No Bearer token in request to %s", request.path)
+            print(f"AUTH FAIL: No Bearer token for {request.path} headers={dict(request.headers)}", flush=True)
             return jsonify({"error": "Missing authorization token"}), 401
 
         token = auth_header[7:]  # strip "Bearer "
@@ -34,8 +34,7 @@ def require_auth(f):
             )
 
             if resp.status_code != 200:
-                logger.warning("AUTH: Supabase rejected token for %s — status=%s body=%s token_prefix=%s",
-                             request.path, resp.status_code, resp.text[:200], token[:20] + "...")
+                print(f"AUTH FAIL: path={request.path} supabase_status={resp.status_code} body={resp.text[:200]} token_start={token[:20]}...", flush=True)
                 return jsonify({"error": "Invalid or expired token"}), 401
 
             user_data = resp.json()
