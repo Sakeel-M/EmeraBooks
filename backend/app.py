@@ -61,9 +61,11 @@ app.register_blueprint(control_settings_bp)
 # ── Security: restrict CORS to known front-end origins ──────────────────────
 _allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 if _allowed_origins:
-    CORS(app, origins=_allowed_origins)
+    CORS(app, origins=_allowed_origins,
+         allow_headers=["Authorization", "Content-Type", "X-API-Key"],
+         supports_credentials=True)
 else:
-    CORS(app)  # Fallback: open (development mode)
+    CORS(app, supports_credentials=True)  # Fallback: open (development mode)
 
 # ── Security: file-size limit (50 MB) ───────────────────────────────────────
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
