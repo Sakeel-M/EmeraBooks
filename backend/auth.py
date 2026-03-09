@@ -1,10 +1,14 @@
 """Auth middleware — verifies Supabase access tokens via Supabase Auth API."""
 import os
+import logging
 from functools import wraps
 import requests
 from flask import request, g, jsonify
 
+logger = logging.getLogger(__name__)
+
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://hnvwrxkjnnepnchjunel.supabase.co")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhudndyeGtqbm5lcG5jaGp1bmVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5NTAwNTksImV4cCI6MjA3ODUyNjA1OX0.O1nrpKaT0zd2KW5CixqyM8GqMQ1FruGn9bTz66Bhxcs")
 
 
 def require_auth(f):
@@ -13,6 +17,7 @@ def require_auth(f):
     def decorated(*args, **kwargs):
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
+            logger.warning("AUTH: No Bearer token in request to %s", request.path)
             return jsonify({"error": "Missing authorization token"}), 401
 
         token = auth_header[7:]  # strip "Bearer "
@@ -23,12 +28,14 @@ def require_auth(f):
                 f"{SUPABASE_URL}/auth/v1/user",
                 headers={
                     "Authorization": f"Bearer {token}",
-                    "apikey": os.getenv("SUPABASE_ANON_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhudndyeGtqbm5lcG5jaGp1bmVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5NTAwNTksImV4cCI6MjA3ODUyNjA1OX0.O1nrpKaT0zd2KW5CixqyM8GqMQ1FruGn9bTz66Bhxcs"),
+                    "apikey": SUPABASE_ANON_KEY,
                 },
                 timeout=10,
             )
 
             if resp.status_code != 200:
+                logger.warning("AUTH: Supabase rejected token for %s — status=%s body=%s token_prefix=%s",
+                             request.path, resp.status_code, resp.text[:200], token[:20] + "...")
                 return jsonify({"error": "Invalid or expired token"}), 401
 
             user_data = resp.json()
