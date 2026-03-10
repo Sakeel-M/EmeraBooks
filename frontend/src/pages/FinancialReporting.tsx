@@ -75,7 +75,7 @@ import { useQuery } from "@tanstack/react-query";
 import { database } from "@/lib/database";
 import { formatAmount } from "@/lib/utils";
 import { FC } from "@/components/shared/FormattedCurrency";
-import { getCanonicalCategory } from "@/lib/sectorMapping";
+import { getCanonicalCategory, resolveIncomeCategory } from "@/lib/sectorMapping";
 import { TransactionDetailSheet } from "@/components/shared/TransactionDetailSheet";
 import {
   format,
@@ -99,6 +99,9 @@ const NON_PL_CATEGORIES = [
   "owner draw",
   "owner contribution",
   "opening balance",
+  "atm & cash deposits",
+  "atm & withdrawals",
+  "finance & banking",
 ];
 
 function isPlCategory(cat: string): boolean {
@@ -207,7 +210,8 @@ function getSmartDefaultPeriod(globalStart: string): PeriodKey {
 }
 
 function ProfitLossTab() {
-  const { clientId, currency } = useActiveClient();
+  const { clientId, currency, client } = useActiveClient();
+  const businessSector = client?.industry || null;
   const { startDate: globalStart } = useDateRange();
   const [period, setPeriod] = useState<PeriodKey>(() => getSmartDefaultPeriod(globalStart));
   const [periodInitialized, setPeriodInitialized] = useState(!!globalStart);
@@ -260,7 +264,10 @@ function ProfitLossTab() {
     let inc = 0;
     let exp = 0;
     prevTransactions.forEach((t: any) => {
-      const cat = getCanonicalCategory(t.category, t.description, t.description) || "Other";
+      const entity = t.counterparty_name || t.description;
+      const cat = t.amount > 0
+        ? resolveIncomeCategory(t.category, entity, businessSector)
+        : getCanonicalCategory(t.category, entity, t.description) || "Other";
       if (!isPlCategory(cat)) return;
       if (t.amount > 0) inc += t.amount;
       else exp += Math.abs(t.amount);
@@ -277,7 +284,10 @@ function ProfitLossTab() {
       const monthly: Record<string, { income: number; expense: number }> = {};
 
       transactions.forEach((t: any) => {
-        const cat = getCanonicalCategory(t.category, t.description, t.description) || "Other";
+        const entity = t.counterparty_name || t.description;
+        const cat = t.amount > 0
+          ? resolveIncomeCategory(t.category, entity, businessSector)
+          : getCanonicalCategory(t.category, entity, t.description) || "Other";
         if (!isPlCategory(cat)) return;
 
         const month = t.transaction_date?.slice(0, 7);
@@ -313,7 +323,7 @@ function ProfitLossTab() {
         expenseByCategory: Object.entries(expByCat).sort(([, a], [, b]) => b - a),
         monthlyData: monthlyArr,
       };
-    }, [transactions]);
+    }, [transactions, businessSector]);
 
   const netIncome = income - expenses;
   const margin = income > 0 ? (netIncome / income) * 100 : 0;
@@ -483,8 +493,8 @@ function ProfitLossTab() {
 
       {/* Category Breakdown */}
       <div className="grid gap-4 md:grid-cols-2">
-        <CategoryTable title="Revenue by Category" rows={incomeByCategory} currency={currency} color="text-green-600" total={income} onRowClick={(cat) => setDrillDown({ title: `Revenue — ${cat}`, transactions: transactions.filter((t: any) => t.amount > 0 && (getCanonicalCategory(t.category, t.description, t.description) || "Other") === cat) })} />
-        <CategoryTable title="Expenses by Category" rows={expenseByCategory} currency={currency} color="text-red-500" total={expenses} onRowClick={(cat) => setDrillDown({ title: `Expenses — ${cat}`, transactions: transactions.filter((t: any) => t.amount < 0 && (getCanonicalCategory(t.category, t.description, t.description) || "Other") === cat) })} />
+        <CategoryTable title="Revenue by Category" rows={incomeByCategory} currency={currency} color="text-green-600" total={income} onRowClick={(cat) => setDrillDown({ title: `Revenue — ${cat}`, transactions: transactions.filter((t: any) => t.amount > 0 && resolveIncomeCategory(t.category, t.counterparty_name || t.description, businessSector) === cat) })} />
+        <CategoryTable title="Expenses by Category" rows={expenseByCategory} currency={currency} color="text-red-500" total={expenses} onRowClick={(cat) => setDrillDown({ title: `Expenses — ${cat}`, transactions: transactions.filter((t: any) => t.amount < 0 && (getCanonicalCategory(t.category, t.counterparty_name || t.description, t.description) || "Other") === cat) })} />
       </div>
 
       <TransactionDetailSheet
@@ -502,7 +512,8 @@ function ProfitLossTab() {
 // ── Balance Sheet Tab ─────────────────────────────────────────────────────
 
 function BalanceSheetTab() {
-  const { clientId, currency } = useActiveClient();
+  const { clientId, currency, client } = useActiveClient();
+  const businessSector = client?.industry || null;
   const { startDate: globalStart, endDate: globalEnd } = useDateRange();
   const navigate = useNavigate();
   const [period, setPeriod] = useState<PeriodKey>("this-year");
@@ -567,7 +578,10 @@ function BalanceSheetTab() {
     let inc = 0;
     let exp = 0;
     transactions.forEach((t: any) => {
-      const cat = getCanonicalCategory(t.category, t.description, t.description) || "Other";
+      const entity = t.counterparty_name || t.description;
+      const cat = t.amount > 0
+        ? resolveIncomeCategory(t.category, entity, businessSector)
+        : getCanonicalCategory(t.category, entity, t.description) || "Other";
       if (!isPlCategory(cat)) return;
       if (t.amount > 0) inc += t.amount;
       else exp += Math.abs(t.amount);
@@ -1017,7 +1031,8 @@ function CashFlowTab() {
 // ── Ratios Tab ────────────────────────────────────────────────────────────
 
 function RatiosTab() {
-  const { clientId, currency } = useActiveClient();
+  const { clientId, currency, client } = useActiveClient();
+  const businessSector = client?.industry || null;
   const { startDate: globalStart, endDate: globalEnd } = useDateRange();
 
   const { data: bankAccounts = [] } = useQuery({
@@ -1068,7 +1083,10 @@ function RatiosTab() {
     let rev = 0;
     let exp = 0;
     transactions.forEach((t: any) => {
-      const cat = getCanonicalCategory(t.category, t.description, t.description) || "Other";
+      const entity = t.counterparty_name || t.description;
+      const cat = t.amount > 0
+        ? resolveIncomeCategory(t.category, entity, businessSector)
+        : getCanonicalCategory(t.category, entity, t.description) || "Other";
       if (!isPlCategory(cat)) return;
       if (t.amount > 0) rev += t.amount;
       else exp += Math.abs(t.amount);
@@ -1209,7 +1227,7 @@ function CustomFiltersTab() {
     if (txnType === "expense") list = list.filter((t: any) => t.amount < 0);
     if (txnType === "transfer") {
       list = list.filter((t: any) => {
-        const cat = getCanonicalCategory(t.category, t.description, t.description) || "";
+        const cat = getCanonicalCategory(t.category, t.counterparty_name || t.description, t.description) || "";
         return !isPlCategory(cat);
       });
     }
@@ -1218,7 +1236,7 @@ function CustomFiltersTab() {
     if (categoryFilter) {
       const catLower = categoryFilter.toLowerCase();
       list = list.filter((t: any) => {
-        const cat = getCanonicalCategory(t.category, t.description, t.description) || "";
+        const cat = getCanonicalCategory(t.category, t.counterparty_name || t.description, t.description) || "";
         return cat.toLowerCase().includes(catLower);
       });
     }
