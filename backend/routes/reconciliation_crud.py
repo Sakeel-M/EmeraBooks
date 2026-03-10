@@ -159,9 +159,14 @@ def update_item(item_id):
         return jsonify({"error": "Access denied"}), 403
 
     data = request.get_json()
-    for key in ("status", "resolution", "match_quality"):
+    for key in ("status", "resolution", "match_quality", "flag_type",
+                "source_b_desc", "source_b_date", "source_b_amount"):
         if key in data:
             setattr(item, key, data[key])
+
+    # Handle source_b_id separately (needs UUID conversion)
+    if "source_b_id" in data:
+        item.source_b_id = uuid.UUID(data["source_b_id"]) if data["source_b_id"] else None
 
     if data.get("status") in ("matched", "manual_match", "excluded"):
         item.resolved_by = uuid.UUID(g.user_id)

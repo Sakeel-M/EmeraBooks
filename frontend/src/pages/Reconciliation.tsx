@@ -558,10 +558,11 @@ function BankReconciliationTab() {
         (i) => i.status === "matched" || i.status === "manual_match",
       ).length;
       const finalFlagged = items.filter((i) => i.status === "flagged").length;
-      const finalRate = items.length > 0 ? (finalMatched / items.length) * 100 : 0;
+      const activeItems = finalMatched + finalFlagged;
+      const finalRate = activeItems > 0 ? (finalMatched / activeItems) * 100 : 0;
 
       await database.updateReconciliationSession(selectedSessionId, {
-        status: "completed",
+        status: "finalized",
         match_count: finalMatched,
         flag_count: finalFlagged,
         match_rate: finalRate,
@@ -764,7 +765,7 @@ function BankReconciliationTab() {
                         {format(new Date(s.period_end), "MMM d, yyyy")}
                       </span>
                       <Badge
-                        variant={s.status === "completed" ? "default" : "secondary"}
+                        variant={s.status === "finalized" ? "default" : "secondary"}
                         className="text-[10px] h-4"
                       >
                         {s.status}
@@ -905,7 +906,7 @@ function BankReconciliationTab() {
                 </div>
                 <Badge
                   variant={
-                    selectedSession.status === "completed"
+                    selectedSession.status === "finalized"
                       ? "default"
                       : selectedSession.status === "in_progress"
                         ? "secondary"
@@ -958,7 +959,7 @@ function BankReconciliationTab() {
                 icon={Target}
                 iconColor="text-primary"
                 label="Match Rate"
-                value={`${(items.length > 0 ? (matchedItems.length / items.length * 100) : 0).toFixed(1)}%`}
+                value={`${((matchedItems.length + flaggedItems.length) > 0 ? (matchedItems.length / (matchedItems.length + flaggedItems.length) * 100) : 0).toFixed(1)}%`}
                 onClick={() => setSummaryDrillDown("rate")}
               />
               <MiniStat
@@ -968,7 +969,7 @@ function BankReconciliationTab() {
                 value={<FC amount={selectedSession.unreconciled_difference} currency={currency} />}
                 onClick={() => setSummaryDrillDown("difference")}
               />
-              {selectedSession.status !== "completed" && (
+              {selectedSession.status !== "finalized" && (
                 <div className="flex items-center">
                   <Button
                     size="sm"
@@ -986,7 +987,7 @@ function BankReconciliationTab() {
                   )}
                 </div>
               )}
-              {selectedSession.status === "completed" && (
+              {selectedSession.status === "finalized" && (
                 <Badge className="bg-green-100 text-green-700 border-green-200 h-8 px-3">
                   <Lock className="h-3.5 w-3.5 mr-1.5" />
                   Finalized
@@ -1103,7 +1104,7 @@ function BankReconciliationTab() {
               </Card>
 
               {/* Bulk actions bar */}
-              {selectedSession?.status !== "completed" && filteredItems.length > 0 && (
+              {selectedSession?.status !== "finalized" && filteredItems.length > 0 && (
                 <div className="flex items-center gap-3 px-3 py-2 bg-muted/40 rounded-lg border">
                   <Checkbox
                     checked={selectedIds.size > 0 && selectedIds.size === filteredItems.length}
@@ -1191,7 +1192,7 @@ function BankReconciliationTab() {
                       <CardContent className="py-3 px-4">
                         <div className="flex items-center gap-4">
                           {/* Checkbox */}
-                          {selectedSession?.status !== "completed" && (
+                          {selectedSession?.status !== "finalized" && (
                             <Checkbox
                               checked={selectedIds.has(item.id)}
                               onCheckedChange={() => toggleSelectItem(item.id)}
@@ -1298,7 +1299,7 @@ function BankReconciliationTab() {
                               </Button>
                             )}
                             {(item.status === "matched" || item.status === "manual_match") &&
-                              selectedSession?.status !== "completed" && (
+                              selectedSession?.status !== "finalized" && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -2022,7 +2023,7 @@ function ItemDetail({
       <Separator />
 
       {/* Resolution actions (for flagged items only) */}
-      {item.status === "flagged" && sessionStatus !== "completed" && (
+      {item.status === "flagged" && sessionStatus !== "finalized" && (
         <div className="space-y-3">
           <div className="space-y-2">
             <Label className="text-xs uppercase tracking-wider text-muted-foreground">
@@ -2056,7 +2057,7 @@ function ItemDetail({
       )}
 
       {/* Unmatch action (for matched items) */}
-      {(item.status === "matched" || item.status === "manual_match") && sessionStatus !== "completed" && (
+      {(item.status === "matched" || item.status === "manual_match") && sessionStatus !== "finalized" && (
         <Button
           variant="outline"
           className="w-full gap-2 text-destructive hover:text-destructive"
@@ -2127,7 +2128,7 @@ function SessionHistory({
             <CardContent className="py-3 px-4">
               <div className="flex items-center gap-4">
                 <div className="flex-shrink-0">
-                  {session.status === "completed" ? (
+                  {session.status === "finalized" ? (
                     <div className="rounded-full bg-green-50 p-1.5">
                       <CheckCircle2 className="h-4 w-4 text-green-500" />
                     </div>
@@ -2168,7 +2169,7 @@ function SessionHistory({
                     <p className="text-[10px] text-muted-foreground">difference</p>
                   </div>
                   <Badge
-                    variant={session.status === "completed" ? "default" : "secondary"}
+                    variant={session.status === "finalized" ? "default" : "secondary"}
                     className="text-[10px]"
                   >
                     {session.status.replace("_", " ")}
