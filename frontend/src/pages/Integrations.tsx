@@ -101,6 +101,10 @@ function ERPTab() {
     return result;
   };
 
+  const connectedCount = connections.filter(
+    (c: any) => c.status === "connected",
+  ).length;
+
   // ── Imported ERP data queries ──
   const hasAnyConnection = connectedCount > 0;
 
@@ -126,10 +130,6 @@ function ERPTab() {
   });
 
   const totalImported = erpInvoices.length + erpBills.length + erpVendors.length + erpCustomers.length;
-
-  const connectedCount = connections.filter(
-    (c: any) => c.status === "connected",
-  ).length;
 
   return (
     <div className="space-y-5">
