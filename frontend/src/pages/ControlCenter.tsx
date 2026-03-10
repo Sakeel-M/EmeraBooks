@@ -59,6 +59,7 @@ import { database } from "@/lib/database";
 import { flaskApi } from "@/lib/flaskApi";
 import { toast } from "sonner";
 import { formatAmount } from "@/lib/utils";
+import { FC } from "@/components/shared/FormattedCurrency";
 import { useNavigate } from "react-router-dom";
 import { format, differenceInDays, parseISO, isAfter } from "date-fns";
 import { getCanonicalCategory } from "@/lib/sectorMapping";
@@ -682,7 +683,7 @@ export default function ControlCenter() {
           {[
             {
               label: "Total Balance",
-              value: formatAmount(totalBalance, currency),
+              value: <FC amount={totalBalance} currency={currency} />,
               icon: Wallet,
               trend: null as number | null,
               onClick: () => {
@@ -690,7 +691,7 @@ export default function ControlCenter() {
                   .filter((a: any) => a.is_active)
                   .map((a: any) => ({
                     label: `${a.bank_name}${a.account_number ? ` ···${a.account_number.slice(-4)}` : ""}`,
-                    value: formatAmount(a.current_balance || 0, a.currency),
+                    value: <FC amount={a.current_balance || 0} currency={a.currency} />,
                   }));
                 setDrillDown({
                   title: "Total Balance — Bank Accounts",
@@ -704,10 +705,7 @@ export default function ControlCenter() {
                               label: i === 0 ? "Transactions" : "Net Flow",
                               value: i === 0
                                 ? String(recentTxns.length)
-                                : formatAmount(
-                                    recentTxns.reduce((s: number, t: any) => s + (t.amount || 0), 0),
-                                    currency,
-                                  ),
+                                : <FC amount={recentTxns.reduce((s: number, t: any) => s + (t.amount || 0), 0)} currency={currency} />,
                             }))
                           : []),
                       ]
@@ -756,7 +754,7 @@ export default function ControlCenter() {
             },
             {
               label: "Expenses",
-              value: formatAmount(totalExpenses, currency),
+              value: <FC amount={totalExpenses} currency={currency} />,
               icon: TrendingDown,
               trend: (() => {
                 if (monthlyRevenue.length < 2) return 0;
@@ -771,9 +769,9 @@ export default function ControlCenter() {
                   description: `${expTxns.length} expense transactions in selected period`,
                   transactions: expTxns,
                   summary: [
-                    { label: "Total Expenses", value: formatAmount(totalExpenses, currency) },
+                    { label: "Total Expenses", value: <FC amount={totalExpenses} currency={currency} /> },
                     { label: "Transactions", value: String(expTxns.length) },
-                    { label: "Avg per Txn", value: formatAmount(expTxns.length > 0 ? totalExpenses / expTxns.length : 0, currency) },
+                    { label: "Avg per Txn", value: <FC amount={expTxns.length > 0 ? totalExpenses / expTxns.length : 0} currency={currency} /> },
                   ],
                 });
               },
@@ -781,7 +779,7 @@ export default function ControlCenter() {
             },
             {
               label: "Revenue",
-              value: formatAmount(totalRevenue, currency),
+              value: <FC amount={totalRevenue} currency={currency} />,
               icon: TrendingUp,
               trend: revenueTrend,
               onClick: () => {
@@ -791,9 +789,9 @@ export default function ControlCenter() {
                   description: `${incomeTxns.length} income transactions in selected period`,
                   transactions: incomeTxns,
                   summary: [
-                    { label: "Total Income", value: formatAmount(totalRevenue, currency) },
+                    { label: "Total Income", value: <FC amount={totalRevenue} currency={currency} /> },
                     { label: "Transactions", value: String(incomeTxns.length) },
-                    { label: "Avg per Txn", value: formatAmount(incomeTxns.length > 0 ? totalRevenue / incomeTxns.length : 0, currency) },
+                    { label: "Avg per Txn", value: <FC amount={incomeTxns.length > 0 ? totalRevenue / incomeTxns.length : 0} currency={currency} /> },
                   ],
                 });
               },
@@ -846,9 +844,9 @@ export default function ControlCenter() {
                   description: `${monthlyRevenue.length} months of data`,
                   transactions: recentTxns,
                   summary: [
-                    { label: "Total Income", value: formatAmount(totalRevenue, currency) },
-                    { label: "Total Expenses", value: formatAmount(totalExpenses, currency) },
-                    { label: "Net", value: formatAmount(totalRevenue - totalExpenses, currency) },
+                    { label: "Total Income", value: <FC amount={totalRevenue} currency={currency} /> },
+                    { label: "Total Expenses", value: <FC amount={totalExpenses} currency={currency} /> },
+                    { label: "Net", value: <FC amount={totalRevenue - totalExpenses} currency={currency} /> },
                   ],
                 });
               } else {
@@ -1086,7 +1084,7 @@ export default function ControlCenter() {
                 summary: [
                   { label: "Total Invoices", value: String(invoices.length) },
                   { label: "Collected", value: String(invoices.filter((i: any) => i.status === "paid").length) },
-                  { label: "Outstanding", value: formatAmount(arExposure.total, currency) },
+                  { label: "Outstanding", value: <FC amount={arExposure.total} currency={currency} /> },
                 ],
               });
             }}
@@ -1128,7 +1126,7 @@ export default function ControlCenter() {
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>Total collected</span>
                         <span className="font-semibold text-foreground">
-                          {formatAmount(invoices.reduce((s: number, i: any) => s + (i.total || 0), 0), currency)}
+                          <FC amount={invoices.reduce((s: number, i: any) => s + (i.total || 0), 0)} currency={currency} />
                         </span>
                       </div>
                     </>
@@ -1138,7 +1136,7 @@ export default function ControlCenter() {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-2xl font-bold text-primary">
-                      {formatAmount(arExposure.total, currency)}
+                      <FC amount={arExposure.total} currency={currency} />
                     </span>
                     {arExposure.overdueCount > 0 && (
                       <Badge variant="destructive" className="text-[10px] h-5">
@@ -1223,7 +1221,7 @@ export default function ControlCenter() {
                   })),
                   summary: [
                     { label: "Total Flagged", value: String(flaggedItems.length) },
-                    { label: "Total Amount", value: formatAmount(totalAmt, currency) },
+                    { label: "Total Amount", value: <FC amount={totalAmt} currency={currency} /> },
                     { label: "Types", value: String(Object.keys(byType).length) },
                   ],
                 });
@@ -1287,10 +1285,7 @@ export default function ControlCenter() {
                         {(item.source_a_desc || item.source_b_desc || "Mismatch").slice(0, 40)}
                       </span>
                       <span className="font-semibold shrink-0">
-                        {formatAmount(
-                          Math.abs(item.source_a_amount ?? item.source_b_amount ?? item.difference ?? 0),
-                          currency,
-                        )}
+                        <FC amount={Math.abs(item.source_a_amount ?? item.source_b_amount ?? item.difference ?? 0)} currency={currency} />
                       </span>
                     </div>
                   ))}
@@ -1328,9 +1323,9 @@ export default function ControlCenter() {
                 description: `${activeBanks.length} active account(s) · ${recentTxns.length} transactions`,
                 transactions: recentTxns.slice(0, 100),
                 summary: [
-                  { label: "Total Balance", value: formatAmount(totalBalance, currency) },
+                  { label: "Total Balance", value: <FC amount={totalBalance} currency={currency} /> },
                   { label: "Accounts", value: String(activeBanks.length) },
-                  { label: "Net Flow", value: formatAmount(recentTxns.reduce((s: number, t: any) => s + (t.amount || 0), 0), currency) },
+                  { label: "Net Flow", value: <FC amount={recentTxns.reduce((s: number, t: any) => s + (t.amount || 0), 0)} currency={currency} /> },
                 ],
               });
             }}
@@ -1360,7 +1355,7 @@ export default function ControlCenter() {
                           {cur}
                         </span>
                         <span className="text-lg font-bold">
-                          {formatAmount(total, cur)}
+                          <FC amount={total} currency={cur} />
                         </span>
                       </div>
                       <Progress value={100} className="h-1.5" />
@@ -1382,7 +1377,7 @@ export default function ControlCenter() {
                               : ""}
                           </span>
                           <span className="font-medium">
-                            {formatAmount(a.current_balance, a.currency)}
+                            <FC amount={a.current_balance} currency={a.currency} />
                           </span>
                         </div>
                       ))}

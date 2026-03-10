@@ -57,7 +57,8 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
   const navigate = useNavigate();
-  const { totalOpen } = useRiskAlerts();
+  const { totalOpen, breakdown } = useRiskAlerts();
+  const flagCount = (breakdown.flaggedRecon || 0) + (breakdown.overdueInvoices || 0) + (breakdown.overdueBills || 0);
 
   const { data: user } = useQuery({
     queryKey: ["current-user"],
@@ -130,13 +131,22 @@ export function AppSidebar() {
                       {!isCollapsed && (
                         <>
                           <span className="flex-1">{item.title}</span>
-                          {item.showBadge && totalOpen > 0 && (
-                            <Badge
-                              variant="destructive"
-                              className="h-5 min-w-[20px] px-1.5 text-xs"
-                            >
-                              {totalOpen > 99 ? "99+" : totalOpen}
-                            </Badge>
+                          {item.showBadge && (totalOpen > 0 || flagCount > 0) && (
+                            <div className="flex items-center gap-1">
+                              {totalOpen > 0 && (
+                                <Badge
+                                  variant="destructive"
+                                  className="h-5 min-w-[20px] px-1.5 text-xs"
+                                >
+                                  {totalOpen > 99 ? "99+" : totalOpen}
+                                </Badge>
+                              )}
+                              {flagCount > 0 && (
+                                <span className="text-[9px] text-muted-foreground">
+                                  +{flagCount}
+                                </span>
+                              )}
+                            </div>
                           )}
                         </>
                       )}

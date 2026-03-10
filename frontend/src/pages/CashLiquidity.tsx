@@ -125,6 +125,7 @@ import { database } from "@/lib/database";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { formatAmount } from "@/lib/utils";
+import { FC } from "@/components/shared/FormattedCurrency";
 import { format, subMonths, subDays, differenceInDays, isAfter, parseISO, startOfMonth, endOfMonth, eachMonthOfInterval } from "date-fns";
 import { useDateRange } from "@/hooks/useDateRange";
 import { TransactionDetailSheet } from "@/components/shared/TransactionDetailSheet";
@@ -337,14 +338,14 @@ function CashOverviewTab() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KPICard
           label="Total Balance"
-          value={formatAmount(totalBalance, currency)}
+          value={<FC amount={totalBalance} currency={currency} />}
           icon={Wallet}
           color="text-primary"
           onClick={() => setDrillDown({ title: "All Transactions", description: "All transactions contributing to the total balance", transactions })}
         />
         <KPICard
           label="Total Inflow"
-          value={formatAmount(totalInflow, currency)}
+          value={<FC amount={totalInflow} currency={currency} />}
           icon={TrendingUp}
           color="text-green-600"
           trend={inflowTrend}
@@ -353,7 +354,7 @@ function CashOverviewTab() {
         />
         <KPICard
           label="Total Outflow"
-          value={formatAmount(totalOutflow, currency)}
+          value={<FC amount={totalOutflow} currency={currency} />}
           icon={TrendingDown}
           color="text-red-500"
           sub="12 months"
@@ -361,7 +362,7 @@ function CashOverviewTab() {
         />
         <KPICard
           label="Net Cash Flow"
-          value={formatAmount(Math.abs(netCashFlow), currency)}
+          value={<FC amount={Math.abs(netCashFlow)} currency={currency} />}
           icon={ArrowRightLeft}
           color={netCashFlow >= 0 ? "text-green-600" : "text-red-500"}
           sub={netCashFlow >= 0 ? "Positive" : "Negative"}
@@ -857,26 +858,20 @@ function BankAccountsTab() {
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <KPICard
           label="Total Balance"
-          value={formatAmount(totalBalance, currency)}
+          value={<FC amount={totalBalance} currency={currency} />}
           icon={Wallet}
           color="text-primary"
           sub={`${bankAccounts.length} account${bankAccounts.length !== 1 ? "s" : ""}`}
         />
         <KPICard
           label="Highest Balance"
-          value={formatAmount(
-            Math.max(...bankAccounts.map((a: any) => a.current_balance || 0)),
-            currency,
-          )}
+          value={<FC amount={Math.max(...bankAccounts.map((a: any) => a.current_balance || 0))} currency={currency} />}
           icon={TrendingUp}
           color="text-green-600"
         />
         <KPICard
           label="Lowest Balance"
-          value={formatAmount(
-            Math.min(...bankAccounts.map((a: any) => a.current_balance || 0)),
-            currency,
-          )}
+          value={<FC amount={Math.min(...bankAccounts.map((a: any) => a.current_balance || 0))} currency={currency} />}
           icon={
             Math.min(...bankAccounts.map((a: any) => a.current_balance || 0)) < 0
               ? AlertTriangle
@@ -927,7 +922,7 @@ function BankAccountsTab() {
                   </div>
                   <div className="text-right">
                     <p className="font-bold text-lg">
-                      {formatAmount(acc.current_balance || 0, acc.currency || currency)}
+                      <FC amount={acc.current_balance || 0} currency={acc.currency || currency} />
                     </p>
                     <Badge
                       variant="outline"
@@ -946,13 +941,13 @@ function BankAccountsTab() {
                   <div>
                     <span className="text-muted-foreground">30d Inflow</span>
                     <p className="font-semibold text-green-600">
-                      {formatAmount(acc.recentInflow, acc.currency || currency)}
+                      <FC amount={acc.recentInflow} currency={acc.currency || currency} />
                     </p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">30d Outflow</span>
                     <p className="font-semibold text-red-500">
-                      {formatAmount(acc.recentOutflow, acc.currency || currency)}
+                      <FC amount={acc.recentOutflow} currency={acc.currency || currency} />
                     </p>
                   </div>
                   <div>
@@ -1039,7 +1034,7 @@ function BankAccountsTab() {
                         {d.name}
                       </span>
                       <span className="font-semibold ml-auto">
-                        {formatAmount(d.value, currency)}
+                        <FC amount={d.value} currency={currency} />
                       </span>
                     </div>
                   ))}
@@ -1484,11 +1479,11 @@ function LiquidityRiskTab() {
             </div>
             <div className="p-3 rounded-lg bg-muted/50 text-center">
               <p className="text-[10px] text-muted-foreground uppercase">Cash on Hand</p>
-              <p className="text-sm font-bold">{formatAmount(totalBalance, currency)}</p>
+              <p className="text-sm font-bold"><FC amount={totalBalance} currency={currency} /></p>
             </div>
             <div className="p-3 rounded-lg bg-muted/50 text-center">
               <p className="text-[10px] text-muted-foreground uppercase">Monthly Burn</p>
-              <p className="text-sm font-bold text-red-500">{formatAmount(avgMonthlyBurn, currency)}</p>
+              <p className="text-sm font-bold text-red-500"><FC amount={avgMonthlyBurn} currency={currency} /></p>
             </div>
           </div>
 
@@ -1579,7 +1574,7 @@ function LiquidityRiskTab() {
         <div className="space-y-4">
           <div className="p-4 rounded-lg bg-muted/50 text-center">
             <p className="text-[10px] text-muted-foreground uppercase">Total Cash on Hand</p>
-            <p className="text-2xl font-bold text-primary">{formatAmount(totalBalance, currency)}</p>
+            <p className="text-2xl font-bold text-primary"><FC amount={totalBalance} currency={currency} /></p>
           </div>
           {bankAccounts.length > 0 && (
             <div>
@@ -1591,7 +1586,7 @@ function LiquidityRiskTab() {
                       <p className="text-sm font-medium">{acc.account_name || acc.bank_name || "Account"}</p>
                       <p className="text-[10px] text-muted-foreground">{acc.bank_name} · {acc.account_number ? `···${acc.account_number.slice(-4)}` : ""}</p>
                     </div>
-                    <span className="text-sm font-bold">{formatAmount(acc.current_balance || 0, currency)}</span>
+                    <span className="text-sm font-bold"><FC amount={acc.current_balance || 0} currency={currency} /></span>
                   </div>
                 ))}
               </div>
@@ -1607,7 +1602,7 @@ function LiquidityRiskTab() {
             <div className="p-3 rounded-lg bg-muted/50">
               <p className="text-[10px] text-muted-foreground uppercase">Net Position</p>
               <p className={`text-sm font-bold ${totalBalance - totalObligations >= 0 ? "text-green-600" : "text-red-500"}`}>
-                {formatAmount(totalBalance - totalObligations, currency)}
+                <FC amount={totalBalance - totalObligations} currency={currency} />
               </p>
             </div>
           </div>
@@ -1627,11 +1622,11 @@ function LiquidityRiskTab() {
           <div className="grid grid-cols-2 gap-3">
             <div className="p-3 rounded-lg bg-muted/50">
               <p className="text-[10px] text-muted-foreground uppercase">Cash (Numerator)</p>
-              <p className="text-sm font-bold">{formatAmount(totalBalance, currency)}</p>
+              <p className="text-sm font-bold"><FC amount={totalBalance} currency={currency} /></p>
             </div>
             <div className="p-3 rounded-lg bg-muted/50">
               <p className="text-[10px] text-muted-foreground uppercase">Payables (Denominator)</p>
-              <p className="text-sm font-bold text-red-500">{formatAmount(totalObligations, currency)}</p>
+              <p className="text-sm font-bold text-red-500"><FC amount={totalObligations} currency={currency} /></p>
             </div>
           </div>
           <div className={`p-3 rounded-lg border ${coverageRatio >= 1.5 ? "border-green-200 bg-green-50/50" : coverageRatio >= 1 ? "border-amber-200 bg-amber-50/50" : "border-red-200 bg-red-50/50"}`}>
@@ -1655,7 +1650,7 @@ function LiquidityRiskTab() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {bill.daysUntilDue < 0 && <Badge variant="destructive" className="text-[9px]">{Math.abs(bill.daysUntilDue)}d late</Badge>}
-                      <span className="font-semibold text-xs">{formatAmount(bill.total || 0, currency)}</span>
+                      <span className="font-semibold text-xs"><FC amount={bill.total || 0} currency={currency} /></span>
                     </div>
                   </div>
                 ))}
@@ -1678,21 +1673,21 @@ function LiquidityRiskTab() {
           <div className="grid grid-cols-3 gap-3">
             <div className="p-3 rounded-lg bg-muted/50 text-center">
               <p className="text-[10px] text-muted-foreground uppercase">Cash</p>
-              <p className="text-sm font-bold">{formatAmount(totalBalance, currency)}</p>
+              <p className="text-sm font-bold"><FC amount={totalBalance} currency={currency} /></p>
             </div>
             <div className="p-3 rounded-lg bg-muted/50 text-center">
               <p className="text-[10px] text-muted-foreground uppercase">Receivables</p>
-              <p className="text-sm font-bold text-green-600">{formatAmount(expectedReceivables, currency)}</p>
+              <p className="text-sm font-bold text-green-600"><FC amount={expectedReceivables} currency={currency} /></p>
             </div>
             <div className="p-3 rounded-lg bg-muted/50 text-center">
               <p className="text-[10px] text-muted-foreground uppercase">Payables</p>
-              <p className="text-sm font-bold text-red-500">{formatAmount(totalObligations, currency)}</p>
+              <p className="text-sm font-bold text-red-500"><FC amount={totalObligations} currency={currency} /></p>
             </div>
           </div>
           <div className="p-3 rounded-lg border bg-muted/30">
             <p className="text-xs font-medium mb-1">Formula</p>
             <p className="text-xs text-muted-foreground font-mono">
-              ({formatAmount(totalBalance, currency)} + {formatAmount(expectedReceivables, currency)}) / {formatAmount(totalObligations || 1, currency)} = {quickRatio === Infinity ? "∞" : quickRatio.toFixed(2)}x
+              (<FC amount={totalBalance} currency={currency} /> + <FC amount={expectedReceivables} currency={currency} />) / <FC amount={totalObligations || 1} currency={currency} /> = {quickRatio === Infinity ? "∞" : quickRatio.toFixed(2)}x
             </p>
           </div>
           <div className={`p-3 rounded-lg border ${quickRatio >= 1 ? "border-green-200 bg-green-50/50" : "border-red-200 bg-red-50/50"}`}>
@@ -1713,7 +1708,7 @@ function LiquidityRiskTab() {
                       <p className="font-medium truncate text-xs">{inv.v2_customers?.name || "Unknown"}</p>
                       <p className="text-[10px] text-muted-foreground">{inv.invoice_number || "—"} · {inv.due_date ? format(new Date(inv.due_date), "dd MMM") : "No due date"}</p>
                     </div>
-                    <span className="font-semibold text-xs text-green-600 shrink-0">{formatAmount(inv.total || 0, currency)}</span>
+                    <span className="font-semibold text-xs text-green-600 shrink-0"><FC amount={inv.total || 0} currency={currency} /></span>
                   </div>
                 ))}
               </div>
@@ -1728,7 +1723,7 @@ function LiquidityRiskTab() {
         <div className="space-y-4">
           <div className="p-4 rounded-lg bg-muted/50 text-center">
             <p className="text-[10px] text-muted-foreground uppercase">Average Monthly Burn</p>
-            <p className="text-2xl font-bold text-red-500">{formatAmount(avgMonthlyBurn, currency)}</p>
+            <p className="text-2xl font-bold text-red-500"><FC amount={avgMonthlyBurn} currency={currency} /></p>
           </div>
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-2">Monthly Breakdown (last {monthlyOutflows.length} months)</p>
@@ -1744,11 +1739,11 @@ function LiquidityRiskTab() {
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-medium">{format(new Date(month + "-01"), "MMM yyyy")}</span>
-                      <span className="text-sm font-bold text-red-500">{formatAmount(amount, currency)}</span>
+                      <span className="text-sm font-bold text-red-500"><FC amount={amount} currency={currency} /></span>
                     </div>
                     <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                      <span>Inflow: {formatAmount(inflow, currency)}</span>
-                      <span className={net >= 0 ? "text-green-600" : "text-red-500"}>Net: {net >= 0 ? "+" : ""}{formatAmount(net, currency)}</span>
+                      <span>Inflow: <FC amount={inflow} currency={currency} /></span>
+                      <span className={net >= 0 ? "text-green-600" : "text-red-500"}>Net: {net >= 0 ? "+" : ""}<FC amount={net} currency={currency} /></span>
                     </div>
                     <div className="w-full bg-muted rounded-full h-1.5 mt-1.5 overflow-hidden">
                       <div className="h-full rounded-full bg-red-400" style={{ width: `${Math.max((amount / Math.max(...monthlyOutflows.map(([, v]) => v))) * 100, 2)}%` }} />
@@ -1769,7 +1764,7 @@ function LiquidityRiskTab() {
               <div className={`p-3 rounded-lg border ${trendPct > 20 ? "border-red-200 bg-red-50/50" : trendPct < -10 ? "border-green-200 bg-green-50/50" : "border-muted"}`}>
                 <p className="text-xs font-medium mb-1">Burn Rate Trend</p>
                 <p className="text-xs text-muted-foreground">
-                  Recent 3-month avg: {formatAmount(recentAvg, currency)} ({trendPct > 0 ? "+" : ""}{trendPct.toFixed(0)}% vs earlier)
+                  Recent 3-month avg: <FC amount={recentAvg} currency={currency} /> ({trendPct > 0 ? "+" : ""}{trendPct.toFixed(0)}% vs earlier)
                 </p>
               </div>
             );
@@ -1794,7 +1789,7 @@ function LiquidityRiskTab() {
         <div className="space-y-4">
           <div className="p-4 rounded-lg bg-muted/50 text-center">
             <p className="text-[10px] text-muted-foreground uppercase">Total Expenses</p>
-            <p className="text-2xl font-bold text-red-500">{formatAmount(totalMonth, currency)}</p>
+            <p className="text-2xl font-bold text-red-500"><FC amount={totalMonth} currency={currency} /></p>
           </div>
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-2">Category Breakdown</p>
@@ -1805,7 +1800,7 @@ function LiquidityRiskTab() {
                     <span className="text-xs font-medium truncate">{cat}</span>
                     <span className="text-[10px] text-muted-foreground">{totalMonth > 0 ? ((amt / totalMonth) * 100).toFixed(0) : 0}%</span>
                   </div>
-                  <span className="text-xs font-semibold text-red-500 shrink-0">{formatAmount(amt, currency)}</span>
+                  <span className="text-xs font-semibold text-red-500 shrink-0"><FC amount={amt} currency={currency} /></span>
                 </div>
               ))}
             </div>
@@ -1820,7 +1815,7 @@ function LiquidityRiskTab() {
                     <p className="font-medium truncate text-xs">{t.counterparty_name || t.description?.slice(0, 40)}</p>
                     <p className="text-[10px] text-muted-foreground">{t.transaction_date}</p>
                   </div>
-                  <span className="text-xs font-semibold text-red-500 ml-2">{formatAmount(Math.abs(t.amount), currency)}</span>
+                  <span className="text-xs font-semibold text-red-500 ml-2"><FC amount={Math.abs(t.amount)} currency={currency} /></span>
                 </div>
               ))}
             </div>
@@ -1834,7 +1829,7 @@ function LiquidityRiskTab() {
         <div className="space-y-4">
           <div className="p-4 rounded-lg bg-muted/50 text-center">
             <p className="text-[10px] text-muted-foreground uppercase">Total Outstanding</p>
-            <p className="text-2xl font-bold text-red-500">{formatAmount(totalObligations, currency)}</p>
+            <p className="text-2xl font-bold text-red-500"><FC amount={totalObligations} currency={currency} /></p>
           </div>
           {upcomingObligations.length === 0 ? (
             <div className="flex flex-col items-center py-6 text-center">
@@ -1853,19 +1848,19 @@ function LiquidityRiskTab() {
                   <div className="grid grid-cols-2 gap-2">
                     <div className="p-2.5 rounded-lg bg-red-50/60 border border-red-200 text-center">
                       <p className="text-[10px] text-red-600 uppercase">Overdue</p>
-                      <p className="text-sm font-bold text-red-600">{overdue.length} ({formatAmount(overdue.reduce((s: number, b: any) => s + (b.total || 0), 0), currency)})</p>
+                      <p className="text-sm font-bold text-red-600">{overdue.length} (<FC amount={overdue.reduce((s: number, b: any) => s + (b.total || 0), 0)} currency={currency} />)</p>
                     </div>
                     <div className="p-2.5 rounded-lg bg-amber-50/60 border border-amber-200 text-center">
                       <p className="text-[10px] text-amber-600 uppercase">Due ≤ 7 days</p>
-                      <p className="text-sm font-bold text-amber-600">{within7.length} ({formatAmount(within7.reduce((s: number, b: any) => s + (b.total || 0), 0), currency)})</p>
+                      <p className="text-sm font-bold text-amber-600">{within7.length} (<FC amount={within7.reduce((s: number, b: any) => s + (b.total || 0), 0)} currency={currency} />)</p>
                     </div>
                     <div className="p-2.5 rounded-lg bg-blue-50/60 border border-blue-200 text-center">
                       <p className="text-[10px] text-blue-600 uppercase">Due ≤ 30 days</p>
-                      <p className="text-sm font-bold text-blue-600">{within30.length} ({formatAmount(within30.reduce((s: number, b: any) => s + (b.total || 0), 0), currency)})</p>
+                      <p className="text-sm font-bold text-blue-600">{within30.length} (<FC amount={within30.reduce((s: number, b: any) => s + (b.total || 0), 0)} currency={currency} />)</p>
                     </div>
                     <div className="p-2.5 rounded-lg bg-muted/50 text-center">
                       <p className="text-[10px] text-muted-foreground uppercase">Due &gt; 30 days</p>
-                      <p className="text-sm font-bold">{later.length} ({formatAmount(later.reduce((s: number, b: any) => s + (b.total || 0), 0), currency)})</p>
+                      <p className="text-sm font-bold">{later.length} (<FC amount={later.reduce((s: number, b: any) => s + (b.total || 0), 0)} currency={currency} />)</p>
                     </div>
                   </div>
                 );
@@ -1887,7 +1882,7 @@ function LiquidityRiskTab() {
                         ) : (
                           <span className="text-[10px] text-muted-foreground">{bill.daysUntilDue}d</span>
                         )}
-                        <span className="font-semibold text-xs">{formatAmount(bill.total || 0, currency)}</span>
+                        <span className="font-semibold text-xs"><FC amount={bill.total || 0} currency={currency} /></span>
                       </div>
                     </div>
                   ))}
@@ -1904,7 +1899,7 @@ function LiquidityRiskTab() {
         <div className="space-y-4">
           <div className="p-4 rounded-lg bg-muted/50 text-center">
             <p className="text-[10px] text-muted-foreground uppercase">Total Expected</p>
-            <p className="text-2xl font-bold text-green-600">{formatAmount(expectedReceivables, currency)}</p>
+            <p className="text-2xl font-bold text-green-600"><FC amount={expectedReceivables} currency={currency} /></p>
           </div>
           {unpaidInvoices.length === 0 ? (
             <div className="flex flex-col items-center py-6 text-center">
@@ -1923,7 +1918,7 @@ function LiquidityRiskTab() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <Badge variant="outline" className="text-[9px]">{inv.status}</Badge>
-                      <span className="font-semibold text-xs text-green-600">{formatAmount(inv.total || 0, currency)}</span>
+                      <span className="font-semibold text-xs text-green-600"><FC amount={inv.total || 0} currency={currency} /></span>
                     </div>
                   </div>
                 ))}
@@ -1943,16 +1938,16 @@ function LiquidityRiskTab() {
           <div className="grid grid-cols-3 gap-3">
             <div className="text-center p-3 rounded-lg bg-muted/50">
               <p className="text-[10px] text-muted-foreground uppercase">Cash on Hand</p>
-              <p className="text-lg font-bold">{formatAmount(totalBalance, currency)}</p>
+              <p className="text-lg font-bold"><FC amount={totalBalance} currency={currency} /></p>
             </div>
             <div className="text-center p-3 rounded-lg bg-muted/50">
               <p className="text-[10px] text-muted-foreground uppercase">Total Due</p>
-              <p className="text-lg font-bold text-red-500">{formatAmount(totalObligations, currency)}</p>
+              <p className="text-lg font-bold text-red-500"><FC amount={totalObligations} currency={currency} /></p>
             </div>
             <div className="text-center p-3 rounded-lg bg-muted/50">
               <p className="text-[10px] text-muted-foreground uppercase">Net After Bills</p>
               <p className={`text-lg font-bold ${totalBalance - totalObligations >= 0 ? "text-green-600" : "text-red-500"}`}>
-                {formatAmount(totalBalance - totalObligations, currency)}
+                <FC amount={totalBalance - totalObligations} currency={currency} />
               </p>
             </div>
           </div>
@@ -1963,14 +1958,14 @@ function LiquidityRiskTab() {
                 <CheckCircle2 className="h-8 w-8 text-green-500 mx-auto mb-2" />
                 <p className="text-sm font-medium text-green-700">No Outstanding Obligations</p>
                 <p className="text-xs text-green-600 mt-1">
-                  There are no unpaid bills or pending payables. Your entire cash balance of {formatAmount(totalBalance, currency)} is unencumbered and available.
+                  There are no unpaid bills or pending payables. Your entire cash balance of <FC amount={totalBalance} currency={currency} /> is unencumbered and available.
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-muted/30 border">
                 <p className="text-xs font-medium mb-2">What This Means</p>
                 <ul className="space-y-1.5 text-xs text-muted-foreground">
                   <li>- All bills have been paid or are not yet due</li>
-                  <li>- Cash runway is based purely on burn rate ({formatAmount(avgMonthlyBurn, currency)}/mo avg)</li>
+                  <li>- Cash runway is based purely on burn rate (<FC amount={avgMonthlyBurn} currency={currency} />/mo avg)</li>
                   <li>- At current burn rate, cash covers {runway === Infinity ? "unlimited" : `${runway.toFixed(1)} months`} of operations</li>
                   <li>- No immediate cash flow pressure from payables</li>
                 </ul>
@@ -1987,7 +1982,7 @@ function LiquidityRiskTab() {
                         <p className="text-xs font-medium truncate">{b.v2_vendors?.name || b.notes || "Bill"}</p>
                         <p className="text-[10px] text-red-500">{Math.abs(b.daysUntilDue)} days overdue</p>
                       </div>
-                      <span className="text-xs font-bold text-red-600 shrink-0">{formatAmount(b.total || 0, currency)}</span>
+                      <span className="text-xs font-bold text-red-600 shrink-0"><FC amount={b.total || 0} currency={currency} /></span>
                     </div>
                   ))}
                 </div>
@@ -2001,7 +1996,7 @@ function LiquidityRiskTab() {
                         <p className="text-xs font-medium truncate">{b.v2_vendors?.name || b.notes || "Bill"}</p>
                         <p className="text-[10px] text-muted-foreground">Due in {b.daysUntilDue} days</p>
                       </div>
-                      <span className="text-xs font-bold shrink-0">{formatAmount(b.total || 0, currency)}</span>
+                      <span className="text-xs font-bold shrink-0"><FC amount={b.total || 0} currency={currency} /></span>
                     </div>
                   ))}
                 </div>
@@ -2015,7 +2010,7 @@ function LiquidityRiskTab() {
                         <p className="text-xs font-medium truncate">{b.v2_vendors?.name || b.notes || "Bill"}</p>
                         <p className="text-[10px] text-muted-foreground">Due in {b.daysUntilDue} days</p>
                       </div>
-                      <span className="text-xs font-bold shrink-0">{formatAmount(b.total || 0, currency)}</span>
+                      <span className="text-xs font-bold shrink-0"><FC amount={b.total || 0} currency={currency} /></span>
                     </div>
                   ))}
                 </div>
@@ -2049,11 +2044,11 @@ function LiquidityRiskTab() {
             </div>
             <div className="text-center p-3 rounded-lg bg-muted/50">
               <p className="text-[10px] text-muted-foreground uppercase">Cash</p>
-              <p className="text-sm font-bold">{formatAmount(totalBalance, currency)}</p>
+              <p className="text-sm font-bold"><FC amount={totalBalance} currency={currency} /></p>
             </div>
             <div className="text-center p-3 rounded-lg bg-muted/50">
               <p className="text-[10px] text-muted-foreground uppercase">Payables</p>
-              <p className="text-sm font-bold">{formatAmount(totalObligations, currency)}</p>
+              <p className="text-sm font-bold"><FC amount={totalObligations} currency={currency} /></p>
             </div>
           </div>
 
@@ -2167,7 +2162,7 @@ function LiquidityRiskTab() {
           />
           <p className="text-xs text-muted-foreground mt-2">
             Based on avg monthly burn of{" "}
-            {formatAmount(avgMonthlyBurn, currency)} over last{" "}
+            <FC amount={avgMonthlyBurn} currency={currency} /> over last{" "}
             {monthlyOutflows.length} months
           </p>
           {/* Inline risk reason pills */}
@@ -2188,7 +2183,7 @@ function LiquidityRiskTab() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KPICard
           label="Cash on Hand"
-          value={formatAmount(totalBalance, currency)}
+          value={<FC amount={totalBalance} currency={currency} />}
           icon={Wallet}
           color="text-primary"
           onClick={() => setDrillDown({ type: "cash", title: "Cash on Hand", description: "Bank account balances and cash position" })}
@@ -2211,7 +2206,7 @@ function LiquidityRiskTab() {
         />
         <KPICard
           label="Monthly Burn"
-          value={formatAmount(avgMonthlyBurn, currency)}
+          value={<FC amount={avgMonthlyBurn} currency={currency} />}
           icon={TrendingDown}
           color="text-red-500"
           sub={`${monthlyOutflows.length}-month avg`}
@@ -2231,7 +2226,7 @@ function LiquidityRiskTab() {
                 Upcoming Obligations
               </CardTitle>
               <Badge variant="destructive" className="text-[10px]">
-                {formatAmount(totalObligations, currency)}
+                <FC amount={totalObligations} currency={currency} />
               </Badge>
             </div>
           </CardHeader>
@@ -2275,7 +2270,7 @@ function LiquidityRiskTab() {
                         </span>
                       )}
                       <span className="font-semibold text-xs">
-                        {formatAmount(bill.total || 0, currency)}
+                        <FC amount={bill.total || 0} currency={currency} />
                       </span>
                     </div>
                   </div>
@@ -2298,7 +2293,7 @@ function LiquidityRiskTab() {
                 variant="outline"
                 className="text-[10px] text-green-600 border-green-200"
               >
-                {formatAmount(expectedReceivables, currency)}
+                <FC amount={expectedReceivables} currency={currency} />
               </Badge>
             </div>
           </CardHeader>
@@ -2332,7 +2327,7 @@ function LiquidityRiskTab() {
                         </p>
                       </div>
                       <span className="font-semibold text-xs text-green-600 shrink-0">
-                        {formatAmount(inv.total || 0, currency)}
+                        <FC amount={inv.total || 0} currency={currency} />
                       </span>
                     </div>
                   ))}
@@ -2370,7 +2365,7 @@ function LiquidityRiskTab() {
                         {format(new Date(month + "-01"), "MMM yyyy")}
                       </span>
                       <span className="font-semibold text-xs">
-                        {formatAmount(amount, currency)}
+                        <FC amount={amount} currency={currency} />
                       </span>
                     </div>
                     <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
@@ -2386,7 +2381,7 @@ function LiquidityRiskTab() {
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Average</span>
                 <span className="font-bold text-red-500">
-                  {formatAmount(avgMonthlyBurn, currency)}/mo
+                  <FC amount={avgMonthlyBurn} currency={currency} />/mo
                 </span>
               </div>
             </div>
@@ -2426,7 +2421,7 @@ function LiquidityRiskTab() {
                 </div>
                 <div className="text-center p-2.5 rounded-lg bg-muted/50">
                   <p className="text-[10px] text-muted-foreground uppercase">Cash on Hand</p>
-                  <p className="text-sm font-bold">{formatAmount(totalBalance, currency)}</p>
+                  <p className="text-sm font-bold"><FC amount={totalBalance} currency={currency} /></p>
                 </div>
                 <div className="text-center p-2.5 rounded-lg bg-muted/50">
                   <p className="text-[10px] text-muted-foreground uppercase">Runway</p>
@@ -2484,11 +2479,11 @@ function LiquidityRiskTab() {
               <div className="grid grid-cols-3 gap-3">
                 <div className="text-center p-2.5 rounded-lg bg-muted/50">
                   <p className="text-[10px] text-muted-foreground uppercase">Cash</p>
-                  <p className="text-sm font-bold">{formatAmount(totalBalance, currency)}</p>
+                  <p className="text-sm font-bold"><FC amount={totalBalance} currency={currency} /></p>
                 </div>
                 <div className="text-center p-2.5 rounded-lg bg-muted/50">
                   <p className="text-[10px] text-muted-foreground uppercase">Payables</p>
-                  <p className="text-sm font-bold">{formatAmount(totalObligations, currency)}</p>
+                  <p className="text-sm font-bold"><FC amount={totalObligations} currency={currency} /></p>
                 </div>
                 <div className="text-center p-2.5 rounded-lg bg-muted/50">
                   <p className="text-[10px] text-muted-foreground uppercase">Ratio</p>
@@ -2599,14 +2594,14 @@ function RecentTransactionsTab() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <KPICard
           label="Total Inflow"
-          value={formatAmount(totalIn, currency)}
+          value={<FC amount={totalIn} currency={currency} />}
           icon={TrendingUp}
           color="text-green-600"
           onClick={() => setDrillDown({ title: "Inflows", description: "All income transactions", transactions: transactions.filter((t: any) => t.amount > 0) })}
         />
         <KPICard
           label="Total Outflow"
-          value={formatAmount(totalOut, currency)}
+          value={<FC amount={totalOut} currency={currency} />}
           icon={TrendingDown}
           color="text-red-500"
           onClick={() => setDrillDown({ title: "Outflows", description: "All expense transactions", transactions: transactions.filter((t: any) => t.amount < 0) })}
@@ -2683,7 +2678,7 @@ function RecentTransactionsTab() {
                     }`}
                   >
                     {t.amount >= 0 ? "+" : ""}
-                    {formatAmount(Math.abs(t.amount), currency)}
+                    <FC amount={Math.abs(t.amount)} currency={currency} />
                   </TableCell>
                 </TableRow>
               ))}
@@ -2894,7 +2889,7 @@ function CashLedgerTab() {
               <span className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Total Debits</span>
               <ArrowUpRight className="h-4 w-4 text-muted-foreground/60" />
             </div>
-            <p className="text-2xl font-bold">{formatAmount(totalOutflow, currency)}</p>
+            <p className="text-2xl font-bold"><FC amount={totalOutflow} currency={currency} /></p>
             <p className="text-xs text-muted-foreground">Db side</p>
           </CardContent>
         </Card>
@@ -2905,7 +2900,7 @@ function CashLedgerTab() {
               <span className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Total Credits</span>
               <ArrowDownRight className="h-4 w-4 text-muted-foreground/60" />
             </div>
-            <p className="text-2xl font-bold text-green-600">{formatAmount(totalInflow, currency)}</p>
+            <p className="text-2xl font-bold text-green-600"><FC amount={totalInflow} currency={currency} /></p>
             <p className="text-xs text-muted-foreground">Cr side</p>
           </CardContent>
         </Card>
@@ -2917,7 +2912,7 @@ function CashLedgerTab() {
               <Activity className="h-4 w-4 text-muted-foreground/60" />
             </div>
             <p className={`text-2xl font-bold ${totalNet >= 0 ? "text-green-600" : "text-red-500"}`}>
-              {formatAmount(Math.abs(totalNet), currency)}
+              <FC amount={Math.abs(totalNet)} currency={currency} />
               <span className="text-sm font-normal ml-1">{totalNet >= 0 ? "Cr" : "Db"}</span>
             </p>
             <p className="text-xs text-muted-foreground">Db - Cr</p>
@@ -2982,10 +2977,10 @@ function CashLedgerTab() {
                     {/* Db / Cr amounts */}
                     <div className="flex items-center gap-2 ml-auto shrink-0">
                       <Badge variant="outline" className="text-xs font-mono">
-                        Db {account.outflow > 0 ? formatAmount(account.outflow, currency) : "—"}
+                        Db {account.outflow > 0 ? <FC amount={account.outflow} currency={currency} /> : "—"}
                       </Badge>
                       <Badge variant="outline" className="text-xs font-mono text-green-600 border-green-200">
-                        Cr {account.inflow > 0 ? formatAmount(account.inflow, currency) : "—"}
+                        Cr {account.inflow > 0 ? <FC amount={account.inflow} currency={currency} /> : "—"}
                       </Badge>
                       <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                     </div>
@@ -3019,10 +3014,10 @@ function CashLedgerTab() {
                                 {t.description || "—"}
                               </TableCell>
                               <TableCell className="text-xs text-right py-2 font-mono">
-                                {t.amount < 0 ? <span className="text-foreground">{formatAmount(Math.abs(t.amount), currency)}</span> : ""}
+                                {t.amount < 0 ? <span className="text-foreground"><FC amount={Math.abs(t.amount)} currency={currency} /></span> : ""}
                               </TableCell>
                               <TableCell className="text-xs text-right py-2 font-mono">
-                                {t.amount > 0 ? <span className="text-green-600">{formatAmount(t.amount, currency)}</span> : ""}
+                                {t.amount > 0 ? <span className="text-green-600"><FC amount={t.amount} currency={currency} /></span> : ""}
                               </TableCell>
                               <TableCell className="py-1" onClick={(e) => e.stopPropagation()}>
                                 <Select
@@ -3064,10 +3059,10 @@ function CashLedgerTab() {
         <div className="rounded-lg bg-muted/30 border px-4 py-3 flex items-center justify-end gap-3">
           <span className="text-sm font-semibold mr-auto">Totals</span>
           <Badge variant="outline" className="text-xs font-mono font-semibold">
-            Db {formatAmount(totalOutflow, currency)}
+            Db <FC amount={totalOutflow} currency={currency} />
           </Badge>
           <Badge variant="outline" className="text-xs font-mono font-semibold text-green-600 border-green-200">
-            Cr {formatAmount(totalInflow, currency)}
+            Cr <FC amount={totalInflow} currency={currency} />
           </Badge>
         </div>
       </div>
@@ -3141,7 +3136,7 @@ function KPICard({
   onClick,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   icon: React.ComponentType<{ className?: string }>;
   color: string;
   trend?: number;

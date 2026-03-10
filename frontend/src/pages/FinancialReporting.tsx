@@ -74,6 +74,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { database } from "@/lib/database";
 import { formatAmount } from "@/lib/utils";
+import { FC } from "@/components/shared/FormattedCurrency";
 import { getCanonicalCategory } from "@/lib/sectorMapping";
 import { TransactionDetailSheet } from "@/components/shared/TransactionDetailSheet";
 import {
@@ -385,11 +386,11 @@ function ProfitLossTab() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KPICard label="Revenue" value={formatAmount(income, currency)} icon={TrendingUp} color="text-green-600" sub={prevTotals.income > 0 ? `vs ${formatAmount(prevTotals.income, currency)} prev` : undefined} onClick={() => setDrillDown({ title: "Revenue Transactions", description: `${label} — all income`, transactions: transactions.filter((t: any) => t.amount > 0) })} />
-        <KPICard label="Expenses" value={formatAmount(expenses, currency)} icon={TrendingDown} color="text-red-500" sub={prevTotals.expenses > 0 ? `vs ${formatAmount(prevTotals.expenses, currency)} prev` : undefined} onClick={() => setDrillDown({ title: "Expense Transactions", description: `${label} — all expenses`, transactions: transactions.filter((t: any) => t.amount < 0) })} />
+        <KPICard label="Revenue" value={<FC amount={income} currency={currency} />} icon={TrendingUp} color="text-green-600" sub={prevTotals.income > 0 ? `vs ${formatAmount(prevTotals.income, currency)} prev` : undefined} onClick={() => setDrillDown({ title: "Revenue Transactions", description: `${label} — all income`, transactions: transactions.filter((t: any) => t.amount > 0) })} />
+        <KPICard label="Expenses" value={<FC amount={expenses} currency={currency} />} icon={TrendingDown} color="text-red-500" sub={prevTotals.expenses > 0 ? `vs ${formatAmount(prevTotals.expenses, currency)} prev` : undefined} onClick={() => setDrillDown({ title: "Expense Transactions", description: `${label} — all expenses`, transactions: transactions.filter((t: any) => t.amount < 0) })} />
         <KPICard
           label="Net Income"
-          value={formatAmount(Math.abs(netIncome), currency)}
+          value={<FC amount={Math.abs(netIncome)} currency={currency} />}
           icon={DollarSign}
           color={netIncome >= 0 ? "text-green-600" : "text-red-500"}
           sub={netIncome >= 0 ? "Profit" : "Loss"}
@@ -431,8 +432,8 @@ function ProfitLossTab() {
                   return (
                     <TableRow key={row.label}>
                       <TableCell className="text-sm font-medium">{row.label}</TableCell>
-                      <TableCell className="text-right text-sm font-semibold">{formatAmount(Math.abs(row.current), currency)}</TableCell>
-                      <TableCell className="text-right text-sm text-muted-foreground">{formatAmount(Math.abs(row.prev), currency)}</TableCell>
+                      <TableCell className="text-right text-sm font-semibold"><FC amount={Math.abs(row.current)} currency={currency} /></TableCell>
+                      <TableCell className="text-right text-sm text-muted-foreground"><FC amount={Math.abs(row.prev)} currency={currency} /></TableCell>
                       <TableCell className="text-right">
                         {row.prev > 0 ? (
                           <Badge variant="outline" className={`text-[10px] ${isGood ? "text-green-600 border-green-200" : "text-red-500 border-red-200"}`}>
@@ -660,9 +661,9 @@ function BalanceSheetTab() {
                 </span>
               </div>
               <div className="flex items-center gap-3 text-xs">
-                <span>{formatAmount(totalAssets, currency)}</span>
+                <span><FC amount={totalAssets} currency={currency} /></span>
                 <span className="text-muted-foreground">{balanced ? "=" : "≠"}</span>
-                <span>{formatAmount(liabPlusEquity, currency)}</span>
+                <span><FC amount={liabPlusEquity} currency={currency} /></span>
                 <Badge variant={balanced ? "default" : "destructive"} className="text-[9px]">
                   {balanced ? "Balanced" : `Diff: ${formatAmount(Math.abs(totalAssets - liabPlusEquity), currency)}`}
                 </Badge>
@@ -674,16 +675,16 @@ function BalanceSheetTab() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KPICard label="Total Assets" value={formatAmount(totalAssets, currency)} icon={TrendingUp} color="text-primary" />
-        <KPICard label="Total Liabilities" value={formatAmount(totalLiabilities, currency)} icon={TrendingDown} color="text-red-500" />
+        <KPICard label="Total Assets" value={<FC amount={totalAssets} currency={currency} />} icon={TrendingUp} color="text-primary" />
+        <KPICard label="Total Liabilities" value={<FC amount={totalLiabilities} currency={currency} />} icon={TrendingDown} color="text-red-500" />
         <KPICard
           label="Equity"
-          value={formatAmount(Math.abs(equity), currency)}
+          value={<FC amount={Math.abs(equity)} currency={currency} />}
           icon={Scale}
           color={equity >= 0 ? "text-green-600" : "text-red-500"}
           sub={equity >= 0 ? "Positive" : "Negative"}
         />
-        <KPICard label="Retained Earnings" value={formatAmount(Math.abs(retainedEarnings), currency)} icon={DollarSign} color={retainedEarnings >= 0 ? "text-green-600" : "text-red-500"} />
+        <KPICard label="Retained Earnings" value={<FC amount={Math.abs(retainedEarnings)} currency={currency} />} icon={DollarSign} color={retainedEarnings >= 0 ? "text-green-600" : "text-red-500"} />
       </div>
 
       {/* Balance Sheet Table */}
@@ -699,12 +700,12 @@ function BalanceSheetTab() {
                 {assetRows.map(([name, val]) => (
                   <TableRow key={name}>
                     <TableCell className="text-sm">{name}</TableCell>
-                    <TableCell className="text-right font-semibold text-sm">{formatAmount(val, currency)}</TableCell>
+                    <TableCell className="text-right font-semibold text-sm"><FC amount={val} currency={currency} /></TableCell>
                   </TableRow>
                 ))}
                 <TableRow className="bg-muted/30 font-bold">
                   <TableCell className="text-sm">Total Assets</TableCell>
-                  <TableCell className="text-right text-sm text-green-600">{formatAmount(totalAssets, currency)}</TableCell>
+                  <TableCell className="text-right text-sm text-green-600"><FC amount={totalAssets} currency={currency} /></TableCell>
                 </TableRow>
               </TableBody>
             </Table>
@@ -722,12 +723,12 @@ function BalanceSheetTab() {
                 {liabilityRows.map(([name, val]) => (
                   <TableRow key={name}>
                     <TableCell className="text-sm">{name}</TableCell>
-                    <TableCell className="text-right font-semibold text-sm">{formatAmount(val, currency)}</TableCell>
+                    <TableCell className="text-right font-semibold text-sm"><FC amount={val} currency={currency} /></TableCell>
                   </TableRow>
                 ))}
                 <TableRow className="bg-muted/30">
                   <TableCell className="text-sm font-bold">Total Liabilities</TableCell>
-                  <TableCell className="text-right text-sm font-bold text-red-500">{formatAmount(totalLiabilities, currency)}</TableCell>
+                  <TableCell className="text-right text-sm font-bold text-red-500"><FC amount={totalLiabilities} currency={currency} /></TableCell>
                 </TableRow>
                 <TableRow>
                   <TableCell colSpan={2} className="h-1 p-0"><Separator /></TableCell>
@@ -735,7 +736,7 @@ function BalanceSheetTab() {
                 {equityRows.map(([name, val]) => (
                   <TableRow key={name} className={name === "Total Equity" ? "bg-muted/30 font-bold" : ""}>
                     <TableCell className="text-sm">{name}</TableCell>
-                    <TableCell className={`text-right font-semibold text-sm ${name === "Total Equity" ? "text-primary" : ""}`}>{formatAmount(val, currency)}</TableCell>
+                    <TableCell className={`text-right font-semibold text-sm ${name === "Total Equity" ? "text-primary" : ""}`}><FC amount={val} currency={currency} /></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -865,28 +866,28 @@ function CashFlowTab() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KPICard
           label="Operating"
-          value={formatAmount(Math.abs(operating), currency)}
+          value={<FC amount={Math.abs(operating)} currency={currency} />}
           icon={TrendingUp}
           color={operating >= 0 ? "text-green-600" : "text-red-500"}
           sub={operating >= 0 ? "Inflow" : "Outflow"}
         />
         <KPICard
           label="Investing"
-          value={formatAmount(Math.abs(investing), currency)}
+          value={<FC amount={Math.abs(investing)} currency={currency} />}
           icon={Landmark}
           color={investing >= 0 ? "text-green-600" : "text-red-500"}
           sub={investing >= 0 ? "Inflow" : "Outflow"}
         />
         <KPICard
           label="Financing"
-          value={formatAmount(Math.abs(financing), currency)}
+          value={<FC amount={Math.abs(financing)} currency={currency} />}
           icon={Scale}
           color={financing >= 0 ? "text-green-600" : "text-red-500"}
           sub={financing >= 0 ? "Inflow" : "Outflow"}
         />
         <KPICard
           label="Net Cash Flow"
-          value={formatAmount(Math.abs(netCashFlow), currency)}
+          value={<FC amount={Math.abs(netCashFlow)} currency={currency} />}
           icon={DollarSign}
           color={netCashFlow >= 0 ? "text-green-600" : "text-red-500"}
           sub={netCashFlow >= 0 ? "Positive" : "Negative"}
@@ -907,25 +908,25 @@ function CashFlowTab() {
               <TableRow>
                 <TableCell className="font-medium">Cash from Operating Activities</TableCell>
                 <TableCell className={`text-right font-semibold ${operating >= 0 ? "text-green-600" : "text-red-500"}`}>
-                  {formatAmount(operating, currency)}
+                  <FC amount={operating} currency={currency} />
                 </TableCell>
               </TableRow>
               <TableRow>
                 <TableCell className="font-medium">Cash from Investing Activities</TableCell>
                 <TableCell className={`text-right font-semibold ${investing >= 0 ? "text-green-600" : "text-red-500"}`}>
-                  {formatAmount(investing, currency)}
+                  <FC amount={investing} currency={currency} />
                 </TableCell>
               </TableRow>
               <TableRow>
                 <TableCell className="font-medium">Cash from Financing Activities</TableCell>
                 <TableCell className={`text-right font-semibold ${financing >= 0 ? "text-green-600" : "text-red-500"}`}>
-                  {formatAmount(financing, currency)}
+                  <FC amount={financing} currency={currency} />
                 </TableCell>
               </TableRow>
               <TableRow className="bg-muted/30 font-bold">
                 <TableCell>Net Increase (Decrease) in Cash</TableCell>
                 <TableCell className={`text-right ${netCashFlow >= 0 ? "text-green-600" : "text-red-500"}`}>
-                  {formatAmount(netCashFlow, currency)}
+                  <FC amount={netCashFlow} currency={currency} />
                 </TableCell>
               </TableRow>
               <TableRow>
@@ -933,17 +934,17 @@ function CashFlowTab() {
               </TableRow>
               <TableRow>
                 <TableCell className="font-medium text-muted-foreground">Beginning Cash</TableCell>
-                <TableCell className="text-right font-semibold">{formatAmount(beginningCash, currency)}</TableCell>
+                <TableCell className="text-right font-semibold"><FC amount={beginningCash} currency={currency} /></TableCell>
               </TableRow>
               <TableRow>
                 <TableCell className="font-medium text-muted-foreground">+ Net Change</TableCell>
                 <TableCell className={`text-right font-semibold ${netCashFlow >= 0 ? "text-green-600" : "text-red-500"}`}>
-                  {formatAmount(netCashFlow, currency)}
+                  <FC amount={netCashFlow} currency={currency} />
                 </TableCell>
               </TableRow>
               <TableRow className="bg-muted/30 font-bold">
                 <TableCell>Ending Cash (Calculated)</TableCell>
-                <TableCell className="text-right">{formatAmount(beginningCash + netCashFlow, currency)}</TableCell>
+                <TableCell className="text-right"><FC amount={beginningCash + netCashFlow} currency={currency} /></TableCell>
               </TableRow>
               {currentBankBalance > 0 && (
                 <TableRow>
@@ -953,11 +954,11 @@ function CashFlowTab() {
                       <Badge variant="default" className="ml-2 text-[9px]">Reconciled</Badge>
                     ) : (
                       <Badge variant="outline" className="ml-2 text-[9px] text-amber-600 border-amber-200">
-                        Diff: {formatAmount(Math.abs((beginningCash + netCashFlow) - currentBankBalance), currency)}
+                        Diff: <FC amount={Math.abs((beginningCash + netCashFlow) - currentBankBalance)} currency={currency} />
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell className="text-right font-semibold text-primary">{formatAmount(currentBankBalance, currency)}</TableCell>
+                  <TableCell className="text-right font-semibold text-primary"><FC amount={currentBankBalance} currency={currency} /></TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -1104,7 +1105,7 @@ function RatiosTab() {
     {
       category: "Efficiency",
       items: [
-        { name: "Revenue per Month", value: formatAmount(revenue / 12, currency), good: true },
+        { name: "Revenue per Month", value: <FC amount={revenue / 12} currency={currency} />, good: true },
         { name: "Expense Ratio", value: revenue > 0 ? ((totalExpenses / revenue) * 100).toFixed(1) + "%" : "N/A", good: revenue > 0 && totalExpenses / revenue < 0.8 },
         { name: "AR to Revenue", value: revenue > 0 ? ((ar / revenue) * 100).toFixed(1) + "%" : "N/A", good: revenue > 0 && ar / revenue < 0.15 },
       ],
@@ -1120,10 +1121,10 @@ function RatiosTab() {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KPICard label="Cash" value={formatAmount(cashBalance, currency)} icon={DollarSign} color="text-primary" />
-        <KPICard label="Receivables" value={formatAmount(ar, currency)} icon={TrendingUp} color="text-green-600" />
-        <KPICard label="Payables" value={formatAmount(ap, currency)} icon={TrendingDown} color="text-red-500" />
-        <KPICard label="Net Income" value={formatAmount(Math.abs(netIncome), currency)} icon={Scale} color={netIncome >= 0 ? "text-green-600" : "text-red-500"} sub="12 months" />
+        <KPICard label="Cash" value={<FC amount={cashBalance} currency={currency} />} icon={DollarSign} color="text-primary" />
+        <KPICard label="Receivables" value={<FC amount={ar} currency={currency} />} icon={TrendingUp} color="text-green-600" />
+        <KPICard label="Payables" value={<FC amount={ap} currency={currency} />} icon={TrendingDown} color="text-red-500" />
+        <KPICard label="Net Income" value={<FC amount={Math.abs(netIncome)} currency={currency} />} icon={Scale} color={netIncome >= 0 ? "text-green-600" : "text-red-500"} sub="12 months" />
       </div>
 
       {ratios.map((group) => (
@@ -1409,7 +1410,7 @@ function CustomFiltersTab() {
             <CardContent className="p-3 text-center">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Total</p>
               <p className={`text-sm font-bold ${aggregates.total >= 0 ? "text-green-600" : "text-red-500"}`}>
-                {formatAmount(aggregates.total, currency)}
+                <FC amount={aggregates.total} currency={currency} />
               </p>
             </CardContent>
           </Card>
@@ -1422,19 +1423,19 @@ function CustomFiltersTab() {
           <Card className="stat-card-hover">
             <CardContent className="p-3 text-center">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Average</p>
-              <p className="text-sm font-bold">{formatAmount(aggregates.average, currency)}</p>
+              <p className="text-sm font-bold"><FC amount={aggregates.average} currency={currency} /></p>
             </CardContent>
           </Card>
           <Card className="stat-card-hover">
             <CardContent className="p-3 text-center">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Min</p>
-              <p className="text-sm font-bold">{formatAmount(aggregates.min, currency)}</p>
+              <p className="text-sm font-bold"><FC amount={aggregates.min} currency={currency} /></p>
             </CardContent>
           </Card>
           <Card className="stat-card-hover">
             <CardContent className="p-3 text-center">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Max</p>
-              <p className="text-sm font-bold">{formatAmount(aggregates.max, currency)}</p>
+              <p className="text-sm font-bold"><FC amount={aggregates.max} currency={currency} /></p>
             </CardContent>
           </Card>
         </div>
@@ -1498,7 +1499,7 @@ function CustomFiltersTab() {
                         </Badge>
                       </TableCell>
                       <TableCell className={`text-right font-semibold text-sm ${t.amount >= 0 ? "text-green-600" : "text-red-500"}`}>
-                        {t.amount >= 0 ? "+" : ""}{formatAmount(Math.abs(t.amount), currency)}
+                        {t.amount >= 0 ? "+" : ""}<FC amount={Math.abs(t.amount)} currency={currency} />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1522,7 +1523,7 @@ function CustomFiltersTab() {
 function KPICard({
   label, value, icon: Icon, color, sub, onClick,
 }: {
-  label: string; value: string; icon: React.ComponentType<{ className?: string }>; color: string; sub?: string; onClick?: () => void;
+  label: string; value: React.ReactNode; icon: React.ComponentType<{ className?: string }>; color: string; sub?: string; onClick?: () => void;
 }) {
   return (
     <Card className={`stat-card-hover ${onClick ? "cursor-pointer" : ""}`} onClick={onClick}>
@@ -1636,7 +1637,7 @@ function CategoryTable({
                     </div>
                   </TableCell>
                   <TableCell className="text-right font-semibold text-sm">
-                    {formatAmount(amt, currency)}
+                    <FC amount={amt} currency={currency} />
                   </TableCell>
                 </TableRow>
               );
@@ -1644,7 +1645,7 @@ function CategoryTable({
             <TableRow className="bg-muted/30 font-bold">
               <TableCell className="text-sm">Total</TableCell>
               <TableCell className={`text-right text-sm ${color}`}>
-                {formatAmount(total, currency)}
+                <FC amount={total} currency={currency} />
               </TableCell>
             </TableRow>
           </TableBody>

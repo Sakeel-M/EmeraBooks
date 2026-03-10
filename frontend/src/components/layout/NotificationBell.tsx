@@ -10,13 +10,17 @@ import {
 } from "@/components/ui/tooltip";
 
 export function NotificationBell() {
-  const { totalOpen, bySeverity } = useRiskAlerts();
+  const { totalOpen, bySeverity, breakdown } = useRiskAlerts();
   const navigate = useNavigate();
+  const flagCount = (breakdown.flaggedRecon || 0) + (breakdown.overdueInvoices || 0) + (breakdown.overdueBills || 0);
 
   const tooltipLabel =
-    totalOpen === 0
+    totalOpen === 0 && flagCount === 0
       ? "No active alerts"
-      : `${totalOpen} alert${totalOpen > 1 ? "s" : ""}: ${bySeverity.critical ? `${bySeverity.critical} critical` : ""}${bySeverity.critical && bySeverity.high ? ", " : ""}${bySeverity.high ? `${bySeverity.high} high` : ""}`.replace(/:[\s,]*$/, "");
+      : [
+          totalOpen > 0 ? `${totalOpen} alert${totalOpen > 1 ? "s" : ""}` : "",
+          flagCount > 0 ? `${flagCount} flag${flagCount > 1 ? "s" : ""}` : "",
+        ].filter(Boolean).join(" + ");
 
   return (
     <Tooltip>

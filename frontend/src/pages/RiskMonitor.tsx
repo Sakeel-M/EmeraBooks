@@ -90,6 +90,7 @@ import { useRiskAlerts } from "@/hooks/useRiskAlerts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { database } from "@/lib/database";
 import { formatAmount } from "@/lib/utils";
+import { FC } from "@/components/shared/FormattedCurrency";
 import { getCanonicalCategory } from "@/lib/sectorMapping";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -307,8 +308,8 @@ function RiskOverviewTab() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <MiniStat label="Open Alerts" value={riskAlerts.alertCount} color={riskAlerts.alertCount > 0 ? "text-red-500" : "text-green-600"} />
               <MiniStat label="Flagged Items" value={flaggedItems.length} color={flaggedItems.length > 0 ? "text-amber-500" : "text-green-600"} />
-              <MiniStat label="Overdue AP" value={formatAmount(overdueAP, currency)} color={overdueAP > 0 ? "text-red-500" : "text-green-600"} />
-              <MiniStat label="Overdue AR" value={formatAmount(overdueAR, currency)} color={overdueAR > 0 ? "text-amber-500" : "text-green-600"} />
+              <MiniStat label="Overdue AP" value={<FC amount={overdueAP} currency={currency} />} color={overdueAP > 0 ? "text-red-500" : "text-green-600"} />
+              <MiniStat label="Overdue AR" value={<FC amount={overdueAR} currency={currency} />} color={overdueAR > 0 ? "text-amber-500" : "text-green-600"} />
             </div>
           </div>
         </CardContent>
@@ -608,7 +609,7 @@ function ActiveAlertsTab() {
                   </div>
                   <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
                     {alert.alert_type && <span className="capitalize">{alert.alert_type.replace(/_/g, " ")}</span>}
-                    {alert.amount && <span className="font-medium">{formatAmount(alert.amount, currency)}</span>}
+                    {alert.amount && <span className="font-medium"><FC amount={alert.amount} currency={currency} /></span>}
                     {alert.created_at && <span>{format(new Date(alert.created_at), "dd MMM yyyy")}</span>}
                   </div>
                 </div>
@@ -654,7 +655,7 @@ function ActiveAlertsTab() {
                 {selectedAlert.amount && (
                   <div>
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Amount</p>
-                    <p className="font-semibold">{formatAmount(selectedAlert.amount, currency)}</p>
+                    <p className="font-semibold"><FC amount={selectedAlert.amount} currency={currency} /></p>
                   </div>
                 )}
               </div>
@@ -832,7 +833,7 @@ function HighRiskTransactionsTab() {
         </TableCell>
         <TableCell className="text-sm font-medium max-w-[200px] truncate">{t.description || "—"}</TableCell>
         <TableCell className={`text-right font-semibold text-sm ${t.amount >= 0 ? "text-green-600" : "text-red-500"}`}>
-          {formatAmount(Math.abs(t.amount), currency)}
+          <FC amount={Math.abs(t.amount)} currency={currency} />
         </TableCell>
         <TableCell><span className="text-[10px] text-muted-foreground">{t.reason}</span></TableCell>
         <TableCell>
@@ -1095,11 +1096,11 @@ function VarianceTab() {
                 </div>
                 <div className="p-3 rounded-lg bg-muted/50">
                   <p className="text-[10px] text-muted-foreground uppercase">Baseline Avg</p>
-                  <p className="text-sm font-bold">{formatAmount(varData.avg, currency)}</p>
+                  <p className="text-sm font-bold"><FC amount={varData.avg} currency={currency} /></p>
                 </div>
                 <div className="p-3 rounded-lg bg-muted/50">
                   <p className="text-[10px] text-muted-foreground uppercase">Latest</p>
-                  <p className="text-sm font-bold">{formatAmount(varData.latest, currency)}</p>
+                  <p className="text-sm font-bold"><FC amount={varData.latest} currency={currency} /></p>
                 </div>
               </div>
               {varData.monthlyData.length > 0 && (
@@ -1145,7 +1146,7 @@ function VarianceTab() {
                       <p className="font-medium truncate text-xs">{t.counterparty_name || t.description?.slice(0, 40)}</p>
                       <p className="text-[10px] text-muted-foreground">{t.transaction_date}</p>
                     </div>
-                    <span className="text-xs font-semibold text-red-500 ml-2">{formatAmount(Math.abs(t.amount), currency)}</span>
+                    <span className="text-xs font-semibold text-red-500 ml-2"><FC amount={Math.abs(t.amount)} currency={currency} /></span>
                   </div>
                 ))}
               </div>
@@ -1168,14 +1169,14 @@ function VarianceTab() {
         <div className="space-y-4">
           <div className="p-4 rounded-lg bg-muted/50 text-center">
             <p className="text-[10px] text-muted-foreground uppercase">Total Expenses</p>
-            <p className="text-2xl font-bold text-red-500">{formatAmount(totalMonth, currency)}</p>
+            <p className="text-2xl font-bold text-red-500"><FC amount={totalMonth} currency={currency} /></p>
           </div>
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-2">Category Breakdown</p>
             {Object.entries(catBreakdown).sort((a, b) => b[1] - a[1]).map(([cat, amt]) => (
               <div key={cat} className="flex items-center justify-between py-1.5">
                 <span className="text-xs font-medium">{cat}</span>
-                <span className="text-xs font-semibold text-red-500">{formatAmount(amt, currency)}</span>
+                <span className="text-xs font-semibold text-red-500"><FC amount={amt} currency={currency} /></span>
               </div>
             ))}
           </div>
@@ -1188,7 +1189,7 @@ function VarianceTab() {
                   <p className="font-medium truncate text-xs">{t.counterparty_name || t.description?.slice(0, 40)}</p>
                   <p className="text-[10px] text-muted-foreground">{t.transaction_date}</p>
                 </div>
-                <span className="text-xs font-semibold text-red-500 ml-2">{formatAmount(Math.abs(t.amount), currency)}</span>
+                <span className="text-xs font-semibold text-red-500 ml-2"><FC amount={Math.abs(t.amount)} currency={currency} /></span>
               </div>
             ))}
           </div>
@@ -1206,11 +1207,11 @@ function VarianceTab() {
           <div className="grid grid-cols-3 gap-3">
             <div className="p-3 rounded-lg bg-muted/50 text-center">
               <p className="text-[10px] text-muted-foreground uppercase">Baseline</p>
-              <p className="text-sm font-bold">{formatAmount(target.avg, currency)}</p>
+              <p className="text-sm font-bold"><FC amount={target.avg} currency={currency} /></p>
             </div>
             <div className="p-3 rounded-lg bg-muted/50 text-center">
               <p className="text-[10px] text-muted-foreground uppercase">Latest</p>
-              <p className="text-sm font-bold">{formatAmount(target.latest, currency)}</p>
+              <p className="text-sm font-bold"><FC amount={target.latest} currency={currency} /></p>
             </div>
             <div className="p-3 rounded-lg bg-muted/50 text-center">
               <p className="text-[10px] text-muted-foreground uppercase">Z-Score</p>
@@ -1235,7 +1236,7 @@ function VarianceTab() {
                     <p className="font-medium truncate text-xs">{t.counterparty_name || t.description?.slice(0, 40)}</p>
                     <p className="text-[10px] text-muted-foreground">{t.transaction_date}</p>
                   </div>
-                  <span className="text-xs font-semibold text-red-500 ml-2">{formatAmount(Math.abs(t.amount), currency)}</span>
+                  <span className="text-xs font-semibold text-red-500 ml-2"><FC amount={Math.abs(t.amount)} currency={currency} /></span>
                 </div>
               ))}
             </div>
@@ -1254,7 +1255,7 @@ function VarianceTab() {
                 <p className="font-medium truncate text-xs">{t.counterparty_name || t.description?.slice(0, 40)}</p>
                 <p className="text-[10px] text-muted-foreground">{t.transaction_date}</p>
               </div>
-              <span className={`text-xs font-semibold ml-2 ${t.amount >= 0 ? "text-green-600" : "text-red-500"}`}>{formatAmount(Math.abs(t.amount), currency)}</span>
+              <span className={`text-xs font-semibold ml-2 ${t.amount >= 0 ? "text-green-600" : "text-red-500"}`}><FC amount={Math.abs(t.amount)} currency={currency} /></span>
             </div>
           ))}
         </div>
@@ -1345,8 +1346,8 @@ function VarianceTab() {
                     onClick={() => setDrillDown({ type: "category-detail", title: v.category, category: v.category })}
                   >
                     <TableCell className="text-sm font-medium">{v.category}</TableCell>
-                    <TableCell className="text-right text-sm text-muted-foreground">{formatAmount(v.avg, currency)}</TableCell>
-                    <TableCell className="text-right text-sm font-semibold">{formatAmount(v.latest, currency)}</TableCell>
+                    <TableCell className="text-right text-sm text-muted-foreground"><FC amount={v.avg} currency={currency} /></TableCell>
+                    <TableCell className="text-right text-sm font-semibold"><FC amount={v.latest} currency={currency} /></TableCell>
                     <TableCell className={`text-right text-sm font-bold ${v.variance > 0 ? "text-red-500" : "text-green-600"}`}>
                       {v.variance > 0 ? "+" : ""}{v.variance.toFixed(0)}%
                     </TableCell>
@@ -1386,7 +1387,7 @@ function VarianceTab() {
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>Avg: {formatAmount(v.avg, currency)} → Latest: {formatAmount(v.latest, currency)}</span>
+                      <span>Avg: <FC amount={v.avg} currency={currency} /> → Latest: <FC amount={v.latest} currency={currency} /></span>
                       <Badge variant={Math.abs(v.variance) > 50 ? "destructive" : "outline"} className="text-[9px]">
                         {Math.abs(v.variance) > 50 ? "High" : "Watch"}
                       </Badge>
@@ -1504,13 +1505,13 @@ function UnresolvedMismatchesTab() {
                       {item.source_a_description || item.description || "—"}
                     </TableCell>
                     <TableCell className="text-right text-xs font-semibold">
-                      {item.source_a_amount != null ? formatAmount(Math.abs(item.source_a_amount), currency) : item.amount != null ? formatAmount(Math.abs(item.amount), currency) : "—"}
+                      {item.source_a_amount != null ? <FC amount={Math.abs(item.source_a_amount)} currency={currency} /> : item.amount != null ? <FC amount={Math.abs(item.amount)} currency={currency} /> : "—"}
                     </TableCell>
                     <TableCell className="text-xs max-w-[150px] truncate">
                       {item.source_b_description || "No match"}
                     </TableCell>
                     <TableCell className="text-right text-xs font-semibold">
-                      {item.source_b_amount != null ? formatAmount(Math.abs(item.source_b_amount), currency) : "—"}
+                      {item.source_b_amount != null ? <FC amount={Math.abs(item.source_b_amount)} currency={currency} /> : "—"}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-[9px] text-amber-600 border-amber-200">
@@ -2274,7 +2275,7 @@ function AIRiskInsightsTab() {
                     {insight.affectedAmount != null && insight.affectedAmount > 0 && (
                       <div className="flex items-center gap-1.5 mt-2">
                         <DollarSign className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-xs font-semibold">{formatAmount(insight.affectedAmount, currency)}</span>
+                        <span className="text-xs font-semibold"><FC amount={insight.affectedAmount} currency={currency} /></span>
                         <span className="text-[10px] text-muted-foreground">affected</span>
                       </div>
                     )}
@@ -2333,7 +2334,7 @@ function AIRiskInsightsTab() {
                 <p className="text-sm">{selectedInsight.impact}</p>
                 {selectedInsight.affectedAmount != null && selectedInsight.affectedAmount > 0 && (
                   <div className="mt-2 pt-2 border-t border-current/10">
-                    <span className="text-lg font-bold">{formatAmount(selectedInsight.affectedAmount, currency)}</span>
+                    <span className="text-lg font-bold"><FC amount={selectedInsight.affectedAmount} currency={currency} /></span>
                     <span className="text-xs text-muted-foreground ml-1.5">financial exposure</span>
                   </div>
                 )}
@@ -2369,7 +2370,7 @@ function AIRiskInsightsTab() {
                           <p className="text-[10px] text-muted-foreground">{t.transaction_date}</p>
                         </div>
                         <span className={`text-xs font-semibold ml-2 ${t.amount >= 0 ? "text-green-600" : "text-red-500"}`}>
-                          {formatAmount(Math.abs(t.amount), currency)}
+                          <FC amount={Math.abs(t.amount)} currency={currency} />
                         </span>
                       </div>
                     ))}

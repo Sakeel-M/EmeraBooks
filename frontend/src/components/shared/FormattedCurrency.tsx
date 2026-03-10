@@ -53,3 +53,6 @@ export const FormattedCurrency = ({
 
   return <>{formatted}</>;
 };
+
+/** Short alias for dense JSX — use `<FC amount={x} currency={y} />` */
+export { FormattedCurrency as FC };

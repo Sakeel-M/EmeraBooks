@@ -25,12 +25,13 @@ import {
 } from "@/components/ui/select";
 import { Download, ArrowUpRight, ArrowDownRight, Trash2 } from "lucide-react";
 import { formatAmount } from "@/lib/utils";
+import { FC } from "@/components/shared/FormattedCurrency";
 import { format } from "date-fns";
 import { getCanonicalCategory } from "@/lib/sectorMapping";
 
 interface SummaryItem {
   label: string;
-  value: string;
+  value: React.ReactNode;
 }
 
 interface TransactionDetailSheetProps {
@@ -121,7 +122,7 @@ export function TransactionDetailSheet({
               <>
                 <div className="text-center p-2 rounded-lg bg-muted/50">
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total</p>
-                  <p className="text-sm font-semibold mt-0.5">{formatAmount(Math.abs(total), currency)}</p>
+                  <p className="text-sm font-semibold mt-0.5"><FC amount={Math.abs(total)} currency={currency} /></p>
                 </div>
                 <div className="text-center p-2 rounded-lg bg-muted/50">
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Count</p>
@@ -129,7 +130,7 @@ export function TransactionDetailSheet({
                 </div>
                 <div className="text-center p-2 rounded-lg bg-muted/50">
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Average</p>
-                  <p className="text-sm font-semibold mt-0.5">{formatAmount(Math.abs(avg), currency)}</p>
+                  <p className="text-sm font-semibold mt-0.5"><FC amount={Math.abs(avg)} currency={currency} /></p>
                 </div>
               </>
             )}
@@ -186,7 +187,7 @@ export function TransactionDetailSheet({
                             ) : (
                               <ArrowDownRight className="inline h-3 w-3 mr-0.5" />
                             )}
-                            {formatAmount(Math.abs(amt), currency)}
+                            <FC amount={Math.abs(amt)} currency={currency} />
                           </span>
                         </TableCell>
                         {(onStatusChange || onDelete) && (

@@ -102,6 +102,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { database } from "@/lib/database";
 import { flaskApi } from "@/lib/flaskApi";
 import { formatAmount } from "@/lib/utils";
+import { FC } from "@/components/shared/FormattedCurrency";
 import { format, subMonths, differenceInDays, isAfter, parseISO } from "date-fns";
 import { resolveIncomeCategory } from "@/lib/sectorMapping";
 import { toast } from "sonner";
@@ -690,11 +691,11 @@ function RevenueOverviewTab() {
                         <div className="flex items-center gap-2 shrink-0">
                           {c.pending > 0 && (
                             <Badge variant="outline" className="text-[9px] h-4 text-amber-600 border-amber-200">
-                              {formatAmount(c.pending, currency)} due
+                              <FC amount={c.pending} currency={currency} /> due
                             </Badge>
                           )}
                           <span className="font-semibold text-xs">
-                            {formatAmount(c.total, currency)}
+                            <FC amount={c.total} currency={currency} />
                           </span>
                         </div>
                       </div>
@@ -914,7 +915,7 @@ function InvoicesTab() {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-muted-foreground">
-            {invoices.length} invoice{invoices.length !== 1 ? "s" : ""} · {formatAmount(totalAmount, currency)} total
+            {invoices.length} invoice{invoices.length !== 1 ? "s" : ""} · <FC amount={totalAmount} currency={currency} /> total
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1046,7 +1047,7 @@ function InvoicesTab() {
                   </div>
                   {/* Amount */}
                   <p className="text-right text-lg font-bold">
-                    {formatAmount(inv.total || 0, currency)}
+                    <FC amount={inv.total || 0} currency={currency} />
                   </p>
                 </CardContent>
               </Card>
@@ -1077,7 +1078,7 @@ function InvoicesTab() {
                       <TableCell className="font-medium text-sm">{inv.v2_customers?.name || "—"}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{fmtDate(inv.invoice_date)}</TableCell>
                       <TableCell className={`text-xs ${isOverdue ? "text-red-500 font-medium" : "text-muted-foreground"}`}>{fmtDate(inv.due_date)}</TableCell>
-                      <TableCell className="text-right font-semibold text-sm">{formatAmount(inv.total || 0, currency)}</TableCell>
+                      <TableCell className="text-right font-semibold text-sm"><FC amount={inv.total || 0} currency={currency} /></TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <Select
                           value={isOverdue ? "overdue" : inv.status}
@@ -1247,9 +1248,9 @@ function InvoicesTab() {
                         <div className="grid grid-cols-12 text-xs py-1 border-b border-muted/50">
                           <div className="col-span-5 truncate">{inv.notes || inv.description || "Invoice item"}</div>
                           <div className="col-span-2 text-right">1</div>
-                          <div className="col-span-2 text-right">{formatAmount(invSubtotal, currency)}</div>
+                          <div className="col-span-2 text-right"><FC amount={invSubtotal} currency={currency} /></div>
                           <div className="col-span-1 text-right text-muted-foreground">5%</div>
-                          <div className="col-span-2 text-right font-medium">{formatAmount(inv.total || 0, currency)}</div>
+                          <div className="col-span-2 text-right font-medium"><FC amount={inv.total || 0} currency={currency} /></div>
                         </div>
                       </div>
 
@@ -1257,15 +1258,15 @@ function InvoicesTab() {
                       <div className="space-y-1 max-w-[200px] ml-auto text-xs">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Subtotal</span>
-                          <span>{formatAmount(invSubtotal, currency)}</span>
+                          <span><FC amount={invSubtotal} currency={currency} /></span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">VAT (5%)</span>
-                          <span>{formatAmount(invTax, currency)}</span>
+                          <span><FC amount={invTax} currency={currency} /></span>
                         </div>
                         <div className="flex justify-between font-bold text-sm pt-1 mt-1 border-t-2" style={{ borderColor: accent }}>
                           <span>Total</span>
-                          <span style={{ color: accent }}>{formatAmount(inv.total || 0, currency)}</span>
+                          <span style={{ color: accent }}><FC amount={inv.total || 0} currency={currency} /></span>
                         </div>
                       </div>
 
@@ -1657,7 +1658,7 @@ function ARAgingTab() {
                       </Badge>
                     </div>
                     <span className="font-semibold">
-                      {formatAmount(bucket.total, currency)}
+                      <FC amount={bucket.total} currency={currency} />
                     </span>
                   </div>
                   <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
@@ -1728,7 +1729,7 @@ function ARAgingTab() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-semibold text-sm">
-                        {formatAmount(inv.total || 0, currency)}
+                        <FC amount={inv.total || 0} currency={currency} />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1798,7 +1799,7 @@ function ExposureByCustomerChart({ invoices, currency, totalUnpaid }: { invoices
                         {pct.toFixed(0)}% of AR
                       </Badge>
                     )}
-                    <span className="font-semibold text-xs">{formatAmount(c.total, currency)}</span>
+                    <span className="font-semibold text-xs"><FC amount={c.total} currency={currency} /></span>
                   </div>
                 </div>
                 <div className="w-full h-2 rounded-full overflow-hidden flex bg-muted">
@@ -2130,13 +2131,13 @@ function CustomersTab() {
                     <TableCell className="text-xs">{c.payment_terms ?? 30}d</TableCell>
                     <TableCell className="text-sm">{c.invoiceCount}</TableCell>
                     <TableCell className="text-right text-sm font-medium">
-                      {formatAmount(c.totalBilled, currency)}
+                      <FC amount={c.totalBilled} currency={currency} />
                     </TableCell>
                     <TableCell className="text-right text-sm text-green-600">
-                      {formatAmount(c.totalPaid, currency)}
+                      <FC amount={c.totalPaid} currency={currency} />
                     </TableCell>
                     <TableCell className={`text-right text-sm font-semibold ${c.outstanding > 0 ? "text-amber-600" : ""}`}>
-                      {formatAmount(c.outstanding, currency)}
+                      <FC amount={c.outstanding} currency={currency} />
                     </TableCell>
                     <TableCell>
                       {c.overdueCount > 0 ? (
@@ -2211,16 +2212,16 @@ function CustomersTab() {
                   <div className="grid grid-cols-3 gap-3">
                     <div className="text-center p-2 rounded-lg bg-muted/50">
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total Billed</p>
-                      <p className="text-sm font-semibold mt-0.5">{formatAmount(totalBilled, currency)}</p>
+                      <p className="text-sm font-semibold mt-0.5"><FC amount={totalBilled} currency={currency} /></p>
                     </div>
                     <div className="text-center p-2 rounded-lg bg-muted/50">
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Paid</p>
-                      <p className="text-sm font-semibold mt-0.5 text-green-600">{formatAmount(totalPaid, currency)}</p>
+                      <p className="text-sm font-semibold mt-0.5 text-green-600"><FC amount={totalPaid} currency={currency} /></p>
                     </div>
                     <div className="text-center p-2 rounded-lg bg-muted/50">
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Outstanding</p>
                       <p className={`text-sm font-semibold mt-0.5 ${outstanding > 0 ? "text-amber-600" : ""}`}>
-                        {formatAmount(outstanding, currency)}
+                        <FC amount={outstanding} currency={currency} />
                       </p>
                     </div>
                   </div>
@@ -2267,7 +2268,7 @@ function CustomersTab() {
                                     : "—"}
                                 </TableCell>
                                 <TableCell className="text-xs text-right py-2 font-medium">
-                                  {formatAmount(inv.total || 0, currency)}
+                                  <FC amount={inv.total || 0} currency={currency} />
                                 </TableCell>
                                 <TableCell className="py-2">
                                   <Badge
@@ -2350,7 +2351,7 @@ function ChartDrillDownSheet({
           <div className="grid grid-cols-3 gap-3">
             <div className="text-center p-2.5 rounded-lg bg-primary/5 border">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total</p>
-              <p className="text-sm font-bold text-primary mt-0.5">{formatAmount(totalAmt, currency)}</p>
+              <p className="text-sm font-bold text-primary mt-0.5"><FC amount={totalAmt} currency={currency} /></p>
             </div>
             <div className="text-center p-2.5 rounded-lg bg-muted/50 border">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Count</p>
@@ -2358,7 +2359,7 @@ function ChartDrillDownSheet({
             </div>
             <div className="text-center p-2.5 rounded-lg bg-muted/50 border">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Average</p>
-              <p className="text-sm font-bold mt-0.5">{formatAmount(avgAmt, currency)}</p>
+              <p className="text-sm font-bold mt-0.5"><FC amount={avgAmt} currency={currency} /></p>
             </div>
           </div>
 
@@ -2407,7 +2408,7 @@ function ChartDrillDownSheet({
                       <>
                         <TableCell className="text-xs font-mono py-2">{item.invoice_number || "—"}</TableCell>
                         <TableCell className="text-xs py-2">{item.v2_customers?.name || "—"}</TableCell>
-                        <TableCell className="text-xs text-right py-2 font-semibold">{formatAmount(item.total || 0, currency)}</TableCell>
+                        <TableCell className="text-xs text-right py-2 font-semibold"><FC amount={item.total || 0} currency={currency} /></TableCell>
                         <TableCell className="py-2"><InvoiceStatusBadge status={item.status} /></TableCell>
                       </>
                     ) : (
@@ -2419,7 +2420,7 @@ function ChartDrillDownSheet({
                           {item.description || item.counterparty_name || "—"}
                         </TableCell>
                         <TableCell className="text-xs text-right py-2 font-semibold text-emerald-600">
-                          {formatAmount(item.amount || 0, currency)}
+                          <FC amount={item.amount || 0} currency={currency} />
                         </TableCell>
                       </>
                     )}
@@ -2606,7 +2607,7 @@ function RevenueDrillDownSheet({
               <div className="grid grid-cols-3 gap-3">
                 <div className="text-center p-3 rounded-lg bg-primary/5 border">
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total</p>
-                  <p className="text-lg font-bold text-primary mt-0.5">{formatAmount(total, currency)}</p>
+                  <p className="text-lg font-bold text-primary mt-0.5"><FC amount={total} currency={currency} /></p>
                 </div>
                 <div className="text-center p-3 rounded-lg bg-muted/50 border">
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Transactions</p>
@@ -2614,7 +2615,7 @@ function RevenueDrillDownSheet({
                 </div>
                 <div className="text-center p-3 rounded-lg bg-muted/50 border">
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Avg Size</p>
-                  <p className="text-lg font-bold mt-0.5">{formatAmount(transactions.length > 0 ? total / transactions.length : 0, currency)}</p>
+                  <p className="text-lg font-bold mt-0.5"><FC amount={transactions.length > 0 ? total / transactions.length : 0} currency={currency} /></p>
                 </div>
               </div>
 
@@ -2654,7 +2655,7 @@ function RevenueDrillDownSheet({
                         <div key={c.name} className="flex items-center gap-2">
                           <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: c.fill }} />
                           <span className="text-xs truncate flex-1">{c.name}</span>
-                          <span className="text-xs font-semibold">{formatAmount(c.value, currency)}</span>
+                          <span className="text-xs font-semibold"><FC amount={c.value} currency={currency} /></span>
                           <span className="text-[10px] text-muted-foreground w-8 text-right">{pct.toFixed(0)}%</span>
                         </div>
                       );
@@ -2684,7 +2685,7 @@ function RevenueDrillDownSheet({
                             {t.transaction_date ? format(new Date(t.transaction_date), "dd MMM yy") : "—"}
                           </TableCell>
                           <TableCell className="text-xs py-2 max-w-[200px] truncate">{t.description || t.counterparty_name || "—"}</TableCell>
-                          <TableCell className="text-xs text-right py-2 font-semibold text-emerald-600">{formatAmount(t.amount, currency)}</TableCell>
+                          <TableCell className="text-xs text-right py-2 font-semibold text-emerald-600"><FC amount={t.amount} currency={currency} /></TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -2700,7 +2701,7 @@ function RevenueDrillDownSheet({
               <div className="grid grid-cols-3 gap-3">
                 <div className="text-center p-3 rounded-lg bg-amber-50 border border-amber-200">
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total AR</p>
-                  <p className="text-lg font-bold text-amber-600 mt-0.5">{formatAmount(total, currency)}</p>
+                  <p className="text-lg font-bold text-amber-600 mt-0.5"><FC amount={total} currency={currency} /></p>
                 </div>
                 <div className="text-center p-3 rounded-lg bg-muted/50 border">
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Invoices</p>
@@ -2725,7 +2726,7 @@ function RevenueDrillDownSheet({
                             <span className="font-medium truncate max-w-[220px]">{c.name}</span>
                             <div className="flex items-center gap-2">
                               <Badge variant="outline" className="text-[9px]">{c.count} inv</Badge>
-                              <span className="font-semibold text-xs">{formatAmount(c.total, currency)}</span>
+                              <span className="font-semibold text-xs"><FC amount={c.total} currency={currency} /></span>
                             </div>
                           </div>
                           <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
@@ -2760,7 +2761,7 @@ function RevenueDrillDownSheet({
                           <TableCell className="text-xs font-mono py-2">{inv.invoice_number || "—"}</TableCell>
                           <TableCell className="text-xs py-2">{inv.v2_customers?.name || "—"}</TableCell>
                           <TableCell className="text-xs py-2">{inv.due_date ? format(new Date(inv.due_date), "dd MMM yy") : "—"}</TableCell>
-                          <TableCell className="text-xs text-right py-2 font-semibold">{formatAmount(inv.total || 0, currency)}</TableCell>
+                          <TableCell className="text-xs text-right py-2 font-semibold"><FC amount={inv.total || 0} currency={currency} /></TableCell>
                           <TableCell className="py-2"><InvoiceStatusBadge status={inv.status} /></TableCell>
                         </TableRow>
                       ))}
@@ -2777,7 +2778,7 @@ function RevenueDrillDownSheet({
               <div className="grid grid-cols-3 gap-3">
                 <div className="text-center p-3 rounded-lg bg-red-50 border border-red-200">
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Overdue Total</p>
-                  <p className="text-lg font-bold text-red-600 mt-0.5">{formatAmount(total, currency)}</p>
+                  <p className="text-lg font-bold text-red-600 mt-0.5"><FC amount={total} currency={currency} /></p>
                 </div>
                 <div className="text-center p-3 rounded-lg bg-muted/50 border">
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Invoices</p>
@@ -2841,7 +2842,7 @@ function RevenueDrillDownSheet({
                           <TableCell className="py-2">
                             <Badge variant="destructive" className="text-[9px]">{inv.daysOverdue}d</Badge>
                           </TableCell>
-                          <TableCell className="text-xs text-right py-2 font-semibold">{formatAmount(inv.total || 0, currency)}</TableCell>
+                          <TableCell className="text-xs text-right py-2 font-semibold"><FC amount={inv.total || 0} currency={currency} /></TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -2949,7 +2950,7 @@ function RevenueDrillDownSheet({
                         <TableRow key={inv.id}>
                           <TableCell className="text-xs font-mono py-2">{inv.invoice_number || "—"}</TableCell>
                           <TableCell className="text-xs py-2">{inv.v2_customers?.name || "—"}</TableCell>
-                          <TableCell className="text-xs text-right py-2 font-semibold">{formatAmount(inv.total || 0, currency)}</TableCell>
+                          <TableCell className="text-xs text-right py-2 font-semibold"><FC amount={inv.total || 0} currency={currency} /></TableCell>
                           <TableCell className="py-2"><InvoiceStatusBadge status={inv.status} /></TableCell>
                         </TableRow>
                       ))}
@@ -3108,17 +3109,17 @@ function InvoiceDetail({
       <div className="space-y-2">
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Subtotal</span>
-          <span>{formatAmount(invoice.subtotal || 0, currency)}</span>
+          <span><FC amount={invoice.subtotal || 0} currency={currency} /></span>
         </div>
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Tax</span>
-          <span>{formatAmount(invoice.tax_amount || 0, currency)}</span>
+          <span><FC amount={invoice.tax_amount || 0} currency={currency} /></span>
         </div>
         <Separator />
         <div className="flex justify-between font-semibold">
           <span>Total</span>
           <span className="text-primary">
-            {formatAmount(invoice.total || 0, currency)}
+            <FC amount={invoice.total || 0} currency={currency} />
           </span>
         </div>
       </div>
@@ -3368,14 +3369,14 @@ function PaymentsCollectionsTab() {
                   <TableRow key={i}>
                     <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{fmtDate(a.txn.transaction_date)}</TableCell>
                     <TableCell className="text-sm max-w-[200px] truncate">{a.txn.description || "—"}</TableCell>
-                    <TableCell className="text-right font-semibold text-sm text-green-600">{formatAmount(a.txn.amount, currency)}</TableCell>
+                    <TableCell className="text-right font-semibold text-sm text-green-600"><FC amount={a.txn.amount} currency={currency} /></TableCell>
                     <TableCell className="text-xs">
                       <Badge variant="outline" className="text-[10px]">
                         {a.invoice.invoice_number || `INV-${a.invoice.id?.slice(0, 6)}`}
                       </Badge>
                     </TableCell>
                     <TableCell className={`text-right text-sm ${Math.abs(a.diff) < 0.01 ? "text-green-600" : "text-amber-500"}`}>
-                      {Math.abs(a.diff) < 0.01 ? "Exact" : formatAmount(a.diff, currency)}
+                      {Math.abs(a.diff) < 0.01 ? "Exact" : <FC amount={a.diff} currency={currency} />}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -3391,7 +3392,7 @@ function PaymentsCollectionsTab() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-medium text-amber-600">Unallocated Payments ({unallocated.length})</CardTitle>
-              <p className="text-xs text-muted-foreground">{formatAmount(unallocated.reduce((s: number, t: any) => s + (t.amount || 0), 0), currency)} total</p>
+              <p className="text-xs text-muted-foreground"><FC amount={unallocated.reduce((s: number, t: any) => s + (t.amount || 0), 0)} currency={currency} /> total</p>
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -3399,7 +3400,7 @@ function PaymentsCollectionsTab() {
             <div className="flex items-center gap-2 flex-wrap">
               {unallocatedByReason.map(([reason, { items, color, total }]) => (
                 <Badge key={reason} variant="outline" className={`text-[10px] gap-1 cursor-default ${color}`}>
-                  {reason}: {items.length} ({formatAmount(total, currency)})
+                  {reason}: {items.length} (<FC amount={total} currency={currency} />)
                 </Badge>
               ))}
             </div>
@@ -3422,7 +3423,7 @@ function PaymentsCollectionsTab() {
                       <TableRow key={i} className="bg-amber-50/30">
                         <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{fmtDate(txn.transaction_date)}</TableCell>
                         <TableCell className="text-sm max-w-[250px] truncate">{txn.description || "—"}</TableCell>
-                        <TableCell className="text-right font-semibold text-sm">{formatAmount(txn.amount, currency)}</TableCell>
+                        <TableCell className="text-right font-semibold text-sm"><FC amount={txn.amount} currency={currency} /></TableCell>
                         <TableCell><Badge variant="outline" className={`text-[10px] ${color}`}>{reason}</Badge></TableCell>
                       </TableRow>
                     );
@@ -3460,9 +3461,9 @@ function PaymentsCollectionsTab() {
                     <TableRow key={inv.id}>
                       <TableCell className="text-xs font-mono">{inv.invoice_number || "—"}</TableCell>
                       <TableCell className="text-sm">{inv.customers?.name || inv.customer_name || "—"}</TableCell>
-                      <TableCell className="text-right text-sm">{formatAmount(inv.total || 0, currency)}</TableCell>
-                      <TableCell className="text-right text-sm text-green-600">{formatAmount(inv.amount_paid || 0, currency)}</TableCell>
-                      <TableCell className="text-right text-sm font-semibold text-red-500">{formatAmount(shortfall, currency)}</TableCell>
+                      <TableCell className="text-right text-sm"><FC amount={inv.total || 0} currency={currency} /></TableCell>
+                      <TableCell className="text-right text-sm text-green-600"><FC amount={inv.amount_paid || 0} currency={currency} /></TableCell>
+                      <TableCell className="text-right text-sm font-semibold text-red-500"><FC amount={shortfall} currency={currency} /></TableCell>
                       <TableCell>
                         <Badge variant="outline" className="text-[10px]">{pctPaid.toFixed(0)}%</Badge>
                       </TableCell>
@@ -3498,9 +3499,9 @@ function PaymentsCollectionsTab() {
                   return (
                     <TableRow key={i} className="bg-blue-50/30">
                       <TableCell className="text-sm">{a.invoice?.v2_customers?.name || "—"}</TableCell>
-                      <TableCell className="text-right text-sm">{formatAmount(a.invoice?.total || 0, currency)}</TableCell>
-                      <TableCell className="text-right text-sm text-green-600">{formatAmount(a.txn?.amount || 0, currency)}</TableCell>
-                      <TableCell className="text-right text-sm font-semibold text-blue-500">{formatAmount(a.diff, currency)}</TableCell>
+                      <TableCell className="text-right text-sm"><FC amount={a.invoice?.total || 0} currency={currency} /></TableCell>
+                      <TableCell className="text-right text-sm text-green-600"><FC amount={a.txn?.amount || 0} currency={currency} /></TableCell>
+                      <TableCell className="text-right text-sm font-semibold text-blue-500"><FC amount={a.diff} currency={currency} /></TableCell>
                       <TableCell>
                         <Badge variant="outline" className={`text-[10px] ${r.color}`}>{r.reason}</Badge>
                         <p className="text-[10px] text-muted-foreground mt-0.5 max-w-[200px]">{r.detail}</p>
@@ -3556,12 +3557,12 @@ function PaymentsCollectionsTab() {
                         <TableRow key={i}>
                           <TableCell className="text-xs whitespace-nowrap">{fmtDate(a.txn?.transaction_date)}</TableCell>
                           <TableCell className="text-xs max-w-[160px] truncate">{a.txn?.description || "—"}</TableCell>
-                          <TableCell className="text-right text-xs font-semibold text-green-600">{formatAmount(a.txn?.amount || 0, currency)}</TableCell>
+                          <TableCell className="text-right text-xs font-semibold text-green-600"><FC amount={a.txn?.amount || 0} currency={currency} /></TableCell>
                           <TableCell className="text-xs">
                             <Badge variant="outline" className="text-[9px]">{a.invoice?.invoice_number || "—"}</Badge>
                           </TableCell>
                           <TableCell className={`text-right text-xs ${Math.abs(a.diff) < 0.01 ? "text-green-600" : "text-amber-500"}`}>
-                            {Math.abs(a.diff) < 0.01 ? "Exact" : formatAmount(a.diff, currency)}
+                            {Math.abs(a.diff) < 0.01 ? "Exact" : <FC amount={a.diff} currency={currency} />}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -3580,7 +3581,7 @@ function PaymentsCollectionsTab() {
                         <CardContent className="pt-3 pb-3">
                           <div className="flex items-center justify-between">
                             <p className={`text-sm font-semibold ${color}`}>{items.length}</p>
-                            <p className="text-xs text-muted-foreground">{formatAmount(total, currency)}</p>
+                            <p className="text-xs text-muted-foreground"><FC amount={total} currency={currency} /></p>
                           </div>
                           <p className="text-xs text-muted-foreground mt-0.5">{reason}</p>
                         </CardContent>
@@ -3606,7 +3607,7 @@ function PaymentsCollectionsTab() {
                           <TableRow key={i}>
                             <TableCell className="text-xs whitespace-nowrap">{fmtDate(txn.transaction_date)}</TableCell>
                             <TableCell className="text-xs max-w-[180px] truncate">{txn.description || "—"}</TableCell>
-                            <TableCell className="text-right text-xs font-semibold">{formatAmount(txn.amount, currency)}</TableCell>
+                            <TableCell className="text-right text-xs font-semibold"><FC amount={txn.amount} currency={currency} /></TableCell>
                             <TableCell><Badge variant="outline" className={`text-[9px] ${color}`}>{reason}</Badge></TableCell>
                           </TableRow>
                         );
@@ -3622,7 +3623,7 @@ function PaymentsCollectionsTab() {
                   <Card>
                     <CardContent className="pt-4 text-center">
                       <p className="text-2xl font-bold text-red-500">
-                        {formatAmount((drillDown.items as any[]).reduce((s: number, i: any) => s + ((i.total || 0) - (i.amount_paid || 0)), 0), currency)}
+                        <FC amount={(drillDown.items as any[]).reduce((s: number, i: any) => s + ((i.total || 0) - (i.amount_paid || 0)), 0)} currency={currency} />
                       </p>
                       <p className="text-xs text-muted-foreground">Total Shortfall</p>
                     </CardContent>
@@ -3642,9 +3643,9 @@ function PaymentsCollectionsTab() {
                         <TableRow key={i}>
                           <TableCell className="text-xs font-mono">{inv.invoice_number || "—"}</TableCell>
                           <TableCell className="text-xs">{inv.customers?.name || inv.customer_name || "—"}</TableCell>
-                          <TableCell className="text-right text-xs">{formatAmount(inv.total || 0, currency)}</TableCell>
-                          <TableCell className="text-right text-xs text-green-600">{formatAmount(inv.amount_paid || 0, currency)}</TableCell>
-                          <TableCell className="text-right text-xs font-semibold text-red-500">{formatAmount((inv.total || 0) - (inv.amount_paid || 0), currency)}</TableCell>
+                          <TableCell className="text-right text-xs"><FC amount={inv.total || 0} currency={currency} /></TableCell>
+                          <TableCell className="text-right text-xs text-green-600"><FC amount={inv.amount_paid || 0} currency={currency} /></TableCell>
+                          <TableCell className="text-right text-xs font-semibold text-red-500"><FC amount={(inv.total || 0) - (inv.amount_paid || 0)} currency={currency} /></TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -3658,7 +3659,7 @@ function PaymentsCollectionsTab() {
                   <Card>
                     <CardContent className="pt-4 text-center">
                       <p className="text-2xl font-bold text-blue-500">
-                        {formatAmount((drillDown.items as any[]).reduce((s: number, a: any) => s + (a.diff || 0), 0), currency)}
+                        <FC amount={(drillDown.items as any[]).reduce((s: number, a: any) => s + (a.diff || 0), 0)} currency={currency} />
                       </p>
                       <p className="text-xs text-muted-foreground">Total Excess Received</p>
                     </CardContent>
@@ -3681,15 +3682,15 @@ function PaymentsCollectionsTab() {
                           <div className="grid grid-cols-3 gap-2 text-center">
                             <div className="p-1.5 rounded bg-muted/50">
                               <p className="text-[10px] text-muted-foreground uppercase">Invoiced</p>
-                              <p className="text-sm font-semibold">{formatAmount(a.invoice?.total || 0, currency)}</p>
+                              <p className="text-sm font-semibold"><FC amount={a.invoice?.total || 0} currency={currency} /></p>
                             </div>
                             <div className="p-1.5 rounded bg-green-50">
                               <p className="text-[10px] text-muted-foreground uppercase">Received</p>
-                              <p className="text-sm font-semibold text-green-600">{formatAmount(a.txn?.amount || 0, currency)}</p>
+                              <p className="text-sm font-semibold text-green-600"><FC amount={a.txn?.amount || 0} currency={currency} /></p>
                             </div>
                             <div className="p-1.5 rounded bg-blue-50">
                               <p className="text-[10px] text-muted-foreground uppercase">Excess</p>
-                              <p className="text-sm font-semibold text-blue-500">{formatAmount(a.diff, currency)}</p>
+                              <p className="text-sm font-semibold text-blue-500"><FC amount={a.diff} currency={currency} /></p>
                             </div>
                           </div>
                           <div className="bg-muted/30 rounded p-2">
@@ -4002,12 +4003,12 @@ function RevenueVarianceTab() {
                   onClick={() => setDrillDown({ type: "month-detail", title: fmtMonth(row.month), description: `Revenue: ${formatAmount(row.revenue, currency)} · ${row.txnCount} transactions`, data: row })}
                 >
                   <TableCell className="text-sm font-medium">{fmtMonth(row.month)}</TableCell>
-                  <TableCell className="text-right text-sm font-semibold">{formatAmount(row.revenue, currency)}</TableCell>
+                  <TableCell className="text-right text-sm font-semibold"><FC amount={row.revenue} currency={currency} /></TableCell>
                   <TableCell className="text-right text-sm text-muted-foreground">
-                    {i > 0 ? formatAmount(row.prevRevenue, currency) : "—"}
+                    {i > 0 ? <FC amount={row.prevRevenue} currency={currency} /> : "—"}
                   </TableCell>
                   <TableCell className={`text-right text-sm ${row.changeAmt >= 0 ? "text-green-600" : "text-red-500"}`}>
-                    {i > 0 ? formatAmount(Math.abs(row.changeAmt), currency) : "—"}
+                    {i > 0 ? <FC amount={Math.abs(row.changeAmt)} currency={currency} /> : "—"}
                   </TableCell>
                   <TableCell className={`text-right text-sm font-semibold ${row.changePct >= 0 ? "text-green-600" : "text-red-500"}`}>
                     {i > 0 ? `${row.changePct >= 0 ? "+" : ""}${row.changePct.toFixed(1)}%` : "—"}
@@ -4055,7 +4056,7 @@ function RevenueVarianceTab() {
                     <div className="flex-1">
                       <p className="text-sm font-medium">{format(new Date(a.month + "-01"), "MMMM yyyy")}</p>
                       <p className="text-xs text-muted-foreground">
-                        Revenue: {formatAmount(a.revenue, currency)} — Z-Score: {a.zScore.toFixed(2)}
+                        Revenue: <FC amount={a.revenue} currency={currency} /> — Z-Score: {a.zScore.toFixed(2)}
                       </p>
                     </div>
                     <Badge variant={a.status === "spike" ? "default" : "destructive"} className="text-[10px]">
@@ -4101,11 +4102,11 @@ function RevenueVarianceTab() {
                       <p className="text-[10px] text-muted-foreground">Months</p>
                     </CardContent></Card>
                     <Card><CardContent className="pt-3 text-center">
-                      <p className="text-lg font-bold text-green-600">{formatAmount(Math.max(...monthlyComparison.map((m) => m.revenue), 0), currency)}</p>
+                      <p className="text-lg font-bold text-green-600"><FC amount={Math.max(...monthlyComparison.map((m) => m.revenue), 0)} currency={currency} /></p>
                       <p className="text-[10px] text-muted-foreground">Peak</p>
                     </CardContent></Card>
                     <Card><CardContent className="pt-3 text-center">
-                      <p className="text-lg font-bold text-amber-500">{formatAmount(Math.min(...monthlyComparison.map((m) => m.revenue), 0), currency)}</p>
+                      <p className="text-lg font-bold text-amber-500"><FC amount={Math.min(...monthlyComparison.map((m) => m.revenue), 0)} currency={currency} /></p>
                       <p className="text-[10px] text-muted-foreground">Lowest</p>
                     </CardContent></Card>
                   </div>
@@ -4121,7 +4122,7 @@ function RevenueVarianceTab() {
                       {monthlyComparison.map((row, i) => (
                         <TableRow key={row.month} className="cursor-pointer hover:bg-muted/50" onClick={() => setDrillDown({ type: "month-detail", title: fmtMonth(row.month), description: `Revenue: ${formatAmount(row.revenue, currency)} · ${row.txnCount} transactions`, data: row })}>
                           <TableCell className="text-xs font-medium">{fmtMonth(row.month)}</TableCell>
-                          <TableCell className="text-right text-xs font-semibold">{formatAmount(row.revenue, currency)}</TableCell>
+                          <TableCell className="text-right text-xs font-semibold"><FC amount={row.revenue} currency={currency} /></TableCell>
                           <TableCell className="text-right text-xs">{row.txnCount}</TableCell>
                           <TableCell className={`text-right text-xs ${row.changePct >= 0 ? "text-green-600" : "text-red-500"}`}>{i > 0 ? `${row.changePct >= 0 ? "+" : ""}${row.changePct.toFixed(1)}%` : "—"}</TableCell>
                           <TableCell>
@@ -4160,7 +4161,7 @@ function RevenueVarianceTab() {
                             {a.status === "spike" ? <ArrowUpRight className="h-4 w-4 text-blue-500" /> : <ArrowDownRight className="h-4 w-4 text-red-500" />}
                             <div className="flex-1">
                               <p className="text-sm font-semibold">{fmtMonth(a.month)}</p>
-                              <p className="text-xs text-muted-foreground">{formatAmount(a.revenue, currency)} · {a.txnCount} txns · Z: {a.zScore.toFixed(2)}</p>
+                              <p className="text-xs text-muted-foreground"><FC amount={a.revenue} currency={currency} /> · {a.txnCount} txns · Z: {a.zScore.toFixed(2)}</p>
                             </div>
                             <Badge variant={a.status === "spike" ? "default" : "destructive"} className="text-[10px]">
                               {a.changePct >= 0 ? "+" : ""}{a.changePct.toFixed(0)}%
@@ -4202,7 +4203,7 @@ function RevenueVarianceTab() {
                     {/* Summary cards */}
                     <div className="grid grid-cols-3 gap-3">
                       <Card><CardContent className="pt-3 text-center">
-                        <p className="text-lg font-bold">{formatAmount(row.revenue, currency)}</p>
+                        <p className="text-lg font-bold"><FC amount={row.revenue} currency={currency} /></p>
                         <p className="text-[10px] text-muted-foreground">Revenue</p>
                       </CardContent></Card>
                       <Card><CardContent className="pt-3 text-center">
@@ -4224,7 +4225,7 @@ function RevenueVarianceTab() {
                           <div className="flex items-center justify-between">
                             <span className="text-xs text-muted-foreground">vs Previous Month</span>
                             <span className={`text-sm font-bold ${row.changePct >= 0 ? "text-green-600" : "text-red-500"}`}>
-                              {row.changePct >= 0 ? "+" : ""}{row.changePct.toFixed(1)}% ({formatAmount(Math.abs(row.changeAmt), currency)})
+                              {row.changePct >= 0 ? "+" : ""}{row.changePct.toFixed(1)}% (<FC amount={Math.abs(row.changeAmt)} currency={currency} />)
                             </span>
                           </div>
                         </CardContent>
@@ -4264,7 +4265,7 @@ function RevenueVarianceTab() {
                               <span className="font-medium">{cat}</span>
                               <span className="text-muted-foreground">({count})</span>
                             </div>
-                            <span className="font-semibold">{formatAmount(total, currency)}</span>
+                            <span className="font-semibold"><FC amount={total} currency={currency} /></span>
                           </div>
                         ))}
                       </CardContent>
@@ -4287,7 +4288,7 @@ function RevenueVarianceTab() {
                               <TableRow key={i}>
                                 <TableCell className="text-[10px] whitespace-nowrap">{t.transaction_date ? format(new Date(t.transaction_date), "dd MMM") : "—"}</TableCell>
                                 <TableCell className="text-xs max-w-[200px] truncate">{t.description || "—"}</TableCell>
-                                <TableCell className="text-right text-xs font-semibold text-green-600">{formatAmount(t.amount, currency)}</TableCell>
+                                <TableCell className="text-right text-xs font-semibold text-green-600"><FC amount={t.amount} currency={currency} /></TableCell>
                               </TableRow>
                             ))}
                           </TableBody>

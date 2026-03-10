@@ -95,6 +95,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { database } from "@/lib/database";
 import { flaskApi } from "@/lib/flaskApi";
 import { formatAmount } from "@/lib/utils";
+import { FC } from "@/components/shared/FormattedCurrency";
 import { format, subMonths, addDays, differenceInDays, isAfter, parseISO } from "date-fns";
 import { getCanonicalCategory } from "@/lib/sectorMapping";
 import { toast } from "sonner";
@@ -647,11 +648,11 @@ function ExpenseOverviewTab() {
                               variant="outline"
                               className="text-[9px] h-4 text-amber-600 border-amber-200"
                             >
-                              {formatAmount(v.pending, currency)} due
+                              <FC amount={v.pending} currency={currency} /> due
                             </Badge>
                           )}
                           <span className="font-semibold text-xs">
-                            {formatAmount(v.total, currency)}
+                            <FC amount={v.total} currency={currency} />
                           </span>
                         </div>
                       </div>
@@ -690,7 +691,7 @@ function ExpenseOverviewTab() {
                   return (
                     <TableRow key={cat.name}>
                       <TableCell className="text-sm font-medium">{cat.name}</TableCell>
-                      <TableCell className="text-right text-sm font-semibold">{formatAmount(cat.value, currency)}</TableCell>
+                      <TableCell className="text-right text-sm font-semibold"><FC amount={cat.value} currency={currency} /></TableCell>
                       <TableCell className="text-right text-xs text-muted-foreground">{pctOfTotal.toFixed(1)}%</TableCell>
                       <TableCell>
                         <Progress value={pctOfTotal} className="h-1.5 w-16" />
@@ -746,7 +747,7 @@ function ExpenseOverviewTab() {
                       <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
                       <span className="flex-1 truncate">{c.name}</span>
                       <span className="text-muted-foreground">{pct.toFixed(0)}%</span>
-                      <span className="font-semibold">{formatAmount(c.value, currency)}</span>
+                      <span className="font-semibold"><FC amount={c.value} currency={currency} /></span>
                     </div>
                   );
                 })}
@@ -1038,7 +1039,7 @@ function BillsTab() {
                         : "—"}
                     </TableCell>
                     <TableCell className="text-right font-semibold text-sm">
-                      {formatAmount(bill.total || 0, currency)}
+                      <FC amount={bill.total || 0} currency={currency} />
                     </TableCell>
                     <TableCell>
                       <BillStatusBadge
@@ -1206,10 +1207,10 @@ function BillsTab() {
             </div>
             <Separator />
             <div className="space-y-1.5 text-sm">
-              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatAmount(billSubtotal, currency)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Tax ({billTaxRate}%)</span><span>{formatAmount(billTaxAmount, currency)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span><FC amount={billSubtotal} currency={currency} /></span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Tax ({billTaxRate}%)</span><span><FC amount={billTaxAmount} currency={currency} /></span></div>
               <Separator />
-              <div className="flex justify-between font-semibold text-base"><span>Total</span><span className="text-red-500">{formatAmount(billTotal, currency)}</span></div>
+              <div className="flex justify-between font-semibold text-base"><span>Total</span><span className="text-red-500"><FC amount={billTotal} currency={currency} /></span></div>
             </div>
             <div className="space-y-2">
               <Label className="text-xs">Notes</Label>
@@ -1385,7 +1386,7 @@ function APAgingTab() {
                       </Badge>
                     </div>
                     <span className="font-semibold">
-                      {formatAmount(bucket.total, currency)}
+                      <FC amount={bucket.total} currency={currency} />
                     </span>
                   </div>
                   <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
@@ -1458,7 +1459,7 @@ function APAgingTab() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-semibold text-sm">
-                        {formatAmount(bill.total || 0, currency)}
+                        <FC amount={bill.total || 0} currency={currency} />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1772,15 +1773,15 @@ function VendorsTab() {
                   </TableCell>
                   <TableCell className="text-sm">{v.billCount}</TableCell>
                   <TableCell className="text-right text-sm font-medium">
-                    {formatAmount(v.totalBilled, currency)}
+                    <FC amount={v.totalBilled} currency={currency} />
                   </TableCell>
                   <TableCell className="text-right text-sm text-green-600">
-                    {formatAmount(v.totalPaid, currency)}
+                    <FC amount={v.totalPaid} currency={currency} />
                   </TableCell>
                   <TableCell
                     className={`text-right text-sm font-semibold ${v.outstanding > 0 ? "text-amber-600" : ""}`}
                   >
-                    {formatAmount(v.outstanding, currency)}
+                    <FC amount={v.outstanding} currency={currency} />
                   </TableCell>
                   <TableCell>
                     {v.overdueCount > 0 ? (
@@ -1836,16 +1837,16 @@ function VendorsTab() {
                   <div className="grid grid-cols-3 gap-3">
                     <div className="text-center p-2 rounded-lg bg-muted/50">
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total Billed</p>
-                      <p className="text-sm font-semibold mt-0.5">{formatAmount(totalBilled, currency)}</p>
+                      <p className="text-sm font-semibold mt-0.5"><FC amount={totalBilled} currency={currency} /></p>
                     </div>
                     <div className="text-center p-2 rounded-lg bg-muted/50">
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Paid</p>
-                      <p className="text-sm font-semibold mt-0.5 text-green-600">{formatAmount(totalPaid, currency)}</p>
+                      <p className="text-sm font-semibold mt-0.5 text-green-600"><FC amount={totalPaid} currency={currency} /></p>
                     </div>
                     <div className="text-center p-2 rounded-lg bg-muted/50">
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Outstanding</p>
                       <p className={`text-sm font-semibold mt-0.5 ${outstanding > 0 ? "text-amber-600" : ""}`}>
-                        {formatAmount(outstanding, currency)}
+                        <FC amount={outstanding} currency={currency} />
                       </p>
                     </div>
                   </div>
@@ -1892,7 +1893,7 @@ function VendorsTab() {
                                     : "—"}
                                 </TableCell>
                                 <TableCell className="text-xs text-right py-2 font-medium">
-                                  {formatAmount(b.total || 0, currency)}
+                                  <FC amount={b.total || 0} currency={currency} />
                                 </TableCell>
                                 <TableCell className="py-2">
                                   <Badge
@@ -2091,17 +2092,17 @@ function BillDetail({
       <div className="space-y-2">
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Subtotal</span>
-          <span>{formatAmount(bill.subtotal || 0, currency)}</span>
+          <span><FC amount={bill.subtotal || 0} currency={currency} /></span>
         </div>
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Tax</span>
-          <span>{formatAmount(bill.tax_amount || 0, currency)}</span>
+          <span><FC amount={bill.tax_amount || 0} currency={currency} /></span>
         </div>
         <Separator />
         <div className="flex justify-between font-semibold">
           <span>Total</span>
           <span className="text-red-600">
-            {formatAmount(bill.total || 0, currency)}
+            <FC amount={bill.total || 0} currency={currency} />
           </span>
         </div>
       </div>
@@ -2260,7 +2261,7 @@ function PaymentsTab() {
                     {a.txn.transaction_date ? format(new Date(a.txn.transaction_date), "dd MMM yy") : "—"}
                   </TableCell>
                   <TableCell className="text-sm max-w-[200px] truncate">{a.txn.description || "—"}</TableCell>
-                  <TableCell className="text-right font-semibold text-sm text-red-500">{formatAmount(Math.abs(a.txn.amount), currency)}</TableCell>
+                  <TableCell className="text-right font-semibold text-sm text-red-500"><FC amount={Math.abs(a.txn.amount)} currency={currency} /></TableCell>
                   <TableCell className="text-xs">
                     <Badge variant="outline" className="text-[10px]">{a.bill.vendor_name || a.bill.bill_number || "Bill"}</Badge>
                   </TableCell>
@@ -2274,7 +2275,7 @@ function PaymentsTab() {
                     {txn.transaction_date ? format(new Date(txn.transaction_date), "dd MMM yy") : "—"}
                   </TableCell>
                   <TableCell className="text-sm max-w-[200px] truncate">{txn.description || "—"}</TableCell>
-                  <TableCell className="text-right font-semibold text-sm text-red-500">{formatAmount(Math.abs(txn.amount), currency)}</TableCell>
+                  <TableCell className="text-right font-semibold text-sm text-red-500"><FC amount={Math.abs(txn.amount)} currency={currency} /></TableCell>
                   <TableCell>—</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{getCanonicalCategory(txn.category, txn.description, txn.description) || "—"}</TableCell>
                   <TableCell><Badge variant="outline" className="text-[10px] text-amber-500 border-amber-200">Unallocated</Badge></TableCell>
@@ -2311,7 +2312,7 @@ function PaymentsTab() {
                       {txn.transaction_date ? format(new Date(txn.transaction_date), "dd MMM yyyy") : "—"}
                     </TableCell>
                     <TableCell className="text-sm font-medium max-w-[250px] truncate">{txn.description || "—"}</TableCell>
-                    <TableCell className="text-right font-bold text-red-500">{formatAmount(Math.abs(txn.amount), currency)}</TableCell>
+                    <TableCell className="text-right font-bold text-red-500"><FC amount={Math.abs(txn.amount)} currency={currency} /></TableCell>
                     <TableCell>
                       <Badge variant="destructive" className="text-[9px]">{txn.multiple}x avg</Badge>
                     </TableCell>
@@ -2351,7 +2352,7 @@ function PaymentsTab() {
                       <p className="text-[10px] text-muted-foreground">Transactions</p>
                     </div>
                     <div className="rounded-lg bg-muted/50 p-3">
-                      <p className="text-lg font-bold text-red-500">{formatAmount(grandTotal, currency)}</p>
+                      <p className="text-lg font-bold text-red-500"><FC amount={grandTotal} currency={currency} /></p>
                       <p className="text-[10px] text-muted-foreground">Total Spent</p>
                     </div>
                     <div className="rounded-lg bg-muted/50 p-3">
@@ -2368,7 +2369,7 @@ function PaymentsTab() {
                           <p className="text-[10px] text-muted-foreground">{data.count} txn{data.count !== 1 ? "s" : ""}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-sm font-semibold text-red-500">{formatAmount(data.total, currency)}</p>
+                          <p className="text-sm font-semibold text-red-500"><FC amount={data.total} currency={currency} /></p>
                           <p className="text-[10px] text-muted-foreground">{grandTotal > 0 ? ((data.total / grandTotal) * 100).toFixed(1) : 0}%</p>
                         </div>
                       </div>
@@ -2389,7 +2390,7 @@ function PaymentsTab() {
                       <p className="text-[10px] text-muted-foreground">Matched</p>
                     </div>
                     <div className="rounded-lg bg-green-50 p-3">
-                      <p className="text-lg font-bold text-green-600">{formatAmount(totalAllocated, currency)}</p>
+                      <p className="text-lg font-bold text-green-600"><FC amount={totalAllocated} currency={currency} /></p>
                       <p className="text-[10px] text-muted-foreground">Total Allocated</p>
                     </div>
                     <div className="rounded-lg bg-green-50 p-3">
@@ -2403,12 +2404,12 @@ function PaymentsTab() {
                       <div key={i} className="p-2.5 rounded-lg border space-y-1.5">
                         <div className="flex items-center justify-between">
                           <p className="text-sm font-medium truncate max-w-[200px]">{a.txn.description || "—"}</p>
-                          <p className="text-sm font-semibold text-red-500">{formatAmount(Math.abs(a.txn.amount), currency)}</p>
+                          <p className="text-sm font-semibold text-red-500"><FC amount={Math.abs(a.txn.amount)} currency={currency} /></p>
                         </div>
                         <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                           <span>{a.txn.transaction_date ? format(new Date(a.txn.transaction_date), "dd MMM yyyy") : "—"}</span>
                           <Badge variant="outline" className="text-[9px] text-green-600 border-green-200">
-                            {a.bill.vendor_name || a.bill.bill_number || "Bill"} — {formatAmount(a.bill.total || 0, currency)}
+                            {a.bill.vendor_name || a.bill.bill_number || "Bill"} — <FC amount={a.bill.total || 0} currency={currency} />
                           </Badge>
                         </div>
                       </div>
@@ -2438,7 +2439,7 @@ function PaymentsTab() {
                       <p className="text-[10px] text-muted-foreground">Unmatched</p>
                     </div>
                     <div className="rounded-lg bg-amber-50 p-3">
-                      <p className="text-lg font-bold text-amber-500">{formatAmount(totalUnalloc, currency)}</p>
+                      <p className="text-lg font-bold text-amber-500"><FC amount={totalUnalloc} currency={currency} /></p>
                       <p className="text-[10px] text-muted-foreground">Unallocated Total</p>
                     </div>
                     <div className="rounded-lg bg-amber-50 p-3">
@@ -2457,7 +2458,7 @@ function PaymentsTab() {
                           <p className="text-sm font-medium">{cat}</p>
                           <p className="text-[10px] text-muted-foreground">{data.count} txn{data.count !== 1 ? "s" : ""}</p>
                         </div>
-                        <p className="text-sm font-semibold text-amber-500">{formatAmount(data.total, currency)}</p>
+                        <p className="text-sm font-semibold text-amber-500"><FC amount={data.total} currency={currency} /></p>
                       </div>
                     ))}
                   </div>
@@ -2469,7 +2470,7 @@ function PaymentsTab() {
                           <p className="text-sm font-medium truncate">{txn.description || "—"}</p>
                           <p className="text-[10px] text-muted-foreground">{txn.transaction_date ? format(new Date(txn.transaction_date), "dd MMM yyyy") : "—"}</p>
                         </div>
-                        <p className="text-sm font-semibold text-red-500 shrink-0 ml-2">{formatAmount(Math.abs(txn.amount), currency)}</p>
+                        <p className="text-sm font-semibold text-red-500 shrink-0 ml-2"><FC amount={Math.abs(txn.amount)} currency={currency} /></p>
                       </div>
                     ))}
                     {unallocated.length > 40 && <p className="text-xs text-center text-muted-foreground">+{unallocated.length - 40} more</p>}
@@ -2492,16 +2493,16 @@ function PaymentsTab() {
                       <p className="text-[10px] text-muted-foreground">Outliers</p>
                     </div>
                     <div className="rounded-lg bg-muted/50 p-3">
-                      <p className="text-lg font-bold">{formatAmount(mean, currency)}</p>
+                      <p className="text-lg font-bold"><FC amount={mean} currency={currency} /></p>
                       <p className="text-[10px] text-muted-foreground">Avg Payment</p>
                     </div>
                     <div className="rounded-lg bg-muted/50 p-3">
-                      <p className="text-lg font-bold">{formatAmount(threshold, currency)}</p>
+                      <p className="text-lg font-bold"><FC amount={threshold} currency={currency} /></p>
                       <p className="text-[10px] text-muted-foreground">3σ Threshold</p>
                     </div>
                   </div>
                   <div className="rounded-lg bg-red-50 border border-red-200 p-3">
-                    <p className="text-xs text-red-700">These transactions exceed 3 standard deviations from the mean expense amount ({formatAmount(mean, currency)} avg ± {formatAmount(stdDev, currency)} σ). They may warrant review for unusual activity, duplicate charges, or one-off large purchases.</p>
+                    <p className="text-xs text-red-700">These transactions exceed 3 standard deviations from the mean expense amount (<FC amount={mean} currency={currency} /> avg ± <FC amount={stdDev} currency={currency} /> σ). They may warrant review for unusual activity, duplicate charges, or one-off large purchases.</p>
                   </div>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Flagged Transactions</p>
                   <div className="space-y-2">
@@ -2509,7 +2510,7 @@ function PaymentsTab() {
                       <div key={i} className="p-3 rounded-lg border border-red-200 space-y-2">
                         <div className="flex items-center justify-between">
                           <p className="text-sm font-medium truncate max-w-[220px]">{txn.description || "—"}</p>
-                          <p className="text-sm font-bold text-red-500">{formatAmount(Math.abs(txn.amount), currency)}</p>
+                          <p className="text-sm font-bold text-red-500"><FC amount={Math.abs(txn.amount)} currency={currency} /></p>
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] text-muted-foreground">{txn.transaction_date ? format(new Date(txn.transaction_date), "dd MMM yyyy") : "—"}</span>
@@ -2749,7 +2750,7 @@ function ExpenseVarianceTab() {
                 </span>
               </div>
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>Avg: {formatAmount(v.avg, currency)} → Latest: {formatAmount(v.latest, currency)}</span>
+                <span>Avg: <FC amount={v.avg} currency={currency} /> → Latest: <FC amount={v.latest} currency={currency} /></span>
                 <Badge variant={Math.abs(v.zScore) > 2 ? "destructive" : Math.abs(v.variance) > 25 ? "outline" : "secondary"} className="text-[9px]">
                   {Math.abs(v.zScore) > 2 ? "High" : Math.abs(v.variance) > 25 ? "Watch" : "Normal"}
                 </Badge>
@@ -2771,11 +2772,11 @@ function ExpenseVarianceTab() {
           <div className="grid grid-cols-3 gap-3">
             <div className="p-3 rounded-lg bg-muted/50 text-center">
               <p className="text-[10px] text-muted-foreground uppercase">Baseline</p>
-              <p className="text-sm font-bold">{formatAmount(target.avg, currency)}</p>
+              <p className="text-sm font-bold"><FC amount={target.avg} currency={currency} /></p>
             </div>
             <div className="p-3 rounded-lg bg-muted/50 text-center">
               <p className="text-[10px] text-muted-foreground uppercase">Latest</p>
-              <p className="text-sm font-bold">{formatAmount(target.latest, currency)}</p>
+              <p className="text-sm font-bold"><FC amount={target.latest} currency={currency} /></p>
             </div>
             <div className="p-3 rounded-lg bg-muted/50 text-center">
               <p className="text-[10px] text-muted-foreground uppercase">Z-Score</p>
@@ -2835,7 +2836,7 @@ function ExpenseVarianceTab() {
                       <p className="font-medium truncate">{t.counterparty_name || t.description?.slice(0, 40)}</p>
                       <p className="text-[10px] text-muted-foreground">{t.transaction_date}</p>
                     </div>
-                    <span className="text-sm font-semibold text-red-500 ml-2">{formatAmount(Math.abs(t.amount), currency)}</span>
+                    <span className="text-sm font-semibold text-red-500 ml-2"><FC amount={Math.abs(t.amount)} currency={currency} /></span>
                   </div>
                 ))}
               </div>
@@ -2868,7 +2869,7 @@ function ExpenseVarianceTab() {
                         <span className="font-medium">{t.counterparty_name || t.description?.slice(0, 35)}</span>
                         <span className="text-muted-foreground ml-2">{t.transaction_date}</span>
                       </div>
-                      <span className="font-semibold text-red-500 ml-2">{formatAmount(Math.abs(t.amount), currency)}</span>
+                      <span className="font-semibold text-red-500 ml-2"><FC amount={Math.abs(t.amount)} currency={currency} /></span>
                     </div>
                   ))}
                   {flag.transactions.length > 8 && (
@@ -2904,11 +2905,11 @@ function ExpenseVarianceTab() {
                 </div>
                 <div className="p-3 rounded-lg bg-muted/50">
                   <p className="text-[10px] text-muted-foreground uppercase">Baseline Avg</p>
-                  <p className="text-sm font-bold">{formatAmount(varData.avg, currency)}</p>
+                  <p className="text-sm font-bold"><FC amount={varData.avg} currency={currency} /></p>
                 </div>
                 <div className="p-3 rounded-lg bg-muted/50">
                   <p className="text-[10px] text-muted-foreground uppercase">Latest Month</p>
-                  <p className="text-sm font-bold">{formatAmount(varData.latest, currency)}</p>
+                  <p className="text-sm font-bold"><FC amount={varData.latest} currency={currency} /></p>
                 </div>
               </div>
 
@@ -2923,7 +2924,7 @@ function ExpenseVarianceTab() {
                       const isLatest = m.month === varData.monthlyData[varData.monthlyData.length - 1].month;
                       return (
                         <div key={m.month} className="flex-1 flex flex-col items-center gap-0.5">
-                          <span className="text-[8px] text-muted-foreground">{formatAmount(m.amount, currency)}</span>
+                          <span className="text-[8px] text-muted-foreground"><FC amount={m.amount} currency={currency} /></span>
                           <div className={`w-full rounded-t ${isLatest ? (varData.variance > 0 ? "bg-red-400" : "bg-green-400") : "bg-muted-foreground/20"}`} style={{ height: `${Math.max(pct, 4)}%` }} />
                           <span className="text-[8px] text-muted-foreground">{m.month.slice(5)}</span>
                         </div>
@@ -2969,7 +2970,7 @@ function ExpenseVarianceTab() {
                       <p className="font-medium truncate">{t.counterparty_name || t.description?.slice(0, 40)}</p>
                       <p className="text-[10px] text-muted-foreground">{t.transaction_date}</p>
                     </div>
-                    <span className="text-sm font-semibold text-red-500 ml-2">{formatAmount(Math.abs(t.amount), currency)}</span>
+                    <span className="text-sm font-semibold text-red-500 ml-2"><FC amount={Math.abs(t.amount)} currency={currency} /></span>
                   </div>
                 ))}
               </div>
@@ -3068,8 +3069,8 @@ function ExpenseVarianceTab() {
                     onClick={() => setDrillDown({ type: "category-detail", title: v.category, category: v.category })}
                   >
                     <TableCell className="text-sm font-medium">{v.category}</TableCell>
-                    <TableCell className="text-right text-sm text-muted-foreground">{formatAmount(v.avg, currency)}</TableCell>
-                    <TableCell className="text-right text-sm font-semibold">{formatAmount(v.latest, currency)}</TableCell>
+                    <TableCell className="text-right text-sm text-muted-foreground"><FC amount={v.avg} currency={currency} /></TableCell>
+                    <TableCell className="text-right text-sm font-semibold"><FC amount={v.latest} currency={currency} /></TableCell>
                     <TableCell className={`text-right text-sm font-bold ${v.variance > 0 ? "text-red-500" : "text-green-600"}`}>
                       {v.variance > 0 ? "+" : ""}{v.variance.toFixed(0)}%
                     </TableCell>

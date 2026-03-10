@@ -98,6 +98,7 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { formatDistanceToNow, format } from "date-fns";
 import { formatAmount } from "@/lib/utils";
+import { FC } from "@/components/shared/FormattedCurrency";
 
 // ── Flag type config ──────────────────────────────────────────────────
 
@@ -723,11 +724,8 @@ function BankReconciliationTab() {
           label="Discrepancy"
           value={
             selectedSession
-              ? formatAmount(Math.abs(selectedSession.unreconciled_difference || 0), currency)
-              : formatAmount(
-                  sessions.reduce((s, x) => s + Math.abs(x.unreconciled_difference || 0), 0),
-                  currency,
-                )
+              ? <FC amount={Math.abs(selectedSession.unreconciled_difference || 0)} currency={currency} />
+              : <FC amount={sessions.reduce((s, x) => s + Math.abs(x.unreconciled_difference || 0), 0)} currency={currency} />
           }
           icon={TrendingUp}
           sub={
@@ -967,7 +965,7 @@ function BankReconciliationTab() {
                 icon={selectedSession.unreconciled_difference === 0 ? ShieldCheck : XCircle}
                 iconColor={selectedSession.unreconciled_difference === 0 ? "text-green-500" : "text-red-500"}
                 label="Difference"
-                value={formatAmount(selectedSession.unreconciled_difference, currency)}
+                value={<FC amount={selectedSession.unreconciled_difference} currency={currency} />}
                 onClick={() => setSummaryDrillDown("difference")}
               />
               {selectedSession.status !== "completed" && (
@@ -1280,7 +1278,7 @@ function BankReconciliationTab() {
                             )}
                             {item.difference !== 0 && item.status === "matched" && (
                               <span className="text-xs font-medium text-red-500">
-                                {formatAmount(item.difference, currency)}
+                                <FC amount={item.difference} currency={currency} />
                               </span>
                             )}
                             {item.status === "flagged" && (
@@ -1424,10 +1422,7 @@ function BankReconciliationTab() {
                           </p>
                         </div>
                         <span className="text-sm font-semibold shrink-0">
-                          {formatAmount(
-                            candidate.source_a_amount ?? candidate.source_b_amount ?? 0,
-                            currency,
-                          )}
+                          <FC amount={candidate.source_a_amount ?? candidate.source_b_amount ?? 0} currency={currency} />
                         </span>
                         <Link className="h-4 w-4 text-primary shrink-0" />
                       </CardContent>
@@ -1533,12 +1528,12 @@ function BankReconciliationTab() {
                       <div className="grid grid-cols-3 gap-3">
                         <div className="text-center p-2.5 rounded-lg bg-muted/50">
                           <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total Amount</p>
-                          <p className="text-sm font-semibold">{formatAmount(totalMatchedAmt, currency)}</p>
+                          <p className="text-sm font-semibold"><FC amount={totalMatchedAmt} currency={currency} /></p>
                         </div>
                         <div className="text-center p-2.5 rounded-lg bg-muted/50">
                           <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Cumulative Diff</p>
                           <p className={`text-sm font-semibold ${totalDiff === 0 ? "text-green-600" : "text-amber-600"}`}>
-                            {formatAmount(totalDiff, currency)}
+                            <FC amount={totalDiff} currency={currency} />
                           </p>
                         </div>
                         <div className="text-center p-2.5 rounded-lg bg-muted/50">
@@ -1565,7 +1560,7 @@ function BankReconciliationTab() {
                           </p>
                         </div>
                         <div className="text-right shrink-0">
-                          <p className="text-xs font-semibold">{formatAmount(item.source_a_amount ?? 0, currency)}</p>
+                          <p className="text-xs font-semibold"><FC amount={item.source_a_amount ?? 0} currency={currency} /></p>
                           <Badge variant={item.match_quality === "exact" ? "default" : "secondary"} className="text-[9px] h-3.5">
                             {item.match_quality}
                           </Badge>
@@ -1600,7 +1595,7 @@ function BankReconciliationTab() {
                           </div>
                           <div className="text-center p-2.5 rounded-lg bg-muted/50">
                             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total Amount</p>
-                            <p className="text-sm font-semibold">{formatAmount(totalFlaggedAmt, currency)}</p>
+                            <p className="text-sm font-semibold"><FC amount={totalFlaggedAmt} currency={currency} /></p>
                           </div>
                         </div>
                         <Separator />
@@ -1621,7 +1616,7 @@ function BankReconciliationTab() {
                                   {getFlagExplanation(type)}
                                 </p>
                                 <p className="text-xs font-medium">
-                                  Total: {formatAmount(typeAmt, currency)}
+                                  Total: <FC amount={typeAmt} currency={currency} />
                                 </p>
                                 <div className="mt-2 space-y-1 max-h-[120px] overflow-y-auto">
                                   {typeItems.slice(0, 10).map(item => (
@@ -1632,7 +1627,7 @@ function BankReconciliationTab() {
                                     >
                                       <span className="flex-1 truncate">{item.source_a_desc || item.source_b_desc || "—"}</span>
                                       <span className="font-medium shrink-0">
-                                        {formatAmount(item.source_a_amount ?? item.source_b_amount ?? 0, currency)}
+                                        <FC amount={item.source_a_amount ?? item.source_b_amount ?? 0} currency={currency} />
                                       </span>
                                     </div>
                                   ))}
@@ -1741,7 +1736,7 @@ function BankReconciliationTab() {
                           borderColor: overallDisc === 0 ? "rgb(187 247 208)" : "rgb(254 202 202)",
                         }}>
                           <p className={`text-3xl font-bold ${overallDisc === 0 ? "text-green-700" : "text-red-600"}`}>
-                            {formatAmount(Math.abs(overallDisc), currency)}
+                            <FC amount={Math.abs(overallDisc)} currency={currency} />
                           </p>
                           <p className="text-sm text-muted-foreground mt-1">
                             {overallDisc === 0 ? "Fully Balanced" : "Total Discrepancy"}
@@ -1750,12 +1745,12 @@ function BankReconciliationTab() {
                         <div className="grid grid-cols-2 gap-3">
                           <div className="text-center p-2.5 rounded-lg bg-muted/50">
                             <p className="text-[10px] text-muted-foreground uppercase">Matched Diffs</p>
-                            <p className="text-sm font-semibold">{formatAmount(totalMatchedDiff, currency)}</p>
+                            <p className="text-sm font-semibold"><FC amount={totalMatchedDiff} currency={currency} /></p>
                             <p className="text-[10px] text-muted-foreground">{matchedDiffs.length} items with diff</p>
                           </div>
                           <div className="text-center p-2.5 rounded-lg bg-muted/50">
                             <p className="text-[10px] text-muted-foreground uppercase">Flagged Amount</p>
-                            <p className="text-sm font-semibold text-amber-600">{formatAmount(flaggedTotal, currency)}</p>
+                            <p className="text-sm font-semibold text-amber-600"><FC amount={flaggedTotal} currency={currency} /></p>
                             <p className="text-[10px] text-muted-foreground">{flaggedItems.length} unreconciled</p>
                           </div>
                         </div>
@@ -1773,11 +1768,11 @@ function BankReconciliationTab() {
                                   <div className="flex-1 min-w-0">
                                     <p className="text-xs font-medium truncate">{item.source_a_desc || "Transaction"}</p>
                                     <p className="text-[10px] text-muted-foreground">
-                                      Bank: {formatAmount(item.source_a_amount ?? 0, currency)} vs Ledger: {formatAmount(item.source_b_amount ?? 0, currency)}
+                                      Bank: <FC amount={item.source_a_amount ?? 0} currency={currency} /> vs Ledger: <FC amount={item.source_b_amount ?? 0} currency={currency} />
                                     </p>
                                   </div>
                                   <span className="text-xs font-bold text-red-500 shrink-0">
-                                    {formatAmount(item.difference, currency)}
+                                    <FC amount={item.difference} currency={currency} />
                                   </span>
                                 </div>
                               ))}
@@ -1911,7 +1906,7 @@ function ItemDetail({
                 )}
               </div>
               <p className="text-lg font-bold text-primary">
-                {formatAmount(item.source_a_amount ?? 0, currency)}
+                <FC amount={item.source_a_amount ?? 0} currency={currency} />
               </p>
             </>
           ) : (
@@ -1954,7 +1949,7 @@ function ItemDetail({
                 </span>
               </div>
               <p className="text-lg font-bold text-primary">
-                {formatAmount(item.source_b_amount ?? 0, currency)}
+                <FC amount={item.source_b_amount ?? 0} currency={currency} />
               </p>
               {item.status === "flagged" && (
                 <p className="text-[10px] text-amber-600 bg-amber-50 rounded px-2 py-1">
@@ -2001,7 +1996,7 @@ function ItemDetail({
           <div className="rounded-lg bg-muted/50 px-3 py-2">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Amount Diff</p>
             <p className={`text-sm font-bold ${item.difference === 0 ? "text-green-600" : "text-red-500"}`}>
-              {item.difference === 0 ? "Exact" : formatAmount(item.difference, currency)}
+              {item.difference === 0 ? "Exact" : <FC amount={item.difference} currency={currency} />}
             </p>
           </div>
           <div className="rounded-lg bg-muted/50 px-3 py-2">
@@ -2018,7 +2013,7 @@ function ItemDetail({
           <CardContent className="py-3 px-4 flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Unreconciled Amount</span>
             <span className="text-sm font-bold text-red-600">
-              {formatAmount(item.difference, currency)}
+              <FC amount={item.difference} currency={currency} />
             </span>
           </CardContent>
         </Card>
@@ -2168,7 +2163,7 @@ function SessionHistory({
                   </div>
                   <div className="text-right min-w-[80px]">
                     <p className="text-xs font-medium">
-                      {formatAmount(Math.abs(session.unreconciled_difference || 0), currency)}
+                      <FC amount={Math.abs(session.unreconciled_difference || 0)} currency={currency} />
                     </p>
                     <p className="text-[10px] text-muted-foreground">difference</p>
                   </div>
@@ -2515,7 +2510,7 @@ function CrossSystemTab() {
                       <TableRow key={i}>
                         <TableCell className="text-[10px] py-1.5">{r.reference || "—"}</TableCell>
                         <TableCell className="text-[10px] py-1.5">{r.date || "—"}</TableCell>
-                        <TableCell className="text-[10px] py-1.5 text-right font-mono">{formatAmount(r.amount, currency)}</TableCell>
+                        <TableCell className="text-[10px] py-1.5 text-right font-mono"><FC amount={r.amount} currency={currency} /></TableCell>
                       </TableRow>
                     ))}
                     {sourceAData.length > 10 && (
@@ -2562,7 +2557,7 @@ function CrossSystemTab() {
                       <TableRow key={i}>
                         <TableCell className="text-[10px] py-1.5">{r.reference || "—"}</TableCell>
                         <TableCell className="text-[10px] py-1.5">{r.date || "—"}</TableCell>
-                        <TableCell className="text-[10px] py-1.5 text-right font-mono">{formatAmount(r.amount, currency)}</TableCell>
+                        <TableCell className="text-[10px] py-1.5 text-right font-mono"><FC amount={r.amount} currency={currency} /></TableCell>
                       </TableRow>
                     ))}
                     {sourceBData.length > 10 && (
@@ -2632,7 +2627,7 @@ function CrossSystemTab() {
             <MiniStat icon={Target} iconColor="text-primary" label="Match Rate" value={`${matchRate}%`} />
             <MiniStat icon={CheckCircle2} iconColor="text-green-500" label="Matched" value={matchedCount.toString()} />
             <MiniStat icon={AlertTriangle} iconColor="text-amber-500" label="Mismatches" value={mismatchCount.toString()} />
-            <MiniStat icon={DollarSign} iconColor="text-red-500" label="Total Discrepancy" value={formatAmount(totalDiscrepancy, currency)} />
+            <MiniStat icon={DollarSign} iconColor="text-red-500" label="Total Discrepancy" value={<FC amount={totalDiscrepancy} currency={currency} />} />
           </div>
 
           {/* Filter */}
@@ -2685,12 +2680,12 @@ function CrossSystemTab() {
                       </TableCell>
                       <TableCell className="text-xs py-2">{r.sourceA.reference || "—"}</TableCell>
                       <TableCell className="text-xs py-2 max-w-[140px] truncate">{r.sourceA.description || "—"}</TableCell>
-                      <TableCell className="text-xs py-2 text-right font-mono">{formatAmount(r.sourceA.amount, currency)}</TableCell>
+                      <TableCell className="text-xs py-2 text-right font-mono"><FC amount={r.sourceA.amount} currency={currency} /></TableCell>
                       <TableCell className="text-xs py-2">{r.sourceB?.reference || "—"}</TableCell>
                       <TableCell className="text-xs py-2 max-w-[140px] truncate">{r.sourceB?.description || "—"}</TableCell>
-                      <TableCell className="text-xs py-2 text-right font-mono">{r.sourceB ? formatAmount(r.sourceB.amount, currency) : "—"}</TableCell>
+                      <TableCell className="text-xs py-2 text-right font-mono">{r.sourceB ? <FC amount={r.sourceB.amount} currency={currency} /> : "—"}</TableCell>
                       <TableCell className={`text-xs py-2 text-right font-mono font-medium ${r.difference !== 0 ? "text-red-500" : ""}`}>
-                        {r.status !== "unmatched" && r.sourceB ? formatAmount(r.difference, currency) : "—"}
+                        {r.status !== "unmatched" && r.sourceB ? <FC amount={r.difference} currency={currency} /> : "—"}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -3168,7 +3163,7 @@ function KPICard({
   color,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   icon: React.ComponentType<{ className?: string }>;
   sub: string;
   color: string;
@@ -3199,7 +3194,7 @@ function MiniStat({
   icon: React.ComponentType<{ className?: string }>;
   iconColor: string;
   label: string;
-  value: string;
+  value: React.ReactNode;
   onClick?: () => void;
 }) {
   return (

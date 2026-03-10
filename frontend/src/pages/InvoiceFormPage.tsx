@@ -52,6 +52,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { database } from "@/lib/database";
 import { flaskApi } from "@/lib/flaskApi";
 import { formatAmount } from "@/lib/utils";
+import { FC } from "@/components/shared/FormattedCurrency";
 import { format, addDays } from "date-fns";
 import { toast } from "sonner";
 
@@ -473,7 +474,7 @@ export default function InvoiceFormPage() {
                         />
                       </div>
                       <div className="col-span-1 text-right text-sm font-medium">
-                        {formatAmount(lineTotal, currency)}
+                        <FC amount={lineTotal} currency={currency} />
                       </div>
                       <div className="col-span-1 flex justify-center">
                         <Button
@@ -496,16 +497,16 @@ export default function InvoiceFormPage() {
                 <div className="space-y-1.5 max-w-xs ml-auto text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Subtotal</span>
-                    <span>{formatAmount(subtotal, currency)}</span>
+                    <span><FC amount={subtotal} currency={currency} /></span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Tax</span>
-                    <span>{formatAmount(totalTax, currency)}</span>
+                    <span><FC amount={totalTax} currency={currency} /></span>
                   </div>
                   <Separator />
                   <div className="flex justify-between font-bold text-base">
                     <span>Total</span>
-                    <span className="text-primary">{formatAmount(grandTotal, currency)}</span>
+                    <span className="text-primary"><FC amount={grandTotal} currency={currency} /></span>
                   </div>
                 </div>
               </CardContent>
@@ -966,10 +967,10 @@ function InvoiceLivePreview({
             <div key={li.id} className="grid grid-cols-12 text-xs py-1 border-b border-muted/50">
               <div className="col-span-5 truncate">{li.description || "—"}</div>
               <div className="col-span-2 text-right">{li.quantity}</div>
-              <div className="col-span-2 text-right">{formatAmount(li.unit_price, currency)}</div>
+              <div className="col-span-2 text-right"><FC amount={li.unit_price} currency={currency} /></div>
               <div className="col-span-1 text-right text-muted-foreground">{li.tax_rate}%</div>
               <div className="col-span-2 text-right font-medium">
-                {formatAmount(li.quantity * li.unit_price * (1 + li.tax_rate / 100), currency)}
+                <FC amount={li.quantity * li.unit_price * (1 + li.tax_rate / 100)} currency={currency} />
               </div>
             </div>
           ))}
@@ -979,18 +980,18 @@ function InvoiceLivePreview({
         <div className="space-y-1 max-w-[200px] ml-auto text-xs">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Subtotal</span>
-            <span>{formatAmount(subtotal, currency)}</span>
+            <span><FC amount={subtotal} currency={currency} /></span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Tax</span>
-            <span>{formatAmount(totalTax, currency)}</span>
+            <span><FC amount={totalTax} currency={currency} /></span>
           </div>
           <div
             className="flex justify-between font-bold text-sm pt-1 mt-1 border-t-2"
             style={{ borderColor: accent }}
           >
             <span>Total</span>
-            <span style={{ color: accent }}>{formatAmount(grandTotal, currency)}</span>
+            <span style={{ color: accent }}><FC amount={grandTotal} currency={currency} /></span>
           </div>
         </div>
 
