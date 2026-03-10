@@ -545,13 +545,35 @@ def sync_connection(client_id, conn_id):
         conn.last_error = None
         db.session.commit()
 
-        return jsonify({
+        mapped = result["created"] + result["updated"]
+
+        # If nothing found, check if the OTHER type has data and hint
+        suggestion = None
+        if mapped == 0 and result["fetched"] == 0:
+            from services.odoo_sync import _fetch_odoo_data
+            hint_map = {
+                "invoices": ("bills (vendor purchases)", [("move_type", "=", "in_invoice")]),
+                "bills": ("invoices (customer sales)", [("move_type", "=", "out_invoice")]),
+            }
+            if entity_type in hint_map:
+                label, domain = hint_map[entity_type]
+                try:
+                    alt = _fetch_odoo_data(conn, "account.move", domain, ["id"])
+                    if alt:
+                        suggestion = f"No {entity_type} found in your Odoo, but {len(alt)} {label} exist. Try importing those instead."
+                except Exception:
+                    pass
+
+        resp = {
             "ok": True,
-            "mapped": result["created"] + result["updated"],
+            "mapped": mapped,
             "created": result["created"],
             "updated": result["updated"],
             "fetched": result["fetched"],
-        })
+        }
+        if suggestion:
+            resp["suggestion"] = suggestion
+        return jsonify(resp)
 
     except Exception as e:
         sync_run.status = "failed"
