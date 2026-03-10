@@ -357,3 +357,154 @@ def get_connections(client_id):
         .all()
     )
     return jsonify([c.to_dict() for c in connections])
+
+
+@entities_bp.route("/clients/<client_id>/connections", methods=["POST"])
+@require_auth
+@require_client_access
+def create_connection(client_id):
+    """Create/connect an integration (Odoo, QuickBooks, etc.)."""
+    import requests as http_requests
+
+    data = request.get_json()
+    integration_type = data.get("integration_type", "odoo")
+    creds = data.get("credentials", {})
+
+    server_url = (creds.get("server_url") or "").strip()
+    database_name = (creds.get("database") or "").strip()
+    username = (creds.get("username") or "").strip()
+    password = (creds.get("password") or "").strip()
+    api_key = (creds.get("api_key") or "").strip()
+
+    if not server_url:
+        return jsonify({"error": "Server URL is required"}), 400
+    if not username:
+        return jsonify({"error": "Username is required"}), 400
+    if not password:
+        return jsonify({"error": "Password is required"}), 400
+
+    # Clean URL
+    clean_url = server_url.rstrip("/")
+    for suffix in ("/web", "/odoo", "/web/login"):
+        if clean_url.lower().endswith(suffix):
+            clean_url = clean_url[: -len(suffix)]
+    if not clean_url.startswith("http"):
+        clean_url = "https://" + clean_url
+
+    # Auto-detect database from URL if not provided
+    if not database_name:
+        import re
+        m = re.match(r"https?://([a-zA-Z0-9_-]+)\.odoo\.com", clean_url, re.IGNORECASE)
+        if m:
+            database_name = m.group(1)
+    if not database_name:
+        return jsonify({"error": "Database name is required"}), 400
+
+    uid = None
+    auth_method = ""
+
+    # Strategy 1: Session-based auth (works on all Odoo plans)
+    try:
+        resp = http_requests.post(
+            f"{clean_url}/web/session/authenticate",
+            json={"jsonrpc": "2.0", "params": {"db": database_name, "login": username, "password": password}},
+            headers={"Content-Type": "application/json"},
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            result = resp.json().get("result", {})
+            if result.get("uid"):
+                uid = result["uid"]
+                auth_method = "session"
+    except http_requests.exceptions.ConnectionError:
+        return jsonify({"error": "Cannot reach server. Check the Server URL."}), 400
+    except http_requests.exceptions.Timeout:
+        return jsonify({"error": "Server did not respond (timeout). Check the URL."}), 400
+    except Exception:
+        pass
+
+    # Strategy 2: XML-RPC with API key
+    if not uid and api_key:
+        try:
+            import xmlrpc.client
+            common = xmlrpc.client.ServerProxy(f"{clean_url}/xmlrpc/2/common", allow_none=True)
+            uid = common.authenticate(database_name, username, api_key, {})
+            if uid:
+                auth_method = "xmlrpc"
+        except Exception:
+            pass
+
+    if not uid:
+        return jsonify({"error": "Authentication failed. Please check your credentials (username, password, database name)."}), 401
+
+    # Upsert connection
+    cid = uuid.UUID(client_id)
+    existing = Connection.query.filter_by(client_id=cid, provider=integration_type).first()
+    if existing:
+        existing.status = "connected"
+        existing.config = {
+            "server_url": clean_url,
+            "database": database_name,
+            "username": username,
+            "uid": uid,
+            "auth_method": auth_method,
+        }
+        existing.credentials = {"api_key": api_key} if api_key else {}
+        existing.last_error = None
+        existing.updated_at = datetime.now(timezone.utc)
+        conn = existing
+    else:
+        conn = Connection(
+            client_id=cid,
+            type="erp",
+            provider=integration_type,
+            display_name=f"Odoo ({database_name})",
+            status="connected",
+            config={
+                "server_url": clean_url,
+                "database": database_name,
+                "username": username,
+                "uid": uid,
+                "auth_method": auth_method,
+            },
+            credentials={"api_key": api_key} if api_key else {},
+        )
+        db.session.add(conn)
+
+    db.session.commit()
+    return jsonify(conn.to_dict()), 201
+
+
+@entities_bp.route("/clients/<client_id>/connections/<conn_id>", methods=["DELETE"])
+@require_auth
+@require_client_access
+def delete_connection(client_id, conn_id):
+    """Disconnect/delete an integration."""
+    conn = Connection.query.get_or_404(uuid.UUID(conn_id))
+    db.session.delete(conn)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@entities_bp.route("/clients/<client_id>/connections/<conn_id>/sync", methods=["POST"])
+@require_auth
+@require_client_access
+def sync_connection(client_id, conn_id):
+    """Sync data from an external integration (placeholder)."""
+    conn = Connection.query.get_or_404(uuid.UUID(conn_id))
+    if conn.status != "connected":
+        return jsonify({"error": "Connection is not active"}), 400
+
+    data = request.get_json()
+    entity_type = data.get("entity_type", "all")
+    direction = data.get("direction", "import")
+
+    # TODO: Implement actual Odoo data fetch/push via the connection config
+    conn.last_sync_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    return jsonify({
+        "ok": True,
+        "message": f"Sync ({direction}) for {entity_type} initiated",
+        "connection": conn.to_dict(),
+    })

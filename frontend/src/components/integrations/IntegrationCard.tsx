@@ -17,7 +17,7 @@ interface IntegrationCardProps {
   connection?: {
     id: string;
     status: string;
-    last_sync?: string;
+    last_sync_at?: string;
     config?: any;
   } | null;
   onConnect: (credentials: any) => Promise<void>;
@@ -52,7 +52,7 @@ export function IntegrationCard({
   const [credentials, setCredentials] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const isConnected = connection?.status === 'active';
+  const isConnected = connection?.status === 'connected';
 
   const getCredentialFields = (): CredentialField[] => {
     switch (type) {
@@ -259,9 +259,9 @@ export function IntegrationCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {isConnected && connection?.last_sync && (
+        {isConnected && connection?.last_sync_at && (
           <p className="text-xs text-muted-foreground">
-            Last synced: {new Date(connection.last_sync).toLocaleString()}
+            Last synced: {new Date(connection.last_sync_at).toLocaleString()}
           </p>
         )}
 

@@ -63,7 +63,7 @@ function ERPTab() {
   });
 
   const getConnection = (type: string) =>
-    connections.find((c: any) => c.integration_type === type) || null;
+    connections.find((c: any) => c.provider === type) || null;
 
   const handleConnect = async (type: string, credentials: any) => {
     await flaskApi.post(`/clients/${clientId}/connections`, {
@@ -76,7 +76,7 @@ function ERPTab() {
   const handleDisconnect = async (type: string) => {
     const conn = getConnection(type);
     if (conn) {
-      await flaskApi.delete(`/clients/${clientId}/connections/${conn.id}`);
+      await flaskApi.del(`/clients/${clientId}/connections/${conn.id}`);
       queryClient.invalidateQueries({ queryKey: ["connections", clientId] });
     }
   };
@@ -97,7 +97,7 @@ function ERPTab() {
   };
 
   const connectedCount = connections.filter(
-    (c: any) => c.status === "active",
+    (c: any) => c.status === "connected",
   ).length;
 
   return (
@@ -123,21 +123,21 @@ function ERPTab() {
           value={
             connections.length > 0
               ? connections
-                  .filter((c: any) => c.last_sync)
+                  .filter((c: any) => c.last_sync_at)
                   .sort(
                     (a: any, b: any) =>
-                      new Date(b.last_sync).getTime() -
-                      new Date(a.last_sync).getTime(),
-                  )[0]?.last_sync
+                      new Date(b.last_sync_at).getTime() -
+                      new Date(a.last_sync_at).getTime(),
+                  )[0]?.last_sync_at
                 ? formatDistanceToNow(
                     new Date(
                       connections
-                        .filter((c: any) => c.last_sync)
+                        .filter((c: any) => c.last_sync_at)
                         .sort(
                           (a: any, b: any) =>
-                            new Date(b.last_sync).getTime() -
-                            new Date(a.last_sync).getTime(),
-                        )[0].last_sync,
+                            new Date(b.last_sync_at).getTime() -
+                            new Date(a.last_sync_at).getTime(),
+                        )[0].last_sync_at,
                     ),
                     { addSuffix: true },
                   )
