@@ -2463,6 +2463,9 @@ function RevenueDrillDownSheet({
   pendingInvoices: any[];
   overdueInvoices: any[];
 }) {
+  const { client } = useActiveClient();
+  const businessSector = client?.industry || null;
+
   if (!drillDown) return null;
 
   const { type, title, description, transactions } = drillDown;
@@ -3051,6 +3054,9 @@ function InvoiceDetail({
   invoice: any;
   currency: string;
 }) {
+  const { client } = useActiveClient();
+  const businessSector = client?.industry || null;
+
   return (
     <div className="space-y-5 pt-6">
       <div className="grid grid-cols-2 gap-4">

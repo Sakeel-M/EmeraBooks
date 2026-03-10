@@ -2693,6 +2693,7 @@ function RecentTransactionsTab() {
         title={drillDown?.title ?? ""}
         description={drillDown?.description}
         transactions={drillDown?.transactions ?? []}
+        currency={currency}
       />
     </div>
   );
