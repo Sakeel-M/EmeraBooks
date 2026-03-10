@@ -5,7 +5,7 @@ from flask import Blueprint, request, jsonify
 from auth import require_auth
 from permissions import require_client_access, user_has_client_access
 from models.base import db
-from models.tier1 import Connection
+from models.tier1 import Connection, SyncRun
 from models.tier2 import Vendor, Customer, Bill, Invoice, Account
 
 entities_bp = Blueprint("entities", __name__, url_prefix="/api")
@@ -15,12 +15,11 @@ entities_bp = Blueprint("entities", __name__, url_prefix="/api")
 @require_auth
 @require_client_access
 def get_vendors(client_id):
-    vendors = (
-        Vendor.query
-        .filter_by(client_id=uuid.UUID(client_id))
-        .order_by(Vendor.name)
-        .all()
-    )
+    query = Vendor.query.filter_by(client_id=uuid.UUID(client_id))
+    source = request.args.get("source")
+    if source:
+        query = query.filter_by(source=source)
+    vendors = query.order_by(Vendor.name).all()
     return jsonify([v.to_dict() for v in vendors])
 
 
@@ -28,12 +27,11 @@ def get_vendors(client_id):
 @require_auth
 @require_client_access
 def get_customers(client_id):
-    customers = (
-        Customer.query
-        .filter_by(client_id=uuid.UUID(client_id))
-        .order_by(Customer.name)
-        .all()
-    )
+    query = Customer.query.filter_by(client_id=uuid.UUID(client_id))
+    source = request.args.get("source")
+    if source:
+        query = query.filter_by(source=source)
+    customers = query.order_by(Customer.name).all()
     return jsonify([c.to_dict() for c in customers])
 
 
@@ -188,6 +186,9 @@ def get_bills(client_id):
     status = request.args.get("status")
     if status:
         query = query.filter_by(status=status)
+    source = request.args.get("source")
+    if source:
+        query = query.filter_by(source=source)
     start_date = request.args.get("start_date")
     if start_date:
         query = query.filter(Bill.bill_date >= start_date)
@@ -211,6 +212,9 @@ def get_invoices(client_id):
     status = request.args.get("status")
     if status:
         query = query.filter_by(status=status)
+    source = request.args.get("source")
+    if source:
+        query = query.filter_by(source=source)
     start_date = request.args.get("start_date")
     if start_date:
         query = query.filter(Invoice.invoice_date >= start_date)
@@ -449,7 +453,7 @@ def create_connection(client_id):
             "uid": uid,
             "auth_method": auth_method,
         }
-        existing.credentials = {"api_key": api_key} if api_key else {}
+        existing.credentials = {"api_key": api_key, "password": password}
         existing.last_error = None
         existing.updated_at = datetime.now(timezone.utc)
         conn = existing
@@ -467,7 +471,7 @@ def create_connection(client_id):
                 "uid": uid,
                 "auth_method": auth_method,
             },
-            credentials={"api_key": api_key} if api_key else {},
+            credentials={"api_key": api_key, "password": password},
         )
         db.session.add(conn)
 
@@ -490,7 +494,7 @@ def delete_connection(client_id, conn_id):
 @require_auth
 @require_client_access
 def sync_connection(client_id, conn_id):
-    """Sync data from an external integration (placeholder)."""
+    """Sync data from an external integration (Odoo, etc.)."""
     conn = Connection.query.get_or_404(uuid.UUID(conn_id))
     if conn.status != "connected":
         return jsonify({"error": "Connection is not active"}), 400
@@ -499,12 +503,60 @@ def sync_connection(client_id, conn_id):
     entity_type = data.get("entity_type", "all")
     direction = data.get("direction", "import")
 
-    # TODO: Implement actual Odoo data fetch/push via the connection config
-    conn.last_sync_at = datetime.now(timezone.utc)
+    if direction == "export":
+        return jsonify({"suggestion": "Export is not yet supported. Use import to bring data from your ERP."}), 200
+
+    # Create SyncRun for tracking
+    cid = uuid.UUID(client_id)
+    sync_run = SyncRun(
+        connection_id=conn.id,
+        client_id=cid,
+        status="running",
+    )
+    db.session.add(sync_run)
     db.session.commit()
 
-    return jsonify({
-        "ok": True,
-        "message": f"Sync ({direction}) for {entity_type} initiated",
-        "connection": conn.to_dict(),
-    })
+    try:
+        from services.odoo_sync import sync_customers, sync_vendors, sync_invoices, sync_bills
+
+        handlers = {
+            "customers": sync_customers,
+            "vendors": sync_vendors,
+            "invoices": sync_invoices,
+            "bills": sync_bills,
+        }
+
+        handler = handlers.get(entity_type)
+        if not handler:
+            sync_run.status = "completed"
+            sync_run.completed_at = datetime.now(timezone.utc)
+            db.session.commit()
+            return jsonify({"suggestion": f"Import for '{entity_type}' is not yet supported. Try customers, vendors, invoices, or bills."}), 200
+
+        result = handler(conn, cid)
+
+        sync_run.status = "completed"
+        sync_run.records_fetched = result["fetched"]
+        sync_run.records_created = result["created"]
+        sync_run.records_updated = result["updated"]
+        sync_run.completed_at = datetime.now(timezone.utc)
+
+        conn.last_sync_at = datetime.now(timezone.utc)
+        conn.last_error = None
+        db.session.commit()
+
+        return jsonify({
+            "ok": True,
+            "mapped": result["created"] + result["updated"],
+            "created": result["created"],
+            "updated": result["updated"],
+            "fetched": result["fetched"],
+        })
+
+    except Exception as e:
+        sync_run.status = "failed"
+        sync_run.error_log = [str(e)]
+        sync_run.completed_at = datetime.now(timezone.utc)
+        conn.last_error = str(e)
+        db.session.commit()
+        return jsonify({"error": f"Sync failed: {str(e)}"}), 500

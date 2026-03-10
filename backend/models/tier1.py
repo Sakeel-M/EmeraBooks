@@ -32,7 +32,7 @@ class Connection(db.Model):
             "provider": self.provider,
             "display_name": self.display_name,
             "status": self.status,
-            "credentials": self.credentials,
+            "credentials": {},  # Never expose secrets to frontend
             "config": self.config,
             "last_sync_at": self.last_sync_at.isoformat() if self.last_sync_at else None,
             "last_error": self.last_error,

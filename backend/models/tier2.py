@@ -100,6 +100,8 @@ class Vendor(db.Model):
     phone = db.Column(db.Text)
     trn = db.Column(db.Text)
     category = db.Column(db.Text)
+    source = db.Column(db.Text)
+    source_ref = db.Column(db.Text)
     payment_terms = db.Column(db.Integer, default=30)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     metadata_ = db.Column("metadata", JSONB, default={})
@@ -115,6 +117,8 @@ class Vendor(db.Model):
             "phone": self.phone,
             "trn": self.trn,
             "category": self.category,
+            "source": self.source,
+            "source_ref": self.source_ref,
             "payment_terms": self.payment_terms,
             "is_active": self.is_active,
             "metadata": self.metadata_,
@@ -134,6 +138,8 @@ class Customer(db.Model):
     phone = db.Column(db.Text)
     trn = db.Column(db.Text)
     category = db.Column(db.Text)
+    source = db.Column(db.Text)
+    source_ref = db.Column(db.Text)
     payment_terms = db.Column(db.Integer, default=30)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     metadata_ = db.Column("metadata", JSONB, default={})
@@ -149,6 +155,8 @@ class Customer(db.Model):
             "phone": self.phone,
             "trn": self.trn,
             "category": self.category,
+            "source": self.source,
+            "source_ref": self.source_ref,
             "payment_terms": self.payment_terms,
             "is_active": self.is_active,
             "metadata": self.metadata_,

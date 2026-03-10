@@ -92,9 +92,40 @@ function ERPTab() {
       `/clients/${clientId}/connections/${conn.id}/sync`,
       { entity_type: entityType, direction },
     );
+    // Invalidate connections + all imported data queries
     queryClient.invalidateQueries({ queryKey: ["connections", clientId] });
+    queryClient.invalidateQueries({ queryKey: ["erp-invoices", clientId] });
+    queryClient.invalidateQueries({ queryKey: ["erp-bills", clientId] });
+    queryClient.invalidateQueries({ queryKey: ["erp-vendors", clientId] });
+    queryClient.invalidateQueries({ queryKey: ["erp-customers", clientId] });
     return result;
   };
+
+  // ── Imported ERP data queries ──
+  const hasAnyConnection = connectedCount > 0;
+
+  const { data: erpInvoices = [] } = useQuery({
+    queryKey: ["erp-invoices", clientId],
+    queryFn: () => database.getInvoices(clientId!, { source: "odoo" }),
+    enabled: !!clientId && hasAnyConnection,
+  });
+  const { data: erpBills = [] } = useQuery({
+    queryKey: ["erp-bills", clientId],
+    queryFn: () => database.getBills(clientId!, { source: "odoo" }),
+    enabled: !!clientId && hasAnyConnection,
+  });
+  const { data: erpVendors = [] } = useQuery({
+    queryKey: ["erp-vendors", clientId],
+    queryFn: () => database.getVendors(clientId!, { source: "odoo" }),
+    enabled: !!clientId && hasAnyConnection,
+  });
+  const { data: erpCustomers = [] } = useQuery({
+    queryKey: ["erp-customers", clientId],
+    queryFn: () => database.getCustomers(clientId!, { source: "odoo" }),
+    enabled: !!clientId && hasAnyConnection,
+  });
+
+  const totalImported = erpInvoices.length + erpBills.length + erpVendors.length + erpCustomers.length;
 
   const connectedCount = connections.filter(
     (c: any) => c.status === "connected",
@@ -182,6 +213,213 @@ function ERPTab() {
           onSync={(entity, dir) => handleSync("zoho", entity, dir)}
         />
       </div>
+
+      {/* ── Imported ERP Data ── */}
+      {hasAnyConnection && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ArrowRightLeft className="h-4 w-4 text-purple-600" />
+                <CardTitle className="text-sm font-semibold">Imported ERP Data</CardTitle>
+              </div>
+              {totalImported > 0 && (
+                <Badge variant="outline" className="text-[10px]">
+                  {totalImported} records
+                </Badge>
+              )}
+            </div>
+            <CardDescription className="text-xs">
+              Data imported from your connected ERP system
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {totalImported === 0 ? (
+              <div className="flex flex-col items-center py-8 text-center">
+                <ArrowRightLeft className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  No data imported yet
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Use the "Sync Data" button above to import invoices, bills, customers, and vendors from your ERP.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Summary counts */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="rounded-lg border p-3 text-center">
+                    <p className="text-lg font-bold text-primary">{erpInvoices.length}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Invoices</p>
+                  </div>
+                  <div className="rounded-lg border p-3 text-center">
+                    <p className="text-lg font-bold text-primary">{erpBills.length}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Bills</p>
+                  </div>
+                  <div className="rounded-lg border p-3 text-center">
+                    <p className="text-lg font-bold text-primary">{erpCustomers.length}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Customers</p>
+                  </div>
+                  <div className="rounded-lg border p-3 text-center">
+                    <p className="text-lg font-bold text-primary">{erpVendors.length}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Vendors</p>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Invoices table */}
+                {erpInvoices.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <FileSpreadsheet className="h-3 w-3" />
+                      Invoices ({erpInvoices.length})
+                    </h4>
+                    <div className="rounded-md border overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-muted/50">
+                            <th className="text-left p-2 font-medium">Invoice #</th>
+                            <th className="text-left p-2 font-medium">Customer</th>
+                            <th className="text-left p-2 font-medium">Date</th>
+                            <th className="text-left p-2 font-medium">Due Date</th>
+                            <th className="text-right p-2 font-medium">Amount</th>
+                            <th className="text-center p-2 font-medium">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {erpInvoices.map((inv: any) => (
+                            <tr key={inv.id} className="border-t hover:bg-muted/30">
+                              <td className="p-2 font-mono">{inv.invoice_number || "—"}</td>
+                              <td className="p-2">{inv.v2_customers?.name || inv.customer_name || "—"}</td>
+                              <td className="p-2">{inv.invoice_date || "—"}</td>
+                              <td className="p-2">{inv.due_date || "—"}</td>
+                              <td className="p-2 text-right font-medium">
+                                {formatAmount(inv.total || 0, currency)}
+                              </td>
+                              <td className="p-2 text-center">
+                                <Badge variant={inv.status === "sent" || inv.status === "paid" ? "default" : "secondary"} className="text-[9px]">
+                                  {inv.status}
+                                </Badge>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Bills table */}
+                {erpBills.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <FileSpreadsheet className="h-3 w-3" />
+                      Bills ({erpBills.length})
+                    </h4>
+                    <div className="rounded-md border overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-muted/50">
+                            <th className="text-left p-2 font-medium">Bill #</th>
+                            <th className="text-left p-2 font-medium">Vendor</th>
+                            <th className="text-left p-2 font-medium">Date</th>
+                            <th className="text-left p-2 font-medium">Due Date</th>
+                            <th className="text-right p-2 font-medium">Amount</th>
+                            <th className="text-center p-2 font-medium">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {erpBills.map((bill: any) => (
+                            <tr key={bill.id} className="border-t hover:bg-muted/30">
+                              <td className="p-2 font-mono">{bill.bill_number || "—"}</td>
+                              <td className="p-2">{bill.v2_vendors?.name || bill.vendor_name || "—"}</td>
+                              <td className="p-2">{bill.bill_date || "—"}</td>
+                              <td className="p-2">{bill.due_date || "—"}</td>
+                              <td className="p-2 text-right font-medium">
+                                {formatAmount(bill.total || 0, currency)}
+                              </td>
+                              <td className="p-2 text-center">
+                                <Badge variant={bill.status === "open" || bill.status === "paid" ? "default" : "secondary"} className="text-[9px]">
+                                  {bill.status}
+                                </Badge>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Customers list */}
+                {erpCustomers.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <Users className="h-3 w-3" />
+                      Customers ({erpCustomers.length})
+                    </h4>
+                    <div className="rounded-md border overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-muted/50">
+                            <th className="text-left p-2 font-medium">Name</th>
+                            <th className="text-left p-2 font-medium">Email</th>
+                            <th className="text-left p-2 font-medium">Phone</th>
+                            <th className="text-left p-2 font-medium">TRN</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {erpCustomers.map((c: any) => (
+                            <tr key={c.id} className="border-t hover:bg-muted/30">
+                              <td className="p-2 font-medium">{c.name}</td>
+                              <td className="p-2 text-muted-foreground">{c.email || "—"}</td>
+                              <td className="p-2 text-muted-foreground">{c.phone || "—"}</td>
+                              <td className="p-2 text-muted-foreground">{c.trn || "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Vendors list */}
+                {erpVendors.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <Users className="h-3 w-3" />
+                      Vendors ({erpVendors.length})
+                    </h4>
+                    <div className="rounded-md border overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-muted/50">
+                            <th className="text-left p-2 font-medium">Name</th>
+                            <th className="text-left p-2 font-medium">Email</th>
+                            <th className="text-left p-2 font-medium">Phone</th>
+                            <th className="text-left p-2 font-medium">TRN</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {erpVendors.map((v: any) => (
+                            <tr key={v.id} className="border-t hover:bg-muted/30">
+                              <td className="p-2 font-medium">{v.name}</td>
+                              <td className="p-2 text-muted-foreground">{v.email || "—"}</td>
+                              <td className="p-2 text-muted-foreground">{v.phone || "—"}</td>
+                              <td className="p-2 text-muted-foreground">{v.trn || "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

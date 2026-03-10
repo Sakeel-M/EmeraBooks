@@ -379,11 +379,12 @@ export const database = {
 
   // ── Invoices ─────────────────────────────────────────────────────────
 
-  async getInvoices(clientId: string, options?: { status?: string; startDate?: string; endDate?: string }): Promise<any[]> {
+  async getInvoices(clientId: string, options?: { status?: string; startDate?: string; endDate?: string; source?: string }): Promise<any[]> {
     const params = new URLSearchParams();
     if (options?.status) params.set("status", options.status);
     if (options?.startDate) params.set("start_date", options.startDate);
     if (options?.endDate) params.set("end_date", options.endDate);
+    if (options?.source) params.set("source", options.source);
     const qs = params.toString();
     return flaskApi.get<any[]>(`/clients/${clientId}/invoices${qs ? `?${qs}` : ""}`);
   },
@@ -394,11 +395,12 @@ export const database = {
 
   // ── Bills ────────────────────────────────────────────────────────────
 
-  async getBills(clientId: string, options?: { status?: string; startDate?: string; endDate?: string }): Promise<any[]> {
+  async getBills(clientId: string, options?: { status?: string; startDate?: string; endDate?: string; source?: string }): Promise<any[]> {
     const params = new URLSearchParams();
     if (options?.status) params.set("status", options.status);
     if (options?.startDate) params.set("start_date", options.startDate);
     if (options?.endDate) params.set("end_date", options.endDate);
+    if (options?.source) params.set("source", options.source);
     const qs = params.toString();
     return flaskApi.get<any[]>(`/clients/${clientId}/bills${qs ? `?${qs}` : ""}`);
   },
@@ -409,8 +411,11 @@ export const database = {
 
   // ── Vendors & Customers ──────────────────────────────────────────────
 
-  async getVendors(clientId: string): Promise<any[]> {
-    return flaskApi.get<any[]>(`/clients/${clientId}/vendors`);
+  async getVendors(clientId: string, options?: { source?: string }): Promise<any[]> {
+    const params = new URLSearchParams();
+    if (options?.source) params.set("source", options.source);
+    const qs = params.toString();
+    return flaskApi.get<any[]>(`/clients/${clientId}/vendors${qs ? `?${qs}` : ""}`);
   },
 
   async createVendor(clientId: string, data: {
@@ -424,8 +429,11 @@ export const database = {
     return flaskApi.post<any>(`/clients/${clientId}/vendors`, data);
   },
 
-  async getCustomers(clientId: string): Promise<any[]> {
-    return flaskApi.get<any[]>(`/clients/${clientId}/customers`);
+  async getCustomers(clientId: string, options?: { source?: string }): Promise<any[]> {
+    const params = new URLSearchParams();
+    if (options?.source) params.set("source", options.source);
+    const qs = params.toString();
+    return flaskApi.get<any[]>(`/clients/${clientId}/customers${qs ? `?${qs}` : ""}`);
   },
 
   async createCustomer(clientId: string, data: {
