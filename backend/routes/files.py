@@ -74,8 +74,8 @@ def delete_uploaded_file(client_id, file_id):
         UploadedFile.id != fid,
     ).count()
     if remaining_files == 0:
-        Vendor.query.filter_by(client_id=cid, source="bank_upload").delete()
-        Customer.query.filter_by(client_id=cid, source="bank_upload").delete()
+        Vendor.query.filter_by(client_id=cid).delete()
+        Customer.query.filter_by(client_id=cid).delete()
         BankAccount.query.filter_by(client_id=cid).delete()
 
     # Delete the file record itself
