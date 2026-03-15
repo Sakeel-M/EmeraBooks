@@ -151,12 +151,27 @@ def delete_bill(bill_id):
 @require_client_access
 def create_invoice(client_id):
     data = request.get_json()
+    cid = uuid.UUID(client_id)
     total = float(data.get("total", 0))
     subtotal = float(data.get("subtotal", round(total / 1.05, 2)))
     tax_amount = float(data.get("tax_amount", round(total - subtotal, 2)))
+
+    # Resolve customer: accept customer_id OR customer_name
+    customer_id = None
+    if data.get("customer_id"):
+        customer_id = uuid.UUID(data["customer_id"])
+    elif data.get("customer_name"):
+        name = data["customer_name"].strip()
+        cust = Customer.query.filter_by(client_id=cid, name=name).first()
+        if not cust:
+            cust = Customer(client_id=cid, name=name)
+            db.session.add(cust)
+            db.session.flush()
+        customer_id = cust.id
+
     invoice = Invoice(
-        client_id=uuid.UUID(client_id),
-        customer_id=uuid.UUID(data["customer_id"]) if data.get("customer_id") else None,
+        client_id=cid,
+        customer_id=customer_id,
         source=data.get("source", "manual"),
         invoice_number=data.get("invoice_number"),
         invoice_date=data.get("invoice_date", datetime.now(timezone.utc).date().isoformat()),
@@ -167,6 +182,8 @@ def create_invoice(client_id):
         currency=data.get("currency", "AED"),
         status=data.get("status", "draft"),
         category=data.get("category"),
+        description=data.get("description"),
+        line_items=data.get("line_items"),
         notes=data.get("notes"),
     )
     db.session.add(invoice)
@@ -236,11 +253,20 @@ def update_invoice(invoice_id):
         return jsonify({"error": "Access denied"}), 403
     data = request.get_json()
     for key in ("invoice_number", "invoice_date", "due_date", "subtotal",
-                "tax_amount", "total", "currency", "status", "category", "notes"):
+                "tax_amount", "total", "currency", "status", "category", "notes",
+                "description", "line_items"):
         if key in data:
             setattr(invoice, key, data[key])
     if "customer_id" in data:
         invoice.customer_id = uuid.UUID(data["customer_id"]) if data["customer_id"] else None
+    elif "customer_name" in data and data["customer_name"]:
+        name = data["customer_name"].strip()
+        cust = Customer.query.filter_by(client_id=invoice.client_id, name=name).first()
+        if not cust:
+            cust = Customer(client_id=invoice.client_id, name=name)
+            db.session.add(cust)
+            db.session.flush()
+        invoice.customer_id = cust.id
     db.session.commit()
     return jsonify(invoice.to_dict())
 

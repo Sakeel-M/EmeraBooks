@@ -238,6 +238,8 @@ class Invoice(db.Model):
     currency = db.Column(db.Text, nullable=False, default="AED")
     status = db.Column(db.Text, nullable=False, default="draft")
     category = db.Column(db.Text)
+    description = db.Column(db.Text)
+    line_items = db.Column(JSONB, default=[])
     account_id = db.Column(UUID(as_uuid=True), db.ForeignKey("v2_accounts.id"))
     notes = db.Column(db.Text)
     metadata_ = db.Column("metadata", JSONB, default={})
@@ -251,6 +253,7 @@ class Invoice(db.Model):
             "id": str(self.id),
             "client_id": str(self.client_id),
             "customer_id": str(self.customer_id) if self.customer_id else None,
+            "customer_name": self.customer.name if self.customer else None,
             "source": self.source,
             "source_ref": self.source_ref,
             "invoice_number": self.invoice_number,
@@ -262,6 +265,8 @@ class Invoice(db.Model):
             "currency": self.currency,
             "status": self.status,
             "category": self.category,
+            "description": self.description,
+            "line_items": self.line_items,
             "account_id": str(self.account_id) if self.account_id else None,
             "notes": self.notes,
             "metadata": self.metadata_,

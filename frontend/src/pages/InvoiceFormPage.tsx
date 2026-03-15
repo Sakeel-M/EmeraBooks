@@ -202,23 +202,33 @@ export default function InvoiceFormPage() {
         const allInvoices = await database.getInvoices(clientId);
         const inv = allInvoices.find((i: any) => i.id === editId);
         if (inv) {
-          setCustomerName(inv.v2_customers?.name || inv.customer_name || "");
+          setCustomerName(inv.customer_name || inv.v2_customers?.name || "");
           setInvoiceNumber(inv.invoice_number || "");
           setInvoiceDate(inv.invoice_date || format(new Date(), "yyyy-MM-dd"));
           setDueDate(inv.due_date || format(addDays(new Date(), 30), "yyyy-MM-dd"));
           setCategory(inv.category || "Professional Services");
           setNotes(inv.notes || "");
           setStatus(inv.status || "draft");
-          // Reconstruct line item from totals
-          const sub = inv.subtotal || (inv.total || 0) / 1.05;
-          const taxPct = inv.tax_amount && sub > 0 ? Math.round((inv.tax_amount / sub) * 100) : 5;
-          setLineItems([{
-            id: crypto.randomUUID(),
-            description: inv.notes || inv.description || "Invoice item",
-            quantity: 1,
-            unit_price: sub,
-            tax_rate: taxPct,
-          }]);
+          // Load line items from stored data, or reconstruct from totals
+          if (inv.line_items && Array.isArray(inv.line_items) && inv.line_items.length > 0) {
+            setLineItems(inv.line_items.map((li: any) => ({
+              id: crypto.randomUUID(),
+              description: li.description || "",
+              quantity: li.quantity || 1,
+              unit_price: li.unit_price || 0,
+              tax_rate: li.tax_rate ?? 5,
+            })));
+          } else {
+            const sub = inv.subtotal || (inv.total || 0) / 1.05;
+            const taxPct = inv.tax_amount && sub > 0 ? Math.round((inv.tax_amount / sub) * 100) : 5;
+            setLineItems([{
+              id: crypto.randomUUID(),
+              description: inv.description || inv.category || "Invoice item",
+              quantity: 1,
+              unit_price: sub,
+              tax_rate: taxPct,
+            }]);
+          }
         }
       } catch { /* ignore */ }
     })();
@@ -276,6 +286,12 @@ export default function InvoiceFormPage() {
         notes,
         category,
         description: lineItems.map((li) => li.description).filter(Boolean).join("; "),
+        line_items: lineItems.map((li) => ({
+          description: li.description,
+          quantity: li.quantity,
+          unit_price: li.unit_price,
+          tax_rate: li.tax_rate,
+        })),
         status: sendStatus || status,
       };
 
