@@ -234,25 +234,78 @@ class BankStatementPDFProcessor:
         return text_content, tables_data
 
     def ai_extract_transactions(self, pdf_text, tables_data):
-        """Use OpenAI to extract structured transaction data from PDF text"""
+        """Use OpenAI to extract structured transaction data from PDF text.
+        Processes page-by-page in chunks to handle large statements."""
         if not openai.api_key:
             print("[AI] OpenAI API key not available")
             return None
 
+        # Split pdf_text into pages by the --- PAGE N --- markers
+        pages = re.split(r'---\s*PAGE\s+\d+\s*---', pdf_text)
+        pages = [p.strip() for p in pages if p.strip()]
+
+        if not pages:
+            pages = [pdf_text]
+
+        # Group pages into chunks of ~6000 chars each
+        chunks = []
+        current_chunk = ""
+        for page in pages:
+            if len(current_chunk) + len(page) > 6000 and current_chunk:
+                chunks.append(current_chunk)
+                current_chunk = page
+            else:
+                current_chunk += "\n" + page if current_chunk else page
+        if current_chunk:
+            chunks.append(current_chunk)
+
+        print(f"[AI] Processing PDF in {len(chunks)} chunk(s) ({len(pages)} pages, {len(pdf_text)} chars)")
+
+        # Process each chunk
+        all_transactions = []
+        bank_info = None
+        for i, chunk in enumerate(chunks):
+            chunk_tables = tables_data if i == 0 else []
+            result = self._ai_extract_chunk(chunk, chunk_tables, i + 1, len(chunks))
+            if result:
+                if not bank_info:
+                    bank_info = result.get('bank_info')
+                all_transactions.extend(result.get('transactions', []))
+
+        if not all_transactions:
+            return None
+
+        # Dedup by (date, amount, description[:50])
+        seen = set()
+        unique_txns = []
+        for tx in all_transactions:
+            key = (tx.get('date'), tx.get('amount'), (tx.get('description') or '')[:50])
+            if key not in seen:
+                seen.add(key)
+                unique_txns.append(tx)
+
+        print(f"[AI] Total: {len(all_transactions)} raw, {len(unique_txns)} after dedup")
+        return {'bank_info': bank_info or {}, 'transactions': unique_txns}
+
+    def _ai_extract_chunk(self, text_chunk, tables_data, chunk_num, total_chunks):
+        """Extract transactions from a single chunk of PDF text using OpenAI."""
         try:
-            # Prepare comprehensive prompt with both text and table data
             table_info = ""
             if tables_data:
                 table_info = f"\n\nEXTRACTED TABLES ({len(tables_data)} tables):\n"
-                for i, table in enumerate(tables_data[:5], 1):  # Limit to first 5 tables
+                for i, table in enumerate(tables_data[:5], 1):
                     table_info += f"\nTable {i} (Page {table['page']}):\n"
-                    for row in table['data'][:20]:  # Limit rows
+                    for row in table['data'][:30]:
                         table_info += f"{row}\n"
 
-            prompt = f"""You are an expert at extracting transaction data from bank statements. Extract ALL transactions from this PDF bank statement.
+            chunk_note = ""
+            if total_chunks > 1:
+                chunk_note = f"\nNOTE: This is chunk {chunk_num} of {total_chunks} from a multi-page statement. Extract ALL transactions from this section.\n"
 
+            prompt = f"""You are an expert at extracting transaction data from bank statements. Extract ALL transactions from this bank statement section.
+{chunk_note}
 PDF CONTENT:
-{pdf_text[:8000]}
+{text_chunk}
 {table_info}
 
 INSTRUCTIONS:
@@ -270,6 +323,7 @@ CRITICAL RULES:
 - Skip headers and summary rows
 - Parse all date formats correctly (DD/MM/YYYY, MM/DD/YYYY, etc.)
 - Include transaction reference/check numbers in description if available
+- Extract EVERY SINGLE transaction row — do not summarize or skip any
 
 OUTPUT FORMAT (JSON only, no markdown):
 {{
@@ -285,20 +339,13 @@ OUTPUT FORMAT (JSON only, no markdown):
       "description": "Transaction description",
       "amount": -50.00,
       "type": "Debit"
-    }},
-    {{
-      "date": "2024-01-20",
-      "description": "Salary deposit",
-      "amount": 5000.00,
-      "type": "Credit"
     }}
-  ],
-  "total_transactions": 0
+  ]
 }}
 
 Extract ALL transactions you can find. Return ONLY valid JSON."""
 
-            print("[AI] Calling OpenAI to extract transactions from PDF...")
+            print(f"[AI] Chunk {chunk_num}/{total_chunks}: sending {len(text_chunk)} chars to OpenAI...")
             response = openai.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
@@ -308,7 +355,7 @@ Extract ALL transactions you can find. Return ONLY valid JSON."""
                     },
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=4000,
+                max_tokens=8000,
                 temperature=0.1
             )
 
@@ -322,18 +369,16 @@ Extract ALL transactions you can find. Return ONLY valid JSON."""
             elif '```' in ai_response:
                 ai_response = ai_response.replace('```', '').strip()
 
-            # Parse JSON
             extracted_data = json.loads(ai_response)
-            print(f"[AI] Successfully extracted {len(extracted_data.get('transactions', []))} transactions")
-
+            txn_count = len(extracted_data.get('transactions', []))
+            print(f"[AI] Chunk {chunk_num}/{total_chunks}: extracted {txn_count} transactions")
             return extracted_data
 
         except json.JSONDecodeError as e:
-            print(f"[AI] JSON parsing error: {e}")
-            print(f"[AI] Response preview: {ai_response[:200] if 'ai_response' in locals() else 'No response'}")
+            print(f"[AI] Chunk {chunk_num} JSON error: {e}")
             return None
         except Exception as e:
-            print(f"[AI] Error during AI extraction: {e}")
+            print(f"[AI] Chunk {chunk_num} error: {e}")
             return None
 
     def process_pdf_file(self, pdf_file):
