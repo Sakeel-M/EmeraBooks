@@ -43,6 +43,24 @@ def save_uploaded_file(client_id):
     return jsonify(f.to_dict()), 201
 
 
+@files_bp.route("/clients/<client_id>/files/<file_id>", methods=["PATCH"])
+@require_auth
+@require_client_access
+def update_uploaded_file(client_id, file_id):
+    """Update file metadata (currency, bank_name, file_name)."""
+    cid = uuid.UUID(client_id)
+    fid = uuid.UUID(file_id)
+    file_record = UploadedFile.query.filter_by(id=fid, client_id=cid).first()
+    if not file_record:
+        return jsonify({"error": "File not found"}), 404
+    data = request.get_json()
+    for key in ("currency", "bank_name", "file_name"):
+        if key in data:
+            setattr(file_record, key, data[key])
+    db.session.commit()
+    return jsonify(file_record.to_dict())
+
+
 @files_bp.route("/clients/<client_id>/files/<file_id>", methods=["DELETE"])
 @require_auth
 @require_client_access

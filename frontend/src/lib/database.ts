@@ -196,6 +196,10 @@ export const database = {
     return flaskApi.get<UploadedFile[]>(`/clients/${clientId}/files`);
   },
 
+  async updateUploadedFile(clientId: string, fileId: string, data: { currency?: string; bank_name?: string; file_name?: string }): Promise<any> {
+    return flaskApi.patch(`/clients/${clientId}/files/${fileId}`, data);
+  },
+
   async deleteUploadedFile(clientId: string, fileId: string): Promise<void> {
     await flaskApi.del(`/clients/${clientId}/files/${fileId}`);
   },

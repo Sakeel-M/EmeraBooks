@@ -99,7 +99,7 @@ const FileUpload = ({ onUploadSuccess, disabled = false }: FileUploadProps) => {
         duration: 5000,
       });
 
-      onUploadSuccess(data);
+      onUploadSuccess({ ...data, original_filename: file.name });
     } catch (error: any) {
       console.error("❌ Upload error:", error);
 

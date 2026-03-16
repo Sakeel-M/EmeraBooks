@@ -478,10 +478,15 @@ function BanksTab() {
         }
       }
 
+      // Use original PDF filename if available, otherwise bank name
+      const originalName = data.original_filename
+        ? data.original_filename.replace(/\.[^/.]+$/, "")  // strip extension
+        : null;
+      const displayName = originalName
+        || (data.bank_info?.bank_name ? `${data.bank_info.bank_name} Statement` : "Bank Statement");
+
       const file = await database.saveUploadedFile(clientId, {
-        file_name: data.bank_info?.bank_name
-          ? `${data.bank_info.bank_name} Statement`
-          : "Bank Statement",
+        file_name: displayName,
         bank_name: data.bank_info?.bank_name,
         currency: newCurrency,
         total_rows: data.total_rows,
@@ -667,10 +672,10 @@ function BanksTab() {
                       <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">
-                          {f.bank_name || f.file_name}
+                          {f.file_name || f.bank_name}
                         </p>
                         <p className="text-[10px] text-muted-foreground">
-                          {f.total_rows} rows
+                          {f.bank_name ? `${f.bank_name} · ` : ""}{f.total_rows} rows
                           {f.currency ? ` · ${f.currency}` : ""}
                           {f.created_at
                             ? ` · ${formatDistanceToNow(new Date(f.created_at), { addSuffix: true })}`
