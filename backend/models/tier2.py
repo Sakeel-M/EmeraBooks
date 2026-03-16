@@ -198,6 +198,7 @@ class Bill(db.Model):
             "id": str(self.id),
             "client_id": str(self.client_id),
             "vendor_id": str(self.vendor_id) if self.vendor_id else None,
+            "vendor_name": self.vendor.name if self.vendor else None,
             "source": self.source,
             "source_ref": self.source_ref,
             "bill_number": self.bill_number,

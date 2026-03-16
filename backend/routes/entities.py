@@ -91,12 +91,27 @@ def create_customer(client_id):
 @require_client_access
 def create_bill(client_id):
     data = request.get_json()
+    cid = uuid.UUID(client_id)
     total = float(data.get("total", 0))
     subtotal = float(data.get("subtotal", round(total / 1.05, 2)))
     tax_amount = float(data.get("tax_amount", round(total - subtotal, 2)))
+
+    # Resolve vendor: accept vendor_id OR vendor_name
+    vendor_id = None
+    if data.get("vendor_id"):
+        vendor_id = uuid.UUID(data["vendor_id"])
+    elif data.get("vendor_name"):
+        name = data["vendor_name"].strip()
+        v = Vendor.query.filter_by(client_id=cid, name=name).first()
+        if not v:
+            v = Vendor(client_id=cid, name=name)
+            db.session.add(v)
+            db.session.flush()
+        vendor_id = v.id
+
     bill = Bill(
-        client_id=uuid.UUID(client_id),
-        vendor_id=uuid.UUID(data["vendor_id"]) if data.get("vendor_id") else None,
+        client_id=cid,
+        vendor_id=vendor_id,
         source=data.get("source", "manual"),
         bill_number=data.get("bill_number"),
         bill_date=data.get("bill_date", datetime.now(timezone.utc).date().isoformat()),
@@ -129,6 +144,14 @@ def update_bill(bill_id):
             setattr(bill, key, data[key])
     if "vendor_id" in data:
         bill.vendor_id = uuid.UUID(data["vendor_id"]) if data["vendor_id"] else None
+    elif "vendor_name" in data and data["vendor_name"]:
+        name = data["vendor_name"].strip()
+        v = Vendor.query.filter_by(client_id=bill.client_id, name=name).first()
+        if not v:
+            v = Vendor(client_id=bill.client_id, name=name)
+            db.session.add(v)
+            db.session.flush()
+        bill.vendor_id = v.id
     db.session.commit()
     return jsonify(bill.to_dict())
 
