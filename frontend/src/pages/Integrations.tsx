@@ -466,15 +466,15 @@ function BanksTab() {
         return;
       }
 
-      // ── Currency mismatch check ──
+      // ── Currency mismatch check (compare against client currency, not first file) ──
       const newCurrency = data.bank_info?.currency || currency;
-      if (uploadedFiles.length > 0) {
-        const existingCurrency = uploadedFiles[0]?.currency;
-        if (existingCurrency && newCurrency && existingCurrency !== newCurrency) {
-          toast.error("Cannot upload statements with different currencies", {
-            description: `Existing data uses ${existingCurrency}. This statement uses ${newCurrency}. Create a separate client for ${newCurrency} statements.`,
+      if (uploadedFiles.length > 0 && currency && newCurrency) {
+        const clientCurrency = currency; // from useActiveClient — the authoritative currency
+        if (clientCurrency !== newCurrency && clientCurrency !== "AED") {
+          // Only warn if client has a non-default currency set AND it differs
+          toast.warning(`Statement currency (${newCurrency}) differs from client currency (${clientCurrency}). Proceeding anyway.`, {
+            duration: 5000,
           });
-          return;
         }
       }
 

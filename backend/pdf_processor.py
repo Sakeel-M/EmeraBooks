@@ -49,7 +49,8 @@ class BankStatementPDFProcessor:
             'LLOYDS': ['lloyds'],
             'SBI': ['state bank of india', 'sbi'],
             'HDFC': ['hdfc bank', 'hdfc'],
-            'ICICI': ['icici bank', 'icici']
+            'ICICI': ['icici bank', 'icici'],
+            'WIO': ['wio bank', 'wio'],
         }
 
         self.categories = {
@@ -134,7 +135,8 @@ class BankStatementPDFProcessor:
                         'LLOYDS': 'Lloyds Bank',
                         'SBI': 'State Bank of India',
                         'HDFC': 'HDFC Bank',
-                        'ICICI': 'ICICI Bank'
+                        'ICICI': 'ICICI Bank',
+                        'WIO': 'Wio Bank',
                     }.get(bank_code, f'{bank_code} Bank')
         return 'Unknown Bank'
 
