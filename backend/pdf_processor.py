@@ -381,6 +381,107 @@ Extract ALL transactions you can find. Return ONLY valid JSON."""
             print(f"[AI] Chunk {chunk_num} error: {e}")
             return None
 
+    def regex_extract_transactions(self, pdf_text):
+        """Deterministic regex-based extraction — no AI needed for structured PDFs.
+        Handles formats: DD/MM/YYYY RefNum Description Amount Balance"""
+        lines = pdf_text.split('\n')
+        transactions = []
+        bank_name = self.detect_bank(pdf_text[:3000])
+        currency = 'AED'  # default
+
+        # Detect currency from text
+        cur_match = re.search(r'(?:CURRENCY|Currency)[:\s]+([A-Z]{3})', pdf_text[:3000])
+        if cur_match:
+            currency = cur_match.group(1)
+        elif 'AED' in pdf_text[:3000]:
+            currency = 'AED'
+        elif 'USD' in pdf_text[:3000]:
+            currency = 'USD'
+        elif 'INR' in pdf_text[:3000] or '₹' in pdf_text[:3000]:
+            currency = 'INR'
+
+        # Detect account holder
+        holder = 'Unknown'
+        holder_match = re.search(r'ACCOUNT\s*HOLDER\s*NAME[:\s]*\n?([A-Z][A-Z\s\-\.]+)', pdf_text[:2000])
+        if holder_match:
+            holder = holder_match.group(1).strip()
+        else:
+            # Try first line after "ACCOUNT STATEMENT"
+            for line in lines[:15]:
+                stripped = line.strip()
+                if stripped and len(stripped) > 5 and not any(kw in stripped.upper() for kw in ['ACCOUNT', 'FROM', 'TO', 'SUMMARY', 'IBAN', 'INTEREST', 'PAGE']):
+                    holder = stripped
+                    break
+
+        # Detect account number
+        acct_num = 'Unknown'
+        iban_match = re.search(r'(AE\d{21})', pdf_text[:3000])
+        if iban_match:
+            acct_num = iban_match.group(1)[-4:]  # last 4 digits
+        else:
+            num_match = re.search(r'ACCOUNT\s*(?:NUMBER|NO)[:\s]*(\d+)', pdf_text[:3000])
+            if num_match:
+                acct_num = num_match.group(1)[-4:]
+
+        # Transaction regex: date, ref, description, amount, balance
+        # Format: DD/MM/YYYY Pxxxxxxxxx Description -1,234.56 12,345.67
+        txn_pattern = re.compile(
+            r'^(\d{2}/\d{2}/\d{4})\s+'       # date DD/MM/YYYY
+            r'([A-Z]?\d{6,15})\s+'            # reference number
+            r'(.+?)\s+'                        # description (non-greedy)
+            r'([\-]?[\d,]+\.?\d*)\s+'          # amount (incl. sign)
+            r'([\-]?[\d,]+\.?\d*)$'            # balance
+        )
+
+        for line in lines:
+            line = line.strip()
+            if not line or len(line) < 20:
+                continue
+
+            m = txn_pattern.match(line)
+            if m:
+                date_str = m.group(1)  # DD/MM/YYYY
+                description = m.group(3).strip()
+                amount_str = m.group(4).replace(',', '')
+
+                # Skip summary/header rows
+                if any(kw in description.upper() for kw in ['TOTAL', 'OPENING BALANCE', 'CLOSING BALANCE', 'SUMMARY']):
+                    continue
+
+                try:
+                    amount = float(amount_str)
+                except ValueError:
+                    continue
+
+                # Convert date DD/MM/YYYY → YYYY-MM-DD
+                try:
+                    parts = date_str.split('/')
+                    iso_date = f"{parts[2]}-{parts[1]}-{parts[0]}"
+                except (IndexError, ValueError):
+                    iso_date = date_str
+
+                transactions.append({
+                    'date': iso_date,
+                    'description': description,
+                    'amount': amount,
+                    'type': 'Credit' if amount > 0 else 'Debit',
+                })
+
+        if transactions:
+            print(f"[PDF] Regex extraction: {len(transactions)} transactions found")
+            return {
+                'bank_info': {
+                    'bank_name': bank_name,
+                    'account_holder': holder,
+                    'account_number': acct_num,
+                    'currency': currency,
+                },
+                'transactions': transactions,
+            }
+
+        print("[PDF] Regex extraction: no transactions matched pattern")
+        return None
+
     def process_pdf_file(self, pdf_file):
         """Main PDF processing function"""
         print("[PDF] Starting PDF processing...")
@@ -396,11 +497,16 @@ Extract ALL transactions you can find. Return ONLY valid JSON."""
             if not pdf_text and not tables_data:
                 return None, "Could not extract text from PDF. File may be encrypted or image-based."
 
-            # Use AI to extract structured transaction data
-            extracted_data = self.ai_extract_transactions(pdf_text, tables_data)
+            # Priority 1: Deterministic regex extraction (fast, accurate, no AI cost)
+            extracted_data = self.regex_extract_transactions(pdf_text)
+
+            # Priority 2: AI extraction (for unstructured/complex PDFs)
+            if not extracted_data or len(extracted_data.get('transactions', [])) < 3:
+                print("[PDF] Regex found too few, trying AI extraction...")
+                extracted_data = self.ai_extract_transactions(pdf_text, tables_data)
 
             if not extracted_data or 'transactions' not in extracted_data:
-                # Fallback: Try basic pattern matching
+                # Priority 3: Basic pattern matching fallback
                 print("[PDF] AI extraction failed, trying basic pattern matching...")
                 extracted_data = self.fallback_extraction(pdf_text)
 
