@@ -63,16 +63,21 @@ def require_auth(f):
             # verify caller is admin then override g.user_id
             impersonate_id = request.headers.get("X-Impersonate-User")
             if impersonate_id:
-                from models.tier0 import UserRole
-                admin_role = UserRole.query.filter_by(
-                    user_id=_uuid.UUID(g.user_id), role="admin"
-                ).first()
-                if not admin_role:
-                    return jsonify({"error": "Only admins can impersonate users"}), 403
-                g.real_admin_id = g.user_id
-                g.user_id = impersonate_id
-                g.is_impersonating = True
-                g.is_admin = True
+                try:
+                    from models.tier0 import UserRole
+                    admin_role = UserRole.query.filter_by(
+                        user_id=_uuid.UUID(g.user_id), role="admin"
+                    ).first()
+                    if admin_role:
+                        g.real_admin_id = g.user_id
+                        g.user_id = impersonate_id
+                        g.is_impersonating = True
+                        g.is_admin = True
+                    else:
+                        # Not an admin — ignore impersonation header silently
+                        print(f"[AUTH] Non-admin {g.user_id} tried to impersonate {impersonate_id}")
+                except Exception as e:
+                    print(f"[AUTH] Impersonation check error: {e}")
 
         except requests.exceptions.Timeout:
             return jsonify({"error": "Auth verification timed out"}), 503
