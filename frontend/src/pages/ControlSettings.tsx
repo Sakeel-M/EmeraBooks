@@ -786,16 +786,17 @@ function ChartOfAccountsTab() {
                 Load Standard Accounts for {industry}
               </Button>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">or use framework:</span>
-                <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => handleImportFramework("ifrs")} disabled={importing}>
-                  {importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
-                  IFRS
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">or:</span>
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setShowImportDialog(true)} disabled={importing || importingDoc}>
+                  {importingDoc ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+                  {importingDoc ? "Analyzing..." : "Import IFRS"}
                 </Button>
                 <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => setShowAdd(true)}>
                   <Plus className="h-3 w-3" />
                   Add Manual
                 </Button>
               </div>
+              <input ref={fileInputRef} type="file" accept=".pdf,.xlsx,.xls,.csv,.txt" className="hidden" onChange={handleImportDocument} />
             </div>
           </CardContent>
         </Card>
@@ -835,6 +836,41 @@ function ChartOfAccountsTab() {
                 Create
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* IFRS Import Dialog (empty state) */}
+        <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+          <DialogContent className="sm:max-w-[420px]">
+            <DialogHeader>
+              <DialogTitle className="text-lg">Import IFRS Chart of Accounts</DialogTitle>
+              <DialogDescription>Choose how to import your Chart of Accounts</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-3 py-2">
+              <button className="flex items-center gap-4 rounded-lg border p-4 text-left transition-colors hover:bg-muted/50 disabled:opacity-50"
+                onClick={() => { setShowImportDialog(false); handleImportFramework("ifrs"); }} disabled={importing}>
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-green-50 border border-green-200">
+                  <FileSpreadsheet className="h-5 w-5 text-green-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">Use Standard IFRS Template</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Import 20 standard IFRS accounts (quick setup)</p>
+                </div>
+              </button>
+              <button className="flex items-center gap-4 rounded-lg border p-4 text-left transition-colors hover:bg-muted/50 disabled:opacity-50"
+                onClick={() => { setShowImportDialog(false); fileInputRef.current?.click(); }} disabled={importingDoc}>
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 border border-blue-200">
+                  <Upload className="h-5 w-5 text-blue-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">Upload IFRS Document</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Upload PDF, Excel, or CSV — AI extracts accounts</p>
+                </div>
+              </button>
+            </div>
+            <p className="text-[10px] text-muted-foreground leading-relaxed pt-1">
+              Supported: PDF, Excel (.xlsx/.xls), CSV, TXT. AI extracts account names, codes, and types automatically.
+            </p>
           </DialogContent>
         </Dialog>
       </div>
