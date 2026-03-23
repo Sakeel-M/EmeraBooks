@@ -476,11 +476,26 @@ def import_account_document(client_id):
     if not text.strip():
         return jsonify({"error": "Could not extract text from file. File may be empty or image-based."}), 400
 
-    # ── Extract accounts using AI ──
+    # ── Priority 1: Structured CSV/TSV parsing (code,name,type per line) ──
     accounts_data = []
+    csv_pattern = re.compile(
+        r'^(\d{3,6})\s*[,\t]\s*(.+?)\s*[,\t]\s*(Asset|Liability|Equity|Revenue|Expense)\s*$', re.I
+    )
+    for line in text.split("\n"):
+        m = csv_pattern.match(line.strip())
+        if m:
+            accounts_data.append({
+                "code": m.group(1),
+                "name": m.group(2).strip(),
+                "type": m.group(3).strip().capitalize(),
+            })
+    if accounts_data:
+        print(f"[CoA Import] CSV parsing: found {len(accounts_data)} accounts")
+
+    # ── Priority 2: AI extraction (for unstructured documents) ──
     openai_key = os.getenv("OPENAI_API_KEY")
 
-    if openai_key:
+    if not accounts_data and openai_key:
         try:
             import openai
             openai.api_key = openai_key
