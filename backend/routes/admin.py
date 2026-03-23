@@ -70,6 +70,7 @@ def admin_list_users():
         db.session.query(
             OrgMember.user_id,
             OrgMember.user_email,
+            OrgMember.invited_email,
             OrgMember.role,
             OrgMember.created_at,
             Organization.id.label("org_id"),
@@ -82,6 +83,7 @@ def admin_list_users():
         query = query.filter(
             db.or_(
                 func.lower(OrgMember.user_email).contains(search),
+                func.lower(OrgMember.invited_email).contains(search),
                 func.lower(Organization.name).contains(search),
             )
         )
@@ -111,7 +113,7 @@ def admin_list_users():
         )
         users.append({
             "user_id": uid,
-            "email": r.user_email or "",
+            "email": r.user_email or r.invited_email or "",
             "org_id": str(r.org_id),
             "org_name": r.org_name,
             "role": r.role,
@@ -148,7 +150,7 @@ def admin_user_detail(user_id):
 
     return jsonify({
         "user_id": user_id,
-        "email": member.user_email or "",
+        "email": member.user_email or member.invited_email or "",
         "role": member.role,
         "is_admin": is_admin,
         "created_at": member.created_at.isoformat() if member.created_at else None,
@@ -215,7 +217,7 @@ def admin_impersonate(user_id):
 
     return jsonify({
         "user_id": user_id,
-        "email": member.user_email or "",
+        "email": member.user_email or member.invited_email or "",
         "org_name": org.name if org else "",
         "active_client_id": active_client_id,
         "clients": [{"id": str(c.id), "name": c.name} for c in clients],

@@ -47,6 +47,18 @@ def require_auth(f):
             g.is_impersonating = False
             g.real_admin_id = None
 
+            # Auto-backfill user_email on OrgMember if missing
+            if g.user_email:
+                try:
+                    from models.tier0 import OrgMember
+                    from models.base import db as _db
+                    member = OrgMember.query.filter_by(user_id=_uuid.UUID(user_id)).first()
+                    if member and not member.user_email:
+                        member.user_email = g.user_email
+                        _db.session.commit()
+                except Exception:
+                    pass  # Non-critical — don't block the request
+
             # Admin impersonation: if X-Impersonate-User header is present,
             # verify caller is admin then override g.user_id
             impersonate_id = request.headers.get("X-Impersonate-User")
