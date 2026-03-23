@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
@@ -22,6 +22,9 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminUserDetail from "./pages/admin/AdminUserDetail";
 import AdminOrgs from "./pages/admin/AdminOrgs";
+
+// Detect if running on admin subdomain
+const isAdminDomain = window.location.hostname.startsWith("admin.");
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -46,23 +49,39 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/auth" element={<Auth />} />
-          <Route path="/onboarding" element={<P><Onboarding /></P>} />
-          <Route path="/" element={<P><ControlCenter /></P>} />
-          <Route path="/reconciliation" element={<P><Reconciliation /></P>} />
-          <Route path="/revenue" element={<P><RevenueIntegrity /></P>} />
-          <Route path="/revenue/invoices/new" element={<P><InvoiceFormPage /></P>} />
-          <Route path="/expenses" element={<P><ExpenseIntegrity /></P>} />
-          <Route path="/cash" element={<P><CashLiquidity /></P>} />
-          <Route path="/reports" element={<P><FinancialReporting /></P>} />
-          <Route path="/integrations" element={<P><Integrations /></P>} />
-          <Route path="/risk" element={<P><RiskMonitor /></P>} />
-          <Route path="/settings" element={<P><ControlSettings /></P>} />
-          {/* Admin routes */}
-          <Route path="/admin" element={<P><AdminGuard><AdminDashboard /></AdminGuard></P>} />
-          <Route path="/admin/users" element={<P><AdminGuard><AdminUsers /></AdminGuard></P>} />
-          <Route path="/admin/users/:userId" element={<P><AdminGuard><AdminUserDetail /></AdminGuard></P>} />
-          <Route path="/admin/orgs" element={<P><AdminGuard><AdminOrgs /></AdminGuard></P>} />
-          <Route path="*" element={<NotFound />} />
+
+          {isAdminDomain ? (
+            <>
+              {/* Admin domain: only admin routes, "/" redirects to /admin */}
+              <Route path="/" element={<P><AdminGuard><AdminDashboard /></AdminGuard></P>} />
+              <Route path="/admin" element={<P><AdminGuard><AdminDashboard /></AdminGuard></P>} />
+              <Route path="/admin/users" element={<P><AdminGuard><AdminUsers /></AdminGuard></P>} />
+              <Route path="/admin/users/:userId" element={<P><AdminGuard><AdminUserDetail /></AdminGuard></P>} />
+              <Route path="/admin/orgs" element={<P><AdminGuard><AdminOrgs /></AdminGuard></P>} />
+              <Route path="/onboarding" element={<P><Onboarding /></P>} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </>
+          ) : (
+            <>
+              {/* App domain: user routes + admin routes */}
+              <Route path="/onboarding" element={<P><Onboarding /></P>} />
+              <Route path="/" element={<P><ControlCenter /></P>} />
+              <Route path="/reconciliation" element={<P><Reconciliation /></P>} />
+              <Route path="/revenue" element={<P><RevenueIntegrity /></P>} />
+              <Route path="/revenue/invoices/new" element={<P><InvoiceFormPage /></P>} />
+              <Route path="/expenses" element={<P><ExpenseIntegrity /></P>} />
+              <Route path="/cash" element={<P><CashLiquidity /></P>} />
+              <Route path="/reports" element={<P><FinancialReporting /></P>} />
+              <Route path="/integrations" element={<P><Integrations /></P>} />
+              <Route path="/risk" element={<P><RiskMonitor /></P>} />
+              <Route path="/settings" element={<P><ControlSettings /></P>} />
+              <Route path="/admin" element={<P><AdminGuard><AdminDashboard /></AdminGuard></P>} />
+              <Route path="/admin/users" element={<P><AdminGuard><AdminUsers /></AdminGuard></P>} />
+              <Route path="/admin/users/:userId" element={<P><AdminGuard><AdminUserDetail /></AdminGuard></P>} />
+              <Route path="/admin/orgs" element={<P><AdminGuard><AdminOrgs /></AdminGuard></P>} />
+              <Route path="*" element={<NotFound />} />
+            </>
+          )}
         </Routes>
       </BrowserRouter>
     </TooltipProvider>

@@ -58,13 +58,13 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
           {/* Footer */}
           <div className="p-3 border-t border-white/10 space-y-2">
-            <Link
-              to="/"
+            <a
+              href="https://app.emarabooks.com"
               className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-white/60 hover:bg-white/10 hover:text-white transition-colors"
             >
               <ArrowLeft className="h-4 w-4" />
               Back to App
-            </Link>
+            </a>
             <Button
               variant="ghost"
               size="sm"
