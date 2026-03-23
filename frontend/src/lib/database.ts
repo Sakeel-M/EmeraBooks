@@ -493,6 +493,10 @@ export const database = {
     await flaskApi.del(`/accounts/${accountId}`);
   },
 
+  async bulkDeleteAccounts(clientId: string, ids: string[]): Promise<any> {
+    return flaskApi.post<any>(`/clients/${clientId}/accounts/bulk-delete`, { ids });
+  },
+
   async importAccountTemplate(clientId: string, template: string, accounts: any[]): Promise<any> {
     return flaskApi.post<any>(`/clients/${clientId}/accounts/import-template`, { template, accounts });
   },

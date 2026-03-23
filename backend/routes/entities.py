@@ -368,6 +368,29 @@ def delete_account(account_id):
     return jsonify({"ok": True})
 
 
+@entities_bp.route("/clients/<client_id>/accounts/bulk-delete", methods=["POST"])
+@require_auth
+@require_client_access
+def bulk_delete_accounts(client_id):
+    """Delete multiple accounts by IDs."""
+    data = request.get_json()
+    ids = data.get("ids", [])
+    if not ids:
+        return jsonify({"error": "No account IDs provided"}), 400
+    cid = uuid.UUID(client_id)
+    deleted = 0
+    for aid in ids:
+        try:
+            account = Account.query.filter_by(id=uuid.UUID(aid), client_id=cid).first()
+            if account:
+                db.session.delete(account)
+                deleted += 1
+        except Exception:
+            continue
+    db.session.commit()
+    return jsonify({"deleted": deleted})
+
+
 @entities_bp.route("/clients/<client_id>/accounts/import-template", methods=["POST"])
 @require_auth
 @require_client_access

@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -411,6 +412,8 @@ function ChartOfAccountsTab() {
   const [addForm, setAddForm] = useState({ code: "", name: "", type: "Asset" });
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importingDoc, setImportingDoc] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const industry = client?.industry || "Other";
@@ -720,6 +723,37 @@ function ChartOfAccountsTab() {
     }
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === accounts.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(accounts.map((a: any) => a.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!clientId || selectedIds.size === 0) return;
+    setDeleting(true);
+    try {
+      const result = await database.bulkDeleteAccounts(clientId, Array.from(selectedIds));
+      queryClient.invalidateQueries({ queryKey: ["cs-accounts", clientId] });
+      setSelectedIds(new Set());
+      toast.success(`Deleted ${result.deleted} accounts`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete accounts");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -820,23 +854,41 @@ function ChartOfAccountsTab() {
 
       {/* Action Bar */}
       <div className="flex items-center gap-2 flex-wrap">
-        <Button size="sm" className="gap-1.5 text-xs" onClick={() => setShowAdd(true)}>
-          <Plus className="h-3 w-3" />
-          Add Account
-        </Button>
-        <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleImportSector} disabled={importing}>
-          {importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
-          Load {industry} Accounts
-        </Button>
-        <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => setShowImportDialog(true)} disabled={importing || importingDoc}>
-          {importingDoc ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
-          {importingDoc ? "Analyzing..." : "Import IFRS"}
-        </Button>
-        <input ref={fileInputRef} type="file" accept=".pdf,.xlsx,.xls,.csv,.txt" className="hidden" onChange={handleImportDocument} />
-        <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleExportIFRS} disabled={importing}>
-          {importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
-          Export IFRS
-        </Button>
+        {selectedIds.size > 0 ? (
+          <>
+            <span className="text-sm font-medium text-primary">{selectedIds.size} selected</span>
+            <Button size="sm" variant="destructive" className="gap-1.5 text-xs" onClick={handleBulkDelete} disabled={deleting}>
+              {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+              Delete Selected
+            </Button>
+            <Button size="sm" variant="outline" className="text-xs" onClick={() => setSelectedIds(new Set())}>
+              Clear Selection
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button size="sm" className="gap-1.5 text-xs" onClick={() => setShowAdd(true)}>
+              <Plus className="h-3 w-3" />
+              Add Account
+            </Button>
+            <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleImportSector} disabled={importing}>
+              {importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+              Load {industry} Accounts
+            </Button>
+            <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => setShowImportDialog(true)} disabled={importing || importingDoc}>
+              {importingDoc ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+              {importingDoc ? "Analyzing..." : "Import IFRS"}
+            </Button>
+            <input ref={fileInputRef} type="file" accept=".pdf,.xlsx,.xls,.csv,.txt" className="hidden" onChange={handleImportDocument} />
+            <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleExportIFRS} disabled={importing}>
+              {importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+              Export IFRS
+            </Button>
+            <Button size="sm" variant="ghost" className="gap-1.5 text-xs text-muted-foreground" onClick={toggleSelectAll}>
+              Select All
+            </Button>
+          </>
+        )}
       </div>
 
       {/* Sector Info */}
@@ -864,6 +916,19 @@ function ChartOfAccountsTab() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={accs.every((a: any) => selectedIds.has(a.id))}
+                        onCheckedChange={() => {
+                          const allSelected = accs.every((a: any) => selectedIds.has(a.id));
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev);
+                            accs.forEach((a: any) => { allSelected ? next.delete(a.id) : next.add(a.id); });
+                            return next;
+                          });
+                        }}
+                      />
+                    </TableHead>
                     <TableHead>Code</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Status</TableHead>
@@ -872,7 +937,10 @@ function ChartOfAccountsTab() {
                 </TableHeader>
                 <TableBody>
                   {accs.map((a: any) => (
-                    <TableRow key={a.id} className={a.is_active === false ? "opacity-50" : ""}>
+                    <TableRow key={a.id} className={`${a.is_active === false ? "opacity-50" : ""} ${selectedIds.has(a.id) ? "bg-primary/5" : ""}`}>
+                      <TableCell>
+                        <Checkbox checked={selectedIds.has(a.id)} onCheckedChange={() => toggleSelect(a.id)} />
+                      </TableCell>
                       <TableCell className="font-mono text-xs">{a.code || "—"}</TableCell>
                       <TableCell className="text-sm font-medium">{a.name}</TableCell>
                       <TableCell>
