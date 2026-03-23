@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -76,6 +76,7 @@ import {
   Phone,
   MapPin,
   FileText,
+  FileSpreadsheet,
   Hash,
   Calendar as CalendarIcon,
 } from "lucide-react";
@@ -408,6 +409,9 @@ function ChartOfAccountsTab() {
   const [editAccount, setEditAccount] = useState<any>(null);
   const [importing, setImporting] = useState(false);
   const [addForm, setAddForm] = useState({ code: "", name: "", type: "Asset" });
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importingDoc, setImportingDoc] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const industry = client?.industry || "Other";
 
@@ -464,6 +468,37 @@ function ChartOfAccountsTab() {
       toast.error(err.message || "Import failed");
     } finally {
       setImporting(false);
+    }
+  };
+
+  const handleImportDocument = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !clientId) return;
+    // Reset input so same file can be re-selected
+    e.target.value = "";
+
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (!ext || !["pdf", "xlsx", "xls", "csv", "txt"].includes(ext)) {
+      toast.error("Unsupported file type. Upload PDF, Excel, CSV, or TXT.");
+      return;
+    }
+
+    setImportingDoc(true);
+    setShowImportDialog(false);
+    try {
+      const result = await database.importAccountDocument(clientId, file);
+      queryClient.invalidateQueries({ queryKey: ["cs-accounts", clientId] });
+      if (result.imported > 0) {
+        toast.success(`Imported ${result.imported} accounts from "${file.name}" (${result.skipped} duplicates skipped)`);
+      } else if (result.skipped > 0) {
+        toast.warning(`All ${result.skipped} accounts already exist. No new accounts imported.`);
+      } else {
+        toast.warning("No accounts could be extracted from the document.");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to import document");
+    } finally {
+      setImportingDoc(false);
     }
   };
 
@@ -793,10 +828,11 @@ function ChartOfAccountsTab() {
           {importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
           Load {industry} Accounts
         </Button>
-        <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => handleImportFramework("ifrs")} disabled={importing}>
-          {importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
-          Import IFRS
+        <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => setShowImportDialog(true)} disabled={importing || importingDoc}>
+          {importingDoc ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+          {importingDoc ? "Analyzing..." : "Import IFRS"}
         </Button>
+        <input ref={fileInputRef} type="file" accept=".pdf,.xlsx,.xls,.csv,.txt" className="hidden" onChange={handleImportDocument} />
         <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleExportIFRS} disabled={importing}>
           {importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
           Export IFRS
@@ -941,6 +977,53 @@ function ChartOfAccountsTab() {
               Save
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* IFRS Import Dialog */}
+      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Import IFRS Chart of Accounts</DialogTitle>
+            <DialogDescription>
+              Choose how to import your Chart of Accounts
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-4">
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-3 h-auto py-3"
+              onClick={() => {
+                setShowImportDialog(false);
+                handleImportFramework("ifrs");
+              }}
+              disabled={importing}
+            >
+              <FileSpreadsheet className="h-5 w-5 text-green-600 shrink-0" />
+              <div className="text-left">
+                <p className="text-sm font-medium">Use Standard IFRS Template</p>
+                <p className="text-xs text-muted-foreground">Import 20 standard IFRS accounts (quick setup)</p>
+              </div>
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-3 h-auto py-3"
+              onClick={() => {
+                setShowImportDialog(false);
+                fileInputRef.current?.click();
+              }}
+              disabled={importingDoc}
+            >
+              <Upload className="h-5 w-5 text-blue-600 shrink-0" />
+              <div className="text-left">
+                <p className="text-sm font-medium">Upload IFRS Document</p>
+                <p className="text-xs text-muted-foreground">Upload PDF, Excel, or CSV — AI extracts accounts automatically</p>
+              </div>
+            </Button>
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            Supported formats: PDF, Excel (.xlsx/.xls), CSV, TXT. The system uses AI to extract account names, codes, and types from your document.
+          </p>
         </DialogContent>
       </Dialog>
     </div>

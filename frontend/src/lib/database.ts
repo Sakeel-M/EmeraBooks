@@ -497,6 +497,26 @@ export const database = {
     return flaskApi.post<any>(`/clients/${clientId}/accounts/import-template`, { template, accounts });
   },
 
+  async importAccountDocument(clientId: string, file: File): Promise<any> {
+    const formData = new FormData();
+    formData.append("file", file);
+    const { getSession } = await import("@/integrations/supabase/client").then(m => ({ getSession: () => m.supabase.auth.getSession() }));
+    const { data: { session } } = await getSession();
+    const base = import.meta.env.VITE_API_BASE_URL || "/api";
+    const headers: Record<string, string> = {};
+    if (session?.access_token) headers["Authorization"] = `Bearer ${session.access_token}`;
+    const res = await fetch(`${base}/clients/${clientId}/accounts/import-document`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body?.error || `Upload failed: ${res.status}`);
+    }
+    return res.json();
+  },
+
   // ── Control Settings ─────────────────────────────────────────────────
 
   async detectAnomalies(clientId: string): Promise<any> {

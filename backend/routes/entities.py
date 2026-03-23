@@ -399,6 +399,188 @@ def import_account_template(client_id):
     return jsonify({"imported": len(created), "template": template}), 201
 
 
+@entities_bp.route("/clients/<client_id>/accounts/import-document", methods=["POST"])
+@require_auth
+@require_client_access
+def import_account_document(client_id):
+    """Parse an IFRS/CoA document (PDF, Excel, CSV) and extract accounts."""
+    import io, json, re, os
+
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files["file"]
+    if not file.filename:
+        return jsonify({"error": "No file selected"}), 400
+
+    ext = file.filename.lower().rsplit(".", 1)[-1] if "." in file.filename else ""
+    if ext not in ("pdf", "xlsx", "xls", "csv", "txt"):
+        return jsonify({"error": "Unsupported format. Upload PDF, Excel, CSV, or TXT."}), 400
+
+    cid = uuid.UUID(client_id)
+    file_bytes = file.read()
+    text = ""
+
+    # ── Extract text based on file type ──
+    try:
+        if ext == "pdf":
+            import pdfplumber
+            pdf = pdfplumber.open(io.BytesIO(file_bytes))
+            for page in pdf.pages:
+                t = page.extract_text()
+                if t:
+                    text += t + "\n"
+            pdf.close()
+
+        elif ext in ("xlsx", "xls"):
+            import openpyxl
+            wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+            for ws in wb.worksheets:
+                for row in ws.iter_rows(values_only=True):
+                    vals = [str(c) if c is not None else "" for c in row]
+                    text += "\t".join(vals) + "\n"
+            wb.close()
+
+        elif ext == "csv":
+            text = file_bytes.decode("utf-8", errors="replace")
+
+        elif ext == "txt":
+            text = file_bytes.decode("utf-8", errors="replace")
+
+    except Exception as e:
+        return jsonify({"error": f"Failed to read file: {str(e)}"}), 400
+
+    if not text.strip():
+        return jsonify({"error": "Could not extract text from file. File may be empty or image-based."}), 400
+
+    # ── Extract accounts using AI ──
+    accounts_data = []
+    openai_key = os.getenv("OPENAI_API_KEY")
+
+    if openai_key:
+        try:
+            import openai
+            openai.api_key = openai_key
+
+            prompt = f"""You are an expert accountant. Extract ALL accounting accounts from this IFRS / Chart of Accounts document.
+
+DOCUMENT TEXT:
+{text[:12000]}
+
+INSTRUCTIONS:
+1. Extract every account mentioned — account code (if present) and account name
+2. Classify each account as one of: Asset, Liability, Equity, Revenue, Expense
+3. If no account codes exist, generate sequential codes: Assets=1xxx, Liabilities=2xxx, Equity=3xxx, Revenue=4xxx, Expenses=5xxx
+4. Include ALL sub-accounts and line items — do not skip any
+5. If the document mentions terms like "Sales Revenue", "Cost of Sales", "Trade Receivables", etc., include them as separate accounts
+6. For IFRS standards documents, extract the standard account categories they define
+
+OUTPUT FORMAT (JSON array only, no markdown):
+[
+  {{"code": "1000", "name": "Cash and Cash Equivalents", "type": "Asset"}},
+  {{"code": "1100", "name": "Trade Receivables", "type": "Asset"}},
+  {{"code": "4000", "name": "Sales Revenue", "type": "Revenue"}}
+]
+
+Return ONLY the JSON array. No explanation."""
+
+            response = openai.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a financial data extraction expert. Return ONLY valid JSON arrays."},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=4000,
+                temperature=0.1,
+            )
+
+            ai_text = response.choices[0].message.content.strip()
+            if "```json" in ai_text:
+                ai_text = ai_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in ai_text:
+                ai_text = ai_text.replace("```", "").strip()
+
+            accounts_data = json.loads(ai_text)
+            print(f"[CoA Import] AI extracted {len(accounts_data)} accounts")
+
+        except Exception as e:
+            print(f"[CoA Import] AI extraction failed: {e}")
+
+    # ── Fallback: regex-based extraction ──
+    if not accounts_data:
+        print("[CoA Import] Using regex fallback...")
+        current_type = "Asset"
+        code_counter = {"Asset": 1000, "Liability": 2000, "Equity": 3000, "Revenue": 4000, "Expense": 5000}
+
+        type_patterns = {
+            "Asset": re.compile(r"(?:ASSETS?|CURRENT\s+ASSETS?|NON.CURRENT\s+ASSETS?)", re.I),
+            "Liability": re.compile(r"(?:LIABILIT|CURRENT\s+LIABILIT|NON.CURRENT\s+LIABILIT|PAYABLE)", re.I),
+            "Equity": re.compile(r"(?:EQUITY|SHAREHOLDER|CAPITAL|RETAINED)", re.I),
+            "Revenue": re.compile(r"(?:REVENUE|INCOME|SALES)", re.I),
+            "Expense": re.compile(r"(?:EXPENSE|COST\s+OF|OPERATING\s+EXPENSE|ADMIN)", re.I),
+        }
+
+        # Pattern: optional code + account name
+        line_pattern = re.compile(r"^(\d{3,6})?\s*[.\-)]?\s*(.{5,80})\s*$")
+
+        for line in text.split("\n"):
+            line = line.strip()
+            if not line or len(line) < 3:
+                continue
+
+            # Detect section type headers
+            for acct_type, pat in type_patterns.items():
+                if pat.search(line) and len(line) < 60:
+                    current_type = acct_type
+                    break
+
+            # Try to extract account line
+            m = line_pattern.match(line)
+            if m:
+                code = m.group(1)
+                name = m.group(2).strip()
+                # Skip if name is a header or too generic
+                if any(kw in name.upper() for kw in ["TOTAL", "NOTE", "PAGE", "DATE", "PERIOD", "COMPANY"]):
+                    continue
+                if not code:
+                    code = str(code_counter[current_type])
+                    code_counter[current_type] += 10
+                accounts_data.append({"code": code, "name": name, "type": current_type})
+
+    if not accounts_data:
+        return jsonify({"error": "Could not extract any accounts from the document. Please check the file content."}), 400
+
+    # ── Create accounts (dedup by code) ──
+    created = []
+    skipped = 0
+    for a in accounts_data:
+        code = str(a.get("code", "")).strip()
+        name = (a.get("name") or "").strip()
+        acct_type = a.get("type", "Asset")
+        if acct_type not in ("Asset", "Liability", "Equity", "Revenue", "Expense"):
+            acct_type = "Asset"
+        if not name:
+            continue
+
+        existing = Account.query.filter_by(client_id=cid, code=code).first()
+        if existing:
+            skipped += 1
+            continue
+
+        account = Account(client_id=cid, code=code, name=name, type=acct_type, is_active=True)
+        db.session.add(account)
+        created.append(account)
+
+    db.session.commit()
+
+    return jsonify({
+        "imported": len(created),
+        "skipped": skipped,
+        "total_found": len(accounts_data),
+        "accounts": [{"code": a.code, "name": a.name, "type": a.type} for a in created],
+    }), 201
+
+
 @entities_bp.route("/clients/<client_id>/connections", methods=["GET"])
 @require_auth
 @require_client_access
