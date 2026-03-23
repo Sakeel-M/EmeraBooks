@@ -20,7 +20,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
       if (!session) {
         queryClient.clear();
         setAuthenticated(false);
-        navigate("/auth", { replace: true });
+        // Preserve intended URL so Auth page can redirect back after login
+        const returnTo = location.pathname + location.search;
+        navigate(`/auth?returnTo=${encodeURIComponent(returnTo)}`, { replace: true });
         setLoading(false);
         return;
       }
