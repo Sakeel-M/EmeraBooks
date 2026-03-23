@@ -982,47 +982,43 @@ function ChartOfAccountsTab() {
 
       {/* IFRS Import Dialog */}
       <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
-            <DialogTitle>Import IFRS Chart of Accounts</DialogTitle>
+            <DialogTitle className="text-lg">Import IFRS Chart of Accounts</DialogTitle>
             <DialogDescription>
               Choose how to import your Chart of Accounts
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 py-4">
-            <Button
-              variant="outline"
-              className="w-full justify-start gap-3 h-auto py-3"
-              onClick={() => {
-                setShowImportDialog(false);
-                handleImportFramework("ifrs");
-              }}
+          <div className="grid gap-3 py-2">
+            <button
+              className="flex items-center gap-4 rounded-lg border p-4 text-left transition-colors hover:bg-muted/50 disabled:opacity-50"
+              onClick={() => { setShowImportDialog(false); handleImportFramework("ifrs"); }}
               disabled={importing}
             >
-              <FileSpreadsheet className="h-5 w-5 text-green-600 shrink-0" />
-              <div className="text-left">
-                <p className="text-sm font-medium">Use Standard IFRS Template</p>
-                <p className="text-xs text-muted-foreground">Import 20 standard IFRS accounts (quick setup)</p>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-green-50 border border-green-200">
+                <FileSpreadsheet className="h-5 w-5 text-green-600" />
               </div>
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full justify-start gap-3 h-auto py-3"
-              onClick={() => {
-                setShowImportDialog(false);
-                fileInputRef.current?.click();
-              }}
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Use Standard IFRS Template</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Import 20 standard IFRS accounts (quick setup)</p>
+              </div>
+            </button>
+            <button
+              className="flex items-center gap-4 rounded-lg border p-4 text-left transition-colors hover:bg-muted/50 disabled:opacity-50"
+              onClick={() => { setShowImportDialog(false); fileInputRef.current?.click(); }}
               disabled={importingDoc}
             >
-              <Upload className="h-5 w-5 text-blue-600 shrink-0" />
-              <div className="text-left">
-                <p className="text-sm font-medium">Upload IFRS Document</p>
-                <p className="text-xs text-muted-foreground">Upload PDF, Excel, or CSV — AI extracts accounts automatically</p>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 border border-blue-200">
+                <Upload className="h-5 w-5 text-blue-600" />
               </div>
-            </Button>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Upload IFRS Document</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Upload PDF, Excel, or CSV — AI extracts accounts</p>
+              </div>
+            </button>
           </div>
-          <p className="text-[10px] text-muted-foreground">
-            Supported formats: PDF, Excel (.xlsx/.xls), CSV, TXT. The system uses AI to extract account names, codes, and types from your document.
+          <p className="text-[10px] text-muted-foreground leading-relaxed pt-1">
+            Supported: PDF, Excel (.xlsx/.xls), CSV, TXT. AI extracts account names, codes, and types automatically.
           </p>
         </DialogContent>
       </Dialog>
