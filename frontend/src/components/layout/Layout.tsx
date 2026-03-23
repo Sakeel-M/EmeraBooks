@@ -5,6 +5,7 @@ import {
   SidebarInset,
 } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
+import { ImpersonationBanner } from "@/components/admin/ImpersonationBanner";
 import { ClientSwitcher } from "./ClientSwitcher";
 import { NotificationBell } from "./NotificationBell";
 import { DateRangeContext } from "@/hooks/useDateRange";
@@ -181,6 +182,7 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <DateRangeContext.Provider value={ctxValue}>
+      <ImpersonationBanner />
       <SidebarProvider defaultOpen={true}>
         <div className="flex min-h-screen w-full overflow-hidden">
           <AppSidebar />

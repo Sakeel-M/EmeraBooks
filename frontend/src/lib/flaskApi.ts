@@ -15,6 +15,11 @@ async function getAuthHeaders(extra?: Record<string, string>): Promise<Record<st
   if (session?.access_token) {
     headers["Authorization"] = `Bearer ${session.access_token}`;
   }
+  // Admin impersonation header
+  const impersonateId = sessionStorage.getItem("impersonate-user-id");
+  if (impersonateId) {
+    headers["X-Impersonate-User"] = impersonateId;
+  }
   return headers;
 }
 

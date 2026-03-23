@@ -16,6 +16,7 @@ class Organization(db.Model):
     fiscal_year_start = db.Column(db.Integer, nullable=False, default=1)
     country = db.Column(db.Text, nullable=False, default="AE")
     vat_rate = db.Column(db.Numeric(5, 2), default=5.00)
+    locked_features = db.Column(JSONB, nullable=False, default=list, server_default='[]')
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -32,6 +33,7 @@ class Organization(db.Model):
             "fiscal_year_start": self.fiscal_year_start,
             "country": self.country,
             "vat_rate": float(self.vat_rate) if self.vat_rate else None,
+            "locked_features": self.locked_features or [],
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -45,6 +47,7 @@ class OrgMember(db.Model):
     org_id = db.Column(UUID(as_uuid=True), db.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     user_id = db.Column(UUID(as_uuid=True), nullable=False)
     role = db.Column(db.Text, nullable=False, default="member")
+    user_email = db.Column(db.Text)
     invited_email = db.Column(db.Text)
     accepted_at = db.Column(db.DateTime(timezone=True))
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
@@ -55,6 +58,7 @@ class OrgMember(db.Model):
             "org_id": str(self.org_id),
             "user_id": str(self.user_id),
             "role": self.role,
+            "user_email": self.user_email,
             "invited_email": self.invited_email,
             "accepted_at": self.accepted_at.isoformat() if self.accepted_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,

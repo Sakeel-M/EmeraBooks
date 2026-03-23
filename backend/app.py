@@ -45,6 +45,7 @@ from routes.entities import entities_bp
 from routes.categories import categories_bp
 from routes.audit import audit_bp
 from routes.control_settings import control_settings_bp
+from routes.admin import admin_bp
 
 app.register_blueprint(tier0_bp)
 app.register_blueprint(bank_accounts_bp)
@@ -57,12 +58,13 @@ app.register_blueprint(entities_bp)
 app.register_blueprint(categories_bp)
 app.register_blueprint(audit_bp)
 app.register_blueprint(control_settings_bp)
+app.register_blueprint(admin_bp)
 
 # ── Security: restrict CORS to known front-end origins ──────────────────────
 _allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 if _allowed_origins:
     CORS(app, origins=_allowed_origins,
-         allow_headers=["Authorization", "Content-Type", "X-API-Key"],
+         allow_headers=["Authorization", "Content-Type", "X-API-Key", "X-Impersonate-User"],
          supports_credentials=True)
 else:
     CORS(app, supports_credentials=True)  # Fallback: open (development mode)

@@ -17,6 +17,11 @@ import Integrations from "./pages/Integrations";
 import RiskMonitor from "./pages/RiskMonitor";
 import ControlSettings from "./pages/ControlSettings";
 import InvoiceFormPage from "./pages/InvoiceFormPage";
+import { AdminGuard } from "./components/admin/AdminGuard";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminUsers from "./pages/admin/AdminUsers";
+import AdminUserDetail from "./pages/admin/AdminUserDetail";
+import AdminOrgs from "./pages/admin/AdminOrgs";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,6 +57,11 @@ const App = () => (
           <Route path="/integrations" element={<P><Integrations /></P>} />
           <Route path="/risk" element={<P><RiskMonitor /></P>} />
           <Route path="/settings" element={<P><ControlSettings /></P>} />
+          {/* Admin routes */}
+          <Route path="/admin" element={<P><AdminGuard><AdminDashboard /></AdminGuard></P>} />
+          <Route path="/admin/users" element={<P><AdminGuard><AdminUsers /></AdminGuard></P>} />
+          <Route path="/admin/users/:userId" element={<P><AdminGuard><AdminUserDetail /></AdminGuard></P>} />
+          <Route path="/admin/orgs" element={<P><AdminGuard><AdminOrgs /></AdminGuard></P>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

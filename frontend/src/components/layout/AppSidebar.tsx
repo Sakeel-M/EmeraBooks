@@ -10,6 +10,7 @@ import {
   Settings,
   LogOut,
   ChevronUp,
+  Shield,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import emaraLogo from "@/assets/emara-logo-new.png";
@@ -40,6 +41,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useRiskAlerts } from "@/hooks/useRiskAlerts";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 
 const menuItems = [
   { title: "Control Center", url: "/", icon: LayoutDashboard },
@@ -58,6 +60,7 @@ export function AppSidebar() {
   const isCollapsed = state === "collapsed";
   const navigate = useNavigate();
   const { totalOpen, breakdown } = useRiskAlerts();
+  const { isAdmin } = useIsAdmin();
   const flagCount = (breakdown.flaggedRecon || 0) + (breakdown.overdueInvoices || 0) + (breakdown.overdueBills || 0);
 
   const { data: user } = useQuery({
@@ -154,6 +157,20 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+              {isAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <NavLink
+                      to="/admin"
+                      className="flex items-center gap-3 px-3 py-2 rounded-lg text-amber-400/80 hover:text-amber-300 hover:bg-sidebar-accent transition-colors"
+                      activeClassName="bg-amber-500/20 text-amber-300 font-medium"
+                    >
+                      <Shield className="w-5 h-5 flex-shrink-0" />
+                      {!isCollapsed && <span className="flex-1">Admin Panel</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

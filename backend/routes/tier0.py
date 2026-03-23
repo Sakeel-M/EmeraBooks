@@ -53,6 +53,7 @@ def create_organization():
     member = OrgMember(
         org_id=org.id,
         user_id=uuid.UUID(g.user_id),
+        user_email=g.user_email,
         role="owner",
         accepted_at=datetime.now(timezone.utc),
     )
@@ -214,6 +215,11 @@ def get_my_org():
     )
     if not membership:
         return jsonify(None)
+
+    # Backfill email if missing (for users created before this field existed)
+    if not membership.user_email and g.user_email:
+        membership.user_email = g.user_email
+        db.session.commit()
 
     org = Organization.query.get(membership.org_id)
     clients = (
