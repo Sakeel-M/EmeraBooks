@@ -675,6 +675,39 @@ Example format: ["Food & Beverage", "Transportation & Logistics", "Retail & Shop
                             else:
                                 bank_info['currency'] = 'AED'
 
+            # Fallback: scan first 15 rows of first sheet for bank info
+            if bank_info['bank_name'] == 'Unknown Bank':
+                first_sheet = workbook[workbook.sheetnames[0]]
+                header_text = ""
+                for row in range(1, min(16, first_sheet.max_row + 1)):
+                    for col in range(1, min(6, first_sheet.max_column + 1)):
+                        val = str(first_sheet.cell(row, col).value or "")
+                        header_text += " " + val
+                        # Check for common bank-info labels
+                        label = val.strip().lower().rstrip(":")
+                        next_val = str(first_sheet.cell(row, col + 1).value or "").strip() if col < first_sheet.max_column else ""
+                        if label in ("bank", "bank name", "bank:") and next_val:
+                            detected = self.detect_bank(next_val)
+                            if detected != "Unknown Bank":
+                                bank_info["bank_name"] = detected
+                        elif label in ("currency", "currency:") and next_val:
+                            if next_val.upper() in ("AED", "USD", "EUR", "GBP", "INR", "SAR"):
+                                bank_info["currency"] = next_val.upper()
+                        elif label in ("account holder", "account holder:", "account holder name") and next_val:
+                            bank_info["account_holder"] = next_val
+                        elif label in ("iban", "iban:") and next_val:
+                            bank_info["account_number"] = next_val[-4:] if len(next_val) > 4 else next_val
+                # Also try detect_bank on all header text combined
+                if bank_info['bank_name'] == 'Unknown Bank':
+                    detected = self.detect_bank(header_text)
+                    if detected != "Unknown Bank":
+                        bank_info['bank_name'] = detected
+                # Set currency from bank if still USD default
+                if bank_info['currency'] == 'USD' and bank_info['bank_name'] != 'Unknown Bank':
+                    us_banks = ('Bank of America', 'Chase', 'Wells Fargo', 'Citibank')
+                    if not any(b in bank_info['bank_name'] for b in us_banks):
+                        bank_info['currency'] = 'AED'
+
             print(f"[BANK] {bank_info['bank_name']} | Currency: {bank_info['currency']}")
 
             # Process transaction sheets (all sheets except Account Info)
