@@ -26,6 +26,10 @@ def get_transactions(client_id):
     if file_id:
         query = query.filter_by(file_id=uuid.UUID(file_id))
 
+    source = request.args.get("source")
+    if source:
+        query = query.filter_by(source=source)
+
     start_date = request.args.get("start_date")
     if start_date:
         query = query.filter(Transaction.transaction_date >= start_date)

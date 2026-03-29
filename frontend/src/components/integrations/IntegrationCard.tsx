@@ -13,7 +13,7 @@ interface IntegrationCardProps {
   name: string;
   description: string;
   icon: React.ReactNode;
-  type: 'zoho' | 'odoo' | 'quickbooks';
+  type: 'zoho' | 'odoo' | 'quickbooks' | 'gilbarco' | 'verifone';
   connection?: {
     id: string;
     status: string;
@@ -75,6 +75,20 @@ export function IntegrationCard({
           { key: 'client_id', label: 'Client ID', type: 'text', placeholder: 'Your QuickBooks Client ID', helpText: 'From Intuit Developer Portal', required: true },
           { key: 'client_secret', label: 'Client Secret', type: 'password', placeholder: '••••••••••••••••', helpText: 'From Intuit Developer Portal', required: true },
         ];
+      case 'gilbarco':
+        return [
+          { key: 'merchant_id', label: 'Merchant ID', type: 'text', placeholder: 'e.g., ADNOC-DXB-042', helpText: 'Your Gilbarco dealer/merchant identifier', required: true },
+          { key: 'site_id', label: 'Site ID', type: 'text', placeholder: 'e.g., SITE-001', helpText: 'Individual station/location ID', required: false },
+          { key: 'api_key', label: 'API Key', type: 'password', placeholder: '••••••••••••••••', helpText: 'From Gilbarco Insite360 portal (leave blank for demo mode)', required: false },
+          { key: 'demo_mode', label: 'Demo Mode', type: 'text', placeholder: 'true', helpText: 'Enter "true" for sample data (no live API needed)', required: false },
+        ];
+      case 'verifone':
+        return [
+          { key: 'merchant_id', label: 'Merchant ID', type: 'text', placeholder: 'e.g., MRC-UAE-12345', helpText: 'Your Verifone merchant identifier', required: true },
+          { key: 'client_id', label: 'Client ID', type: 'text', placeholder: 'Your Verifone Cloud client ID', helpText: 'From Verifone Developer Portal (leave blank for demo)', required: false },
+          { key: 'client_secret', label: 'Client Secret', type: 'password', placeholder: '••••••••••••••••', helpText: 'OAuth2 client secret', required: false },
+          { key: 'demo_mode', label: 'Demo Mode', type: 'text', placeholder: 'true', helpText: 'Enter "true" for sample data (no live API needed)', required: false },
+        ];
       default:
         return [];
     }
@@ -135,6 +149,36 @@ export function IntegrationCard({
               <li>Go to "Keys & credentials" in your app dashboard</li>
               <li>Copy the Client ID and Client Secret (use Production keys for live data)</li>
             </ol>
+          </div>
+        );
+      case 'gilbarco':
+        return (
+          <div className="space-y-3 text-sm">
+            <p className="font-medium">Gilbarco Passport POS Setup:</p>
+            <ol className="list-decimal list-inside space-y-2 text-muted-foreground">
+              <li>Log into your <strong>Gilbarco Insite360</strong> portal</li>
+              <li>Navigate to Settings → API Access</li>
+              <li>Copy your <strong>Merchant ID</strong> and <strong>Site ID</strong></li>
+              <li>Generate an <strong>API Key</strong> for external access</li>
+            </ol>
+            <div className="mt-3 p-2 bg-blue-500/10 border border-blue-500/20 rounded text-xs">
+              <strong className="text-blue-600">Demo Mode:</strong> Set Demo Mode to "true" to test with sample UAE fuel station data — no live API credentials needed.
+            </div>
+          </div>
+        );
+      case 'verifone':
+        return (
+          <div className="space-y-3 text-sm">
+            <p className="font-medium">Verifone Cloud POS Setup:</p>
+            <ol className="list-decimal list-inside space-y-2 text-muted-foreground">
+              <li>Log into <strong>Verifone Cloud Developer Portal</strong></li>
+              <li>Create a new OAuth2 application</li>
+              <li>Copy the <strong>Client ID</strong> and <strong>Client Secret</strong></li>
+              <li>Note your <strong>Merchant ID</strong> from the portal dashboard</li>
+            </ol>
+            <div className="mt-3 p-2 bg-blue-500/10 border border-blue-500/20 rounded text-xs">
+              <strong className="text-blue-600">Demo Mode:</strong> Set Demo Mode to "true" to test with sample UAE retail/F&B card transaction data.
+            </div>
           </div>
         );
       default:
@@ -353,7 +397,12 @@ export function IntegrationCard({
                   </DialogHeader>
                   <div className="space-y-4 py-4">
                     <div className="grid grid-cols-2 gap-4">
-                      {['customers', 'vendors', 'invoices', 'bills', 'payments', 'journal_entries', 'products', 'accounts'].map((entityType) => {
+                      {(type === 'gilbarco'
+                        ? ['transactions', 'settlements']
+                        : type === 'verifone'
+                        ? ['transactions', 'settlements']
+                        : ['customers', 'vendors', 'invoices', 'bills', 'payments', 'journal_entries', 'products', 'accounts']
+                      ).map((entityType) => {
                         const entityLabels: Record<string, string> = {
                           invoices: 'Invoices (Sales)',
                           bills: 'Bills (Purchases)',

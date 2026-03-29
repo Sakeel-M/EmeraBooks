@@ -244,12 +244,14 @@ export const database = {
     startDate?: string;
     endDate?: string;
     limit?: number;
+    source?: string;
   }): Promise<Transaction[]> {
     const params = new URLSearchParams();
     if (options?.fileId) params.set("file_id", options.fileId);
     if (options?.startDate) params.set("start_date", options.startDate);
     if (options?.endDate) params.set("end_date", options.endDate);
     if (options?.limit) params.set("limit", String(options.limit));
+    if (options?.source) params.set("source", options.source);
     const qs = params.toString();
     return flaskApi.get<Transaction[]>(`/clients/${clientId}/transactions${qs ? `?${qs}` : ""}`);
   },

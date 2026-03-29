@@ -636,13 +636,86 @@ def get_connections(client_id):
 @require_auth
 @require_client_access
 def create_connection(client_id):
-    """Create/connect an integration (Odoo, QuickBooks, etc.)."""
+    """Create/connect an integration (Odoo, Gilbarco POS, Verifone POS, etc.)."""
     import requests as http_requests
 
     data = request.get_json()
     integration_type = data.get("integration_type", "odoo")
     creds = data.get("credentials", {})
+    cid = uuid.UUID(client_id)
 
+    # ── POS providers: Gilbarco & Verifone ──
+    if integration_type == "gilbarco":
+        from services.gilbarco_sync import verify_gilbarco_connection
+        api_key = (creds.get("api_key") or "").strip()
+        merchant_id = (creds.get("merchant_id") or "").strip()
+        site_id = (creds.get("site_id") or "").strip()
+        base_url = (creds.get("base_url") or "https://api.gilbarco.com/v1").strip()
+        demo_mode = str(creds.get("demo_mode", "true")).lower() in ("true", "1", "yes", "")
+
+        if not merchant_id:
+            return jsonify({"error": "Merchant ID is required"}), 400
+
+        try:
+            result = verify_gilbarco_connection(api_key, merchant_id, site_id, base_url, demo_mode)
+        except Exception as e:
+            return jsonify({"error": f"Connection failed: {str(e)}"}), 400
+
+        existing = Connection.query.filter_by(client_id=cid, provider="gilbarco").first()
+        if existing:
+            existing.status = "connected"
+            existing.config = {"base_url": base_url, "site_name": result.get("site_name", site_id), "demo_mode": demo_mode}
+            existing.credentials = {"api_key": api_key, "merchant_id": merchant_id, "site_id": site_id}
+            existing.last_error = None
+            conn = existing
+        else:
+            conn = Connection(
+                client_id=cid, type="pos", provider="gilbarco",
+                display_name=f"Gilbarco POS ({result.get('site_name', site_id)})",
+                status="connected",
+                config={"base_url": base_url, "site_name": result.get("site_name", site_id), "demo_mode": demo_mode},
+                credentials={"api_key": api_key, "merchant_id": merchant_id, "site_id": site_id},
+            )
+            db.session.add(conn)
+        db.session.commit()
+        return jsonify(conn.to_dict()), 201
+
+    if integration_type == "verifone":
+        from services.verifone_sync import verify_verifone_connection
+        client_id_vfn = (creds.get("client_id") or "").strip()
+        client_secret = (creds.get("client_secret") or "").strip()
+        merchant_id = (creds.get("merchant_id") or "").strip()
+        demo_mode = str(creds.get("demo_mode", "true")).lower() in ("true", "1", "yes", "")
+
+        if not merchant_id:
+            return jsonify({"error": "Merchant ID is required"}), 400
+
+        vfn_config = {"base_url": "https://api.verifone.cloud/v1", "merchant_id": merchant_id, "demo_mode": demo_mode}
+        vfn_creds = {"client_id": client_id_vfn, "client_secret": client_secret}
+        try:
+            result = verify_verifone_connection(vfn_creds, vfn_config)
+        except Exception as e:
+            return jsonify({"error": f"Connection failed: {str(e)}"}), 400
+
+        existing = Connection.query.filter_by(client_id=cid, provider="verifone").first()
+        if existing:
+            existing.status = "connected"
+            existing.config = vfn_config
+            existing.credentials = vfn_creds
+            existing.last_error = None
+            conn = existing
+        else:
+            conn = Connection(
+                client_id=cid, type="pos", provider="verifone",
+                display_name=f"Verifone POS ({result.get('merchant_name', merchant_id)})",
+                status="connected",
+                config=vfn_config, credentials=vfn_creds,
+            )
+            db.session.add(conn)
+        db.session.commit()
+        return jsonify(conn.to_dict()), 201
+
+    # ── ERP providers (Odoo, etc.) — existing logic below ──
     server_url = (creds.get("server_url") or "").strip()
     database_name = (creds.get("database") or "").strip()
     username = (creds.get("username") or "").strip()
@@ -786,14 +859,27 @@ def sync_connection(client_id, conn_id):
     db.session.commit()
 
     try:
-        from services.odoo_sync import sync_customers, sync_vendors, sync_invoices, sync_bills
-
-        handlers = {
-            "customers": sync_customers,
-            "vendors": sync_vendors,
-            "invoices": sync_invoices,
-            "bills": sync_bills,
-        }
+        # Route to provider-specific handlers
+        if conn.provider == "gilbarco":
+            from services.gilbarco_sync import sync_gilbarco_transactions, sync_gilbarco_settlements
+            handlers = {
+                "transactions": sync_gilbarco_transactions,
+                "settlements": sync_gilbarco_settlements,
+            }
+        elif conn.provider == "verifone":
+            from services.verifone_sync import sync_verifone_transactions, sync_verifone_settlements
+            handlers = {
+                "transactions": sync_verifone_transactions,
+                "settlements": sync_verifone_settlements,
+            }
+        else:
+            from services.odoo_sync import sync_customers, sync_vendors, sync_invoices, sync_bills
+            handlers = {
+                "customers": sync_customers,
+                "vendors": sync_vendors,
+                "invoices": sync_invoices,
+                "bills": sync_bills,
+            }
 
         handler = handlers.get(entity_type)
         if not handler:
@@ -816,9 +902,9 @@ def sync_connection(client_id, conn_id):
 
         mapped = result["created"] + result["updated"]
 
-        # If nothing found, check if the OTHER type has data and hint
+        # If nothing found for Odoo, check if the OTHER type has data and hint
         suggestion = None
-        if mapped == 0 and result["fetched"] == 0:
+        if mapped == 0 and result["fetched"] == 0 and conn.provider not in ("gilbarco", "verifone"):
             from services.odoo_sync import _fetch_odoo_data
             hint_map = {
                 "invoices": ("bills (vendor purchases)", [("move_type", "=", "in_invoice")]),

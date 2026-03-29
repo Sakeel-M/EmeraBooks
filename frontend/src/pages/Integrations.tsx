@@ -730,32 +730,169 @@ function BanksTab() {
 // ── POS Tab ───────────────────────────────────────────────────────────────
 
 function POSTab() {
+  const { clientId, currency } = useActiveClient();
+  const queryClient = useQueryClient();
+
+  const { data: connections = [] } = useQuery({
+    queryKey: ["connections", clientId],
+    queryFn: () => database.getConnections(clientId!),
+    enabled: !!clientId,
+  });
+
+  const posConnections = connections.filter((c: any) => c.type === "pos");
+  const getConnection = (provider: string) =>
+    posConnections.find((c: any) => c.provider === provider) || null;
+
+  const handleConnect = async (type: string, credentials: any) => {
+    await flaskApi.post(`/clients/${clientId}/connections`, {
+      integration_type: type,
+      credentials,
+    });
+    queryClient.invalidateQueries({ queryKey: ["connections", clientId] });
+  };
+
+  const handleDisconnect = async (type: string) => {
+    const conn = getConnection(type);
+    if (conn) {
+      await flaskApi.del(`/clients/${clientId}/connections/${conn.id}`);
+      queryClient.invalidateQueries({ queryKey: ["connections", clientId] });
+    }
+  };
+
+  const handleSync = async (type: string, entityType: string, direction: "import" | "export") => {
+    const conn = getConnection(type);
+    if (!conn) throw new Error("Not connected");
+    const result = await flaskApi.post<any>(
+      `/clients/${clientId}/connections/${conn.id}/sync`,
+      { entity_type: entityType, direction },
+    );
+    queryClient.invalidateQueries({ queryKey: ["connections", clientId] });
+    queryClient.invalidateQueries({ queryKey: ["pos-transactions", clientId] });
+    return result;
+  };
+
+  const connectedCount = posConnections.filter((c: any) => c.status === "connected").length;
+
+  // Imported POS data
+  const { data: posTransactions = [] } = useQuery({
+    queryKey: ["pos-transactions", clientId],
+    queryFn: () => database.getTransactions(clientId!, { source: "pos", limit: 200 }),
+    enabled: !!clientId && connectedCount > 0,
+  });
+
+  const totalImported = posTransactions.length;
+
   return (
     <div className="space-y-5">
+      {/* Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatusCard
           label="Connected"
-          value="0"
+          value={connectedCount.toString()}
           icon={ShoppingCart}
-          color="text-muted-foreground"
+          color={connectedCount > 0 ? "text-green-600" : "text-muted-foreground"}
           sub="POS systems"
         />
         <StatusCard
           label="Available"
-          value="4"
+          value="2"
           icon={Plug}
           color="text-primary"
-          sub="providers"
+          sub="Gilbarco + Verifone"
         />
         <StatusCard
-          label="Sync Capability"
-          value="Sales"
+          label="POS Transactions"
+          value={totalImported.toString()}
           icon={ArrowRightLeft}
           color="text-primary"
-          sub="+ settlements"
+          sub="imported"
         />
       </div>
 
+      {/* Live POS Cards */}
+      <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-1">
+        <IntegrationCard
+          name="Gilbarco POS"
+          description="Connect Gilbarco Passport POS for fuel stations — sync fuel sales, c-store transactions, and daily settlements."
+          icon={<Landmark className="h-6 w-6 text-orange-600" />}
+          type="gilbarco"
+          connection={getConnection("gilbarco")}
+          onConnect={(creds) => handleConnect("gilbarco", creds)}
+          onDisconnect={() => handleDisconnect("gilbarco")}
+          onSync={(entity, dir) => handleSync("gilbarco", entity, dir)}
+        />
+        <IntegrationCard
+          name="Verifone POS"
+          description="Connect Verifone Cloud POS for retail & F&B — sync card transactions, daily settlements, and terminal data."
+          icon={<CreditCard className="h-6 w-6 text-blue-600" />}
+          type="verifone"
+          connection={getConnection("verifone")}
+          onConnect={(creds) => handleConnect("verifone", creds)}
+          onDisconnect={() => handleDisconnect("verifone")}
+          onSync={(entity, dir) => handleSync("verifone", entity, dir)}
+        />
+      </div>
+
+      {/* Imported POS Data */}
+      {connectedCount > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ArrowRightLeft className="h-4 w-4 text-orange-600" />
+                <CardTitle className="text-sm font-semibold">Imported POS Data</CardTitle>
+              </div>
+              {totalImported > 0 && (
+                <Badge variant="outline" className="text-[10px]">{totalImported} transactions</Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {totalImported === 0 ? (
+              <div className="flex flex-col items-center py-8 text-center">
+                <ShoppingCart className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                <p className="text-sm text-muted-foreground">No POS data imported yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Use "Sync Data" above to import transactions and settlements.</p>
+              </div>
+            ) : (
+              <div className="rounded-md border overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-muted/50">
+                      <th className="text-left p-2 font-medium">Date</th>
+                      <th className="text-left p-2 font-medium">Description</th>
+                      <th className="text-left p-2 font-medium">Type</th>
+                      <th className="text-left p-2 font-medium">Payment</th>
+                      <th className="text-left p-2 font-medium">Terminal</th>
+                      <th className="text-right p-2 font-medium">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {posTransactions.slice(0, 50).map((txn: any) => (
+                      <tr key={txn.id} className="border-t hover:bg-muted/30">
+                        <td className="p-2">{txn.transaction_date || "—"}</td>
+                        <td className="p-2 max-w-[200px] truncate">{txn.description || "—"}</td>
+                        <td className="p-2">
+                          <Badge variant="outline" className="text-[9px]">
+                            {txn.metadata?.product_type || txn.metadata?.txn_type || "sale"}
+                          </Badge>
+                        </td>
+                        <td className="p-2 text-muted-foreground">{txn.metadata?.payment_method || "—"}</td>
+                        <td className="p-2 text-muted-foreground font-mono text-[10px]">{txn.metadata?.terminal_id || "—"}</td>
+                        <td className="p-2 text-right font-medium">
+                          {formatAmount(txn.amount || 0, currency)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Coming Soon */}
       <div className="grid gap-4 md:grid-cols-2">
         <ProviderCard
           title="Square"
@@ -778,28 +915,6 @@ function POSTab() {
           ]}
           phase="Phase 4"
           icon={<Zap className="h-5 w-5 text-orange-500" />}
-        />
-        <ProviderCard
-          title="Toast"
-          description="Restaurant POS integration — sync orders, payments, tips, and labor costs."
-          providers={[
-            { name: "Orders", region: "Real-time" },
-            { name: "Payments", region: "Daily" },
-            { name: "Labor", region: "Payroll sync" },
-          ]}
-          phase="Phase 4"
-          icon={<Receipt className="h-5 w-5 text-red-500" />}
-        />
-        <ProviderCard
-          title="Vend (Lightspeed X)"
-          description="Retail POS — sync products, sales, customers, and registers."
-          providers={[
-            { name: "Products", region: "Full catalog" },
-            { name: "Sales", region: "Register data" },
-            { name: "Reports", region: "Daily summaries" },
-          ]}
-          phase="Phase 4"
-          icon={<ShoppingCart className="h-5 w-5 text-green-600" />}
         />
       </div>
     </div>
