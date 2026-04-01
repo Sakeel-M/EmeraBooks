@@ -128,9 +128,8 @@ def sync_verifone_transactions(conn: Connection, client_id: uuid.UUID):
             seq += 1
         current += timedelta(days=1)
 
-    # Limit to reasonable count for demo
-    if len(demo_txns) > 60:
-        demo_txns = random.sample(demo_txns, 60)
+    # Take first 60 (deterministic — same on every sync for dedup)
+    demo_txns = demo_txns[:60]
 
     created = 0
     updated = 0
@@ -197,9 +196,8 @@ def sync_verifone_settlements(conn: Connection, client_id: uuid.UUID):
             })
         current += timedelta(days=1)
 
-    # Limit settlements for demo
-    if len(settlements) > 30:
-        settlements = random.sample(settlements, 30)
+    # Take first 30 (deterministic for dedup)
+    settlements = settlements[:30]
 
     created = 0
     for s in settlements:

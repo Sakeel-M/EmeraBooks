@@ -147,9 +147,8 @@ def sync_gilbarco_transactions(conn: Connection, client_id: uuid.UUID):
             seq += 1
         current += timedelta(days=1)
 
-    # Limit to reasonable count for demo (take a sample)
-    if len(demo_txns) > 50:
-        demo_txns = random.sample(demo_txns, 50)
+    # Take first 50 (deterministic — same on every sync for dedup)
+    demo_txns = demo_txns[:50]
 
     # Create Transaction records
     created = 0

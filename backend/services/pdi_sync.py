@@ -153,7 +153,9 @@ def sync_pdi_transactions(conn: Connection, client_id: uuid.UUID):
     """Import c-store and fuel transactions from PDI POS."""
     config = conn.config or {}
 
-    # Demo mode: generate transactions for last 30 days
+    # Demo mode: use fixed seed so re-syncs produce identical data (dedup works)
+    rng = random.Random(hash(str(conn.id) + "pdi-txns"))
+
     today = date.today()
     start = today - timedelta(days=30)
 
@@ -161,19 +163,16 @@ def sync_pdi_transactions(conn: Connection, client_id: uuid.UUID):
     seq = 1
     current = start
     while current <= today:
-        # 12-25 fuel transactions per day
-        for _ in range(random.randint(12, 25)):
+        for _ in range(rng.randint(12, 25)):
             demo_txns.append(_gen_fuel_txn(current, seq))
             seq += 1
-        # 8-20 c-store transactions per day
-        for _ in range(random.randint(8, 20)):
+        for _ in range(rng.randint(8, 20)):
             demo_txns.append(_gen_cstore_txn(current, seq))
             seq += 1
         current += timedelta(days=1)
 
-    # Limit for demo
-    if len(demo_txns) > 55:
-        demo_txns = random.sample(demo_txns, 55)
+    # Take first 55 (deterministic — same on every sync)
+    demo_txns = demo_txns[:55]
 
     created = 0
     updated = 0
