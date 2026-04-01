@@ -715,6 +715,40 @@ def create_connection(client_id):
         db.session.commit()
         return jsonify(conn.to_dict()), 201
 
+    if integration_type == "pdi":
+        from services.pdi_sync import verify_pdi_connection
+        api_key = (creds.get("api_key") or "").strip()
+        merchant_id = (creds.get("merchant_id") or "").strip()
+        site_id = (creds.get("site_id") or "").strip()
+        demo_mode = str(creds.get("demo_mode", "true")).lower() in ("true", "1", "yes", "")
+
+        if not merchant_id:
+            return jsonify({"error": "Merchant ID is required"}), 400
+
+        try:
+            result = verify_pdi_connection(api_key, merchant_id, site_id, demo_mode)
+        except Exception as e:
+            return jsonify({"error": f"Connection failed: {str(e)}"}), 400
+
+        existing = Connection.query.filter_by(client_id=cid, provider="pdi").first()
+        if existing:
+            existing.status = "connected"
+            existing.config = {"site_name": result.get("site_name", site_id), "demo_mode": demo_mode}
+            existing.credentials = {"api_key": api_key, "merchant_id": merchant_id, "site_id": site_id}
+            existing.last_error = None
+            conn = existing
+        else:
+            conn = Connection(
+                client_id=cid, type="pos", provider="pdi",
+                display_name=f"PDI CStore POS ({result.get('site_name', site_id)})",
+                status="connected",
+                config={"site_name": result.get("site_name", site_id), "demo_mode": demo_mode},
+                credentials={"api_key": api_key, "merchant_id": merchant_id, "site_id": site_id},
+            )
+            db.session.add(conn)
+        db.session.commit()
+        return jsonify(conn.to_dict()), 201
+
     # ── ERP providers (Odoo, etc.) — existing logic below ──
     server_url = (creds.get("server_url") or "").strip()
     database_name = (creds.get("database") or "").strip()
@@ -871,6 +905,12 @@ def sync_connection(client_id, conn_id):
             handlers = {
                 "transactions": sync_verifone_transactions,
                 "settlements": sync_verifone_settlements,
+            }
+        elif conn.provider == "pdi":
+            from services.pdi_sync import sync_pdi_transactions, sync_pdi_settlements
+            handlers = {
+                "transactions": sync_pdi_transactions,
+                "settlements": sync_pdi_settlements,
             }
         else:
             from services.odoo_sync import sync_customers, sync_vendors, sync_invoices, sync_bills

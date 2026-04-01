@@ -13,7 +13,7 @@ interface IntegrationCardProps {
   name: string;
   description: string;
   icon: React.ReactNode;
-  type: 'zoho' | 'odoo' | 'quickbooks' | 'gilbarco' | 'verifone';
+  type: 'zoho' | 'odoo' | 'quickbooks' | 'gilbarco' | 'verifone' | 'pdi';
   connection?: {
     id: string;
     status: string;
@@ -88,6 +88,13 @@ export function IntegrationCard({
           { key: 'client_id', label: 'Client ID', type: 'text', placeholder: 'Your Verifone Cloud client ID', helpText: 'From Verifone Developer Portal (leave blank for demo)', required: false },
           { key: 'client_secret', label: 'Client Secret', type: 'password', placeholder: '••••••••••••••••', helpText: 'OAuth2 client secret', required: false },
           { key: 'demo_mode', label: 'Demo Mode', type: 'text', placeholder: 'true', helpText: 'Enter "true" for sample data (no live API needed)', required: false },
+        ];
+      case 'pdi':
+        return [
+          { key: 'merchant_id', label: 'Merchant / Store ID', type: 'text', placeholder: 'e.g., PDI-CSTORE-042', helpText: 'Your PDI CStore merchant identifier', required: true },
+          { key: 'site_id', label: 'Site ID', type: 'text', placeholder: 'e.g., SITE-AUH-001', helpText: 'Individual store/location ID (optional)', required: false },
+          { key: 'api_key', label: 'API Key', type: 'password', placeholder: '••••••••••••••••', helpText: 'PDI Data Services API key (leave blank for demo)', required: false },
+          { key: 'demo_mode', label: 'Demo Mode', type: 'text', placeholder: 'true', helpText: 'Enter "true" for sample c-store + fuel data', required: false },
         ];
       default:
         return [];
@@ -178,6 +185,21 @@ export function IntegrationCard({
             </ol>
             <div className="mt-3 p-2 bg-blue-500/10 border border-blue-500/20 rounded text-xs">
               <strong className="text-blue-600">Demo Mode:</strong> Set Demo Mode to "true" to test with sample UAE retail/F&B card transaction data.
+            </div>
+          </div>
+        );
+      case 'pdi':
+        return (
+          <div className="space-y-3 text-sm">
+            <p className="font-medium">PDI Technologies CStore POS Setup:</p>
+            <ol className="list-decimal list-inside space-y-2 text-muted-foreground">
+              <li>Contact <strong>PDI Technologies</strong> at <a href="https://pditechnologies.com/customer-support/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">pditechnologies.com</a> for API access</li>
+              <li>Obtain your <strong>Merchant/Store ID</strong> and <strong>Site ID</strong> from PDI portal</li>
+              <li>Request <strong>Data Services API Key</strong> for programmatic access</li>
+              <li>PDI supports data feeds via Snowflake, SFTP, or REST API</li>
+            </ol>
+            <div className="mt-3 p-2 bg-blue-500/10 border border-blue-500/20 rounded text-xs">
+              <strong className="text-blue-600">Demo Mode:</strong> Set Demo Mode to "true" to test with sample UAE c-store, fuel, and foodservice transaction data.
             </div>
           </div>
         );
@@ -397,9 +419,7 @@ export function IntegrationCard({
                   </DialogHeader>
                   <div className="space-y-4 py-4">
                     <div className="grid grid-cols-2 gap-4">
-                      {(type === 'gilbarco'
-                        ? ['transactions', 'settlements']
-                        : type === 'verifone'
+                      {(type === 'gilbarco' || type === 'verifone' || type === 'pdi'
                         ? ['transactions', 'settlements']
                         : ['customers', 'vendors', 'invoices', 'bills', 'payments', 'journal_entries', 'products', 'accounts']
                       ).map((entityType) => {

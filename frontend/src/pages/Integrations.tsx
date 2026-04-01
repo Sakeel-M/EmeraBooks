@@ -795,10 +795,10 @@ function POSTab() {
         />
         <StatusCard
           label="Available"
-          value="2"
+          value="3"
           icon={Plug}
           color="text-primary"
-          sub="Gilbarco + Verifone"
+          sub="Gilbarco + Verifone + PDI"
         />
         <StatusCard
           label="POS Transactions"
@@ -830,6 +830,16 @@ function POSTab() {
           onConnect={(creds) => handleConnect("verifone", creds)}
           onDisconnect={() => handleDisconnect("verifone")}
           onSync={(entity, dir) => handleSync("verifone", entity, dir)}
+        />
+        <IntegrationCard
+          name="PDI Technologies POS"
+          description="Connect PDI CStore POS for c-store and fuel retail — sync merchandise sales, fuel transactions, foodservice, and daily settlements."
+          icon={<ShoppingCart className="h-6 w-6 text-green-600" />}
+          type="pdi"
+          connection={getConnection("pdi")}
+          onConnect={(creds) => handleConnect("pdi", creds)}
+          onDisconnect={() => handleDisconnect("pdi")}
+          onSync={(entity, dir) => handleSync("pdi", entity, dir)}
         />
       </div>
 
