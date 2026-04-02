@@ -2191,7 +2191,7 @@ function ClientManagementTab() {
         </div>
         <Button size="sm" className="gap-1.5 text-xs" onClick={() => setShowAdd(true)}>
           <Plus className="h-3.5 w-3.5" />
-          Add Client
+          Add Account
         </Button>
       </div>
 
@@ -2201,13 +2201,13 @@ function ClientManagementTab() {
             <div className="rounded-full bg-muted p-4 mb-4">
               <Building2 className="h-10 w-10 text-muted-foreground/40" />
             </div>
-            <h3 className="text-lg font-semibold mb-2">No Clients Yet</h3>
+            <h3 className="text-lg font-semibold mb-2">No Accounts Yet</h3>
             <p className="text-sm text-muted-foreground max-w-md mb-4">
-              Add your first client to start tracking their financial data.
+              Add your first account to start tracking financial data.
             </p>
             <Button onClick={() => setShowAdd(true)} className="gap-1.5">
               <Plus className="h-4 w-4" />
-              Add Client
+              Add Account
             </Button>
           </CardContent>
         </Card>
@@ -2291,12 +2291,12 @@ function ClientManagementTab() {
         </Card>
       )}
 
-      {/* Add Client Dialog */}
+      {/* Add Account Dialog */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Client</DialogTitle>
-            <DialogDescription>Add a new client to your organization.</DialogDescription>
+            <DialogTitle>Add Account</DialogTitle>
+            <DialogDescription>Add a new account to your organization.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
@@ -2332,7 +2332,7 @@ function ClientManagementTab() {
             <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
             <Button onClick={handleAddClient} disabled={saving || !form.name.trim()} className="gap-1.5">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Add Client
+              Add Account
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2863,7 +2863,7 @@ export default function ControlSettings() {
             </TabsTrigger>
             <TabsTrigger value="clients" className="gap-1.5">
               <Building2 className="h-3.5 w-3.5" />
-              Clients
+              Accounts
             </TabsTrigger>
           </TabsList>
 

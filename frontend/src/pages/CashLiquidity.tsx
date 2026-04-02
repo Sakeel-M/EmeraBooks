@@ -2849,6 +2849,21 @@ function CashLedgerTab() {
   const totalNet = totalInflow - totalOutflow;
   const totalEntries = transactions.length;
 
+  // Bank accounts for opening/closing balance
+  const { data: bankAccounts = [] } = useQuery({
+    queryKey: ["cash-bank-accounts", clientId],
+    queryFn: () => database.getBankAccounts(clientId!),
+    enabled: !!clientId,
+  });
+
+  // Closing balance = sum of all bank account balances
+  const closingBalance = useMemo(
+    () => bankAccounts.reduce((s: number, a: any) => s + (a.current_balance || 0), 0),
+    [bankAccounts],
+  );
+  // Opening balance = closing - net movement in the displayed period
+  const openingBalance = closingBalance - totalNet;
+
   const toggleAccount = (name: string) => {
     setExpandedAccounts((prev) => ({ ...prev, [name]: !prev[name] }));
   };
@@ -2873,6 +2888,30 @@ function CashLedgerTab() {
     <div className="flex flex-col lg:flex-row gap-4">
       {/* Left Sidebar — Summary KPIs */}
       <div className="w-full lg:w-[280px] shrink-0 space-y-3">
+        <Card className="border-primary/20 bg-primary/[0.02]">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Opening Balance</span>
+              <Landmark className="h-4 w-4 text-primary/60" />
+            </div>
+            <p className="text-2xl font-bold text-primary"><FC amount={openingBalance} currency={currency} /></p>
+            <p className="text-xs text-muted-foreground">Period start</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-primary/20 bg-primary/[0.02]">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Closing Balance</span>
+              <Banknote className="h-4 w-4 text-primary/60" />
+            </div>
+            <p className={`text-2xl font-bold ${closingBalance >= 0 ? "text-primary" : "text-red-500"}`}>
+              <FC amount={closingBalance} currency={currency} />
+            </p>
+            <p className="text-xs text-muted-foreground">Period end</p>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-1">

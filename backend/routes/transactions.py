@@ -232,12 +232,23 @@ def sync_file_data(client_id):
     currency = uploaded_file.currency or "AED"
     bank_name = uploaded_file.bank_name or "Bank Account"
 
-    # ── 1. Auto-create bank account if none exists ────────────────────────
+    # ── 1. Create or update bank account (match by bank_name to link statements) ──
     bank_account_created = False
-    existing_bank = BankAccount.query.filter_by(client_id=cid).first()
+    # Match by bank_name first (same bank = same account), then fallback to any
+    existing_bank = BankAccount.query.filter_by(client_id=cid, bank_name=bank_name).first()
     if not existing_bank:
-        total_balance = sum(float(t.amount) for t in txns)
-        max_date = max(t.transaction_date for t in txns)
+        existing_bank = BankAccount.query.filter_by(client_id=cid).first()
+
+    # Calculate balance from ALL transactions across ALL files for this client
+    from sqlalchemy import func as _func
+    all_txn_sum = db.session.query(
+        _func.coalesce(_func.sum(Transaction.amount), 0)
+    ).filter_by(client_id=cid).scalar()
+    total_balance = float(all_txn_sum)
+
+    max_date = max(t.transaction_date for t in txns)
+
+    if not existing_bank:
         bank_acct = BankAccount(
             client_id=cid,
             account_name=f"{bank_name} Account",
@@ -251,10 +262,11 @@ def sync_file_data(client_id):
         db.session.flush()
         bank_account_created = True
     else:
-        # Update balance from transactions
-        total_balance = sum(float(t.amount) for t in txns)
-        existing_bank.current_balance = (float(existing_bank.current_balance or 0)) + total_balance
-        max_date = max(t.transaction_date for t in txns)
+        # Update balance from ALL transactions (not just current file)
+        existing_bank.current_balance = total_balance
+        if bank_name and bank_name != "Unknown Bank" and existing_bank.bank_name in ("Unknown Bank", "Unknown"):
+            existing_bank.bank_name = bank_name
+            existing_bank.account_name = f"{bank_name} Account"
         if not existing_bank.last_statement_date or max_date > existing_bank.last_statement_date:
             existing_bank.last_statement_date = max_date
 
