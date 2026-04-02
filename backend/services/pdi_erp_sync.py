@@ -107,6 +107,7 @@ def sync_pdi_erp_customers(conn: Connection, client_id: uuid.UUID):
 
 def sync_pdi_erp_bills(conn: Connection, client_id: uuid.UUID):
     """Import purchase bills from PDI Enterprise AP module."""
+    rng = random.Random(42)  # Fixed seed for deterministic demo data
     today = date.today()
     start = today - timedelta(days=90)
 
@@ -116,15 +117,15 @@ def sync_pdi_erp_bills(conn: Connection, client_id: uuid.UUID):
     while current <= today:
         # 2-5 bills per week
         if current.weekday() in (0, 2, 4):  # Mon, Wed, Fri
-            num = random.randint(1, 3)
+            num = rng.randint(1, 3)
             for _ in range(num):
-                vendor = random.choice(DEMO_VENDORS)
+                vendor = rng.choice(DEMO_VENDORS)
                 if "Fuel" in vendor["category"]:
-                    total = round(random.uniform(5000, 50000), 2)
+                    total = round(rng.uniform(5000, 50000), 2)
                 elif "Food" in vendor["category"]:
-                    total = round(random.uniform(1000, 15000), 2)
+                    total = round(rng.uniform(1000, 15000), 2)
                 else:
-                    total = round(random.uniform(500, 8000), 2)
+                    total = round(rng.uniform(500, 8000), 2)
                 subtotal = round(total / 1.05, 2)
                 tax = round(total - subtotal, 2)
                 bills_data.append({
@@ -135,7 +136,7 @@ def sync_pdi_erp_bills(conn: Connection, client_id: uuid.UUID):
                     "subtotal": subtotal, "tax_amount": tax, "total": total,
                     "category": vendor["category"],
                     "source_ref": f"pdi-erp:bill:{current.isoformat()}-{seq:04d}",
-                    "status": random.choice(["paid", "paid", "paid", "open", "overdue"]),
+                    "status": rng.choice(["paid", "paid", "paid", "open", "overdue"]),
                 })
                 seq += 1
         current += timedelta(days=1)
@@ -168,6 +169,7 @@ def sync_pdi_erp_bills(conn: Connection, client_id: uuid.UUID):
 
 def sync_pdi_erp_invoices(conn: Connection, client_id: uuid.UUID):
     """Import sales invoices from PDI Enterprise AR module."""
+    rng = random.Random(77)  # Fixed seed for deterministic demo data
     today = date.today()
     start = today - timedelta(days=90)
 
@@ -176,15 +178,15 @@ def sync_pdi_erp_invoices(conn: Connection, client_id: uuid.UUID):
     current = start
     while current <= today:
         if current.weekday() < 6:  # Mon-Sat
-            num = random.randint(1, 4)
+            num = rng.randint(1, 4)
             for _ in range(num):
-                customer = random.choice(DEMO_CUSTOMERS)
+                customer = rng.choice(DEMO_CUSTOMERS)
                 if customer["category"] == "Corporate":
-                    total = round(random.uniform(2000, 25000), 2)
+                    total = round(rng.uniform(2000, 25000), 2)
                 elif customer["category"] == "Government":
-                    total = round(random.uniform(5000, 40000), 2)
+                    total = round(rng.uniform(5000, 40000), 2)
                 else:
-                    total = round(random.uniform(500, 5000), 2)
+                    total = round(rng.uniform(500, 5000), 2)
                 subtotal = round(total / 1.05, 2)
                 tax = round(total - subtotal, 2)
                 invoices_data.append({
@@ -195,7 +197,7 @@ def sync_pdi_erp_invoices(conn: Connection, client_id: uuid.UUID):
                     "subtotal": subtotal, "tax_amount": tax, "total": total,
                     "category": customer["category"],
                     "source_ref": f"pdi-erp:invoice:{current.isoformat()}-{seq:04d}",
-                    "status": random.choice(["sent", "sent", "paid", "paid", "paid", "overdue"]),
+                    "status": rng.choice(["sent", "sent", "paid", "paid", "paid", "overdue"]),
                 })
                 seq += 1
         current += timedelta(days=1)
