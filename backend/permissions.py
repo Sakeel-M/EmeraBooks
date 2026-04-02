@@ -33,6 +33,18 @@ def user_has_org_access(org_id):
     return result is not None
 
 
+def get_effective_client_ids(client_id):
+    """For parent accounts, returns [parent_id, child1_id, child2_id, ...].
+    For child/standalone accounts, returns [client_id].
+    Used by GET endpoints to aggregate data across sub-accounts."""
+    cid = uuid.UUID(str(client_id))
+    children = Client.query.filter_by(parent_id=cid).all()
+    ids = [cid]
+    for c in children:
+        ids.append(c.id)
+    return ids
+
+
 def require_client_access(f):
     """Decorator: reads client_id from URL param, query string, or JSON body and checks access."""
     @wraps(f)

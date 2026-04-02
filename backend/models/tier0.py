@@ -77,15 +77,30 @@ class Client(db.Model):
     country = db.Column(db.Text, nullable=False, default="AE")
     industry = db.Column(db.Text)
     fiscal_year_start = db.Column(db.Integer, nullable=False, default=1)
+    parent_id = db.Column(UUID(as_uuid=True), db.ForeignKey("clients.id", ondelete="SET NULL"))
     status = db.Column(db.Text, nullable=False, default="active")
     metadata_ = db.Column("metadata", JSONB, default={})
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
+    children = db.relationship("Client", backref=db.backref("parent", remote_side="Client.id"), lazy="dynamic")
+
+    @property
+    def is_parent(self):
+        return self.children.count() > 0
+
+    @property
+    def children_count(self):
+        return self.children.count()
+
     def to_dict(self):
         return {
             "id": str(self.id),
             "org_id": str(self.org_id),
+            "parent_id": str(self.parent_id) if self.parent_id else None,
+            "parent_name": self.parent.name if self.parent_id and self.parent else None,
+            "is_parent": self.is_parent,
+            "children_count": self.children_count,
             "name": self.name,
             "trade_license": self.trade_license,
             "trn": self.trn,

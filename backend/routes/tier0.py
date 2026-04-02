@@ -69,8 +69,12 @@ def create_client(org_id):
         return jsonify({"error": "Access denied"}), 403
 
     data = request.get_json()
+    parent_id = None
+    if data.get("parent_id"):
+        parent_id = uuid.UUID(data["parent_id"])
     client = Client(
         org_id=uuid.UUID(org_id),
+        parent_id=parent_id,
         name=data.get("name"),
         currency=data.get("currency", "AED"),
         country=data.get("country", "AE"),
@@ -138,6 +142,8 @@ def update_client(client_id):
         client.trn = data["trn"]
     if "fiscal_year_start" in data:
         client.fiscal_year_start = data["fiscal_year_start"]
+    if "parent_id" in data:
+        client.parent_id = uuid.UUID(data["parent_id"]) if data["parent_id"] else None
     if "metadata" in data:
         client.metadata_ = data["metadata"]
 
@@ -173,12 +179,20 @@ def get_active_client():
         return jsonify(None)
 
     org = Organization.query.get(client.org_id)
+
+    # Include children if this is a parent account
+    children_list = []
+    if client.is_parent:
+        children_list = [{"id": str(c.id), "name": c.name, "currency": c.currency} for c in client.children.all()]
+
     return jsonify({
         "client_id": str(client.id),
         "client": client.to_dict(),
         "org_id": str(client.org_id),
         "org_name": org.name if org else None,
         "currency": client.currency,
+        "is_parent": client.is_parent,
+        "children": children_list,
     })
 
 

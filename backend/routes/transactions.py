@@ -16,9 +16,11 @@ transactions_bp = Blueprint("transactions", __name__, url_prefix="/api")
 @require_auth
 @require_client_access
 def get_transactions(client_id):
+    from permissions import get_effective_client_ids
+    cids = get_effective_client_ids(client_id)
     query = (
         Transaction.query
-        .filter_by(client_id=uuid.UUID(client_id))
+        .filter(Transaction.client_id.in_(cids))
         .order_by(Transaction.transaction_date.desc())
     )
 

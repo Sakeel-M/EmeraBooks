@@ -2059,6 +2059,7 @@ function ClientManagementTab() {
     currency: "AED",
     country: "AE",
     industry: "",
+    parent_id: "",
   });
   const [editForm, setEditForm] = useState({
     name: "",
@@ -2081,11 +2082,12 @@ function ClientManagementTab() {
         currency: form.currency,
         country: form.country,
         industry: form.industry.trim() || undefined,
+        parent_id: form.parent_id || undefined,
       });
       queryClient.invalidateQueries({ queryKey: ["org-data"] });
-      toast.success("Client added successfully");
+      toast.success("Account added successfully");
       setShowAdd(false);
-      setForm({ name: "", currency: "AED", country: "AE", industry: "" });
+      setForm({ name: "", currency: "AED", country: "AE", industry: "", parent_id: "" });
     } catch (err: any) {
       toast.error(err.message || "Failed to add client");
     } finally {
@@ -2231,7 +2233,14 @@ function ClientManagementTab() {
                   <TableRow key={client.id} className={client.id === clientId ? "bg-primary/5" : ""}>
                     <TableCell className="text-sm font-medium">
                       <div className="flex items-center gap-1.5">
+                        {client.parent_id && <span className="text-muted-foreground">↳</span>}
                         {client.name || "Untitled"}
+                        {client.is_parent && (
+                          <Badge className="text-[8px] bg-primary/80">Admin</Badge>
+                        )}
+                        {client.parent_id && (
+                          <Badge variant="outline" className="text-[8px]">Sub-Account</Badge>
+                        )}
                         {client.id === clientId && (
                           <Badge variant="outline" className="text-[9px] text-primary border-primary/30">Active</Badge>
                         )}
@@ -2326,6 +2335,21 @@ function ClientManagementTab() {
             <div className="space-y-2">
               <Label>Industry</Label>
               <Input placeholder="e.g. Trading, Real Estate, Technology" value={form.industry} onChange={(e) => setForm({ ...form, industry: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Parent Account (Optional)</Label>
+              <Select value={form.parent_id} onValueChange={(v) => setForm({ ...form, parent_id: v })}>
+                <SelectTrigger><SelectValue placeholder="None (standalone account)" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">None (Admin Account)</SelectItem>
+                  {clients.filter((c: any) => !c.parent_id).map((c: any) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground">
+                Select a parent to make this a sub-account. Sub-accounts hold their own bank statements. The parent sees all sub-accounts combined.
+              </p>
             </div>
           </div>
           <DialogFooter>

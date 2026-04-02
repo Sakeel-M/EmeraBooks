@@ -15,7 +15,9 @@ entities_bp = Blueprint("entities", __name__, url_prefix="/api")
 @require_auth
 @require_client_access
 def get_vendors(client_id):
-    query = Vendor.query.filter_by(client_id=uuid.UUID(client_id))
+    from permissions import get_effective_client_ids
+    cids = get_effective_client_ids(client_id)
+    query = Vendor.query.filter(Vendor.client_id.in_(cids))
     source = request.args.get("source")
     if source:
         query = query.filter_by(source=source)
@@ -27,7 +29,9 @@ def get_vendors(client_id):
 @require_auth
 @require_client_access
 def get_customers(client_id):
-    query = Customer.query.filter_by(client_id=uuid.UUID(client_id))
+    from permissions import get_effective_client_ids
+    cids = get_effective_client_ids(client_id)
+    query = Customer.query.filter(Customer.client_id.in_(cids))
     source = request.args.get("source")
     if source:
         query = query.filter_by(source=source)
@@ -218,9 +222,11 @@ def create_invoice(client_id):
 @require_auth
 @require_client_access
 def get_bills(client_id):
+    from permissions import get_effective_client_ids
+    cids = get_effective_client_ids(client_id)
     query = (
         Bill.query
-        .filter_by(client_id=uuid.UUID(client_id))
+        .filter(Bill.client_id.in_(cids))
         .order_by(Bill.bill_date.desc())
     )
     status = request.args.get("status")
@@ -244,9 +250,11 @@ def get_bills(client_id):
 @require_auth
 @require_client_access
 def get_invoices(client_id):
+    from permissions import get_effective_client_ids
+    cids = get_effective_client_ids(client_id)
     query = (
         Invoice.query
-        .filter_by(client_id=uuid.UUID(client_id))
+        .filter(Invoice.client_id.in_(cids))
         .order_by(Invoice.invoice_date.desc())
     )
     status = request.args.get("status")

@@ -13,9 +13,11 @@ bank_accounts_bp = Blueprint("bank_accounts", __name__, url_prefix="/api")
 @require_auth
 @require_client_access
 def get_bank_accounts(client_id):
+    from permissions import get_effective_client_ids
+    cids = get_effective_client_ids(client_id)
     accounts = (
         BankAccount.query
-        .filter_by(client_id=uuid.UUID(client_id))
+        .filter(BankAccount.client_id.in_(cids))
         .order_by(BankAccount.bank_name)
         .all()
     )
