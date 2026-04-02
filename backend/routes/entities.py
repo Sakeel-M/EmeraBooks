@@ -757,6 +757,39 @@ def create_connection(client_id):
         db.session.commit()
         return jsonify(conn.to_dict()), 201
 
+    if integration_type == "pdi_erp":
+        from services.pdi_erp_sync import verify_pdi_erp_connection
+        api_key = (creds.get("api_key") or "").strip()
+        merchant_id = (creds.get("merchant_id") or "").strip()
+        demo_mode = str(creds.get("demo_mode", "true")).lower() in ("true", "1", "yes", "")
+
+        if not merchant_id:
+            return jsonify({"error": "Merchant ID is required"}), 400
+
+        try:
+            result = verify_pdi_erp_connection(api_key, merchant_id, demo_mode)
+        except Exception as e:
+            return jsonify({"error": f"Connection failed: {str(e)}"}), 400
+
+        existing = Connection.query.filter_by(client_id=cid, provider="pdi_erp").first()
+        if existing:
+            existing.status = "connected"
+            existing.config = {"company_name": result.get("company_name"), "demo_mode": demo_mode}
+            existing.credentials = {"api_key": api_key, "merchant_id": merchant_id}
+            existing.last_error = None
+            conn = existing
+        else:
+            conn = Connection(
+                client_id=cid, type="erp", provider="pdi_erp",
+                display_name=f"PDI Enterprise ({result.get('company_name', merchant_id)})",
+                status="connected",
+                config={"company_name": result.get("company_name"), "demo_mode": demo_mode},
+                credentials={"api_key": api_key, "merchant_id": merchant_id},
+            )
+            db.session.add(conn)
+        db.session.commit()
+        return jsonify(conn.to_dict()), 201
+
     # ── ERP providers (Odoo, etc.) — existing logic below ──
     server_url = (creds.get("server_url") or "").strip()
     database_name = (creds.get("database") or "").strip()
@@ -919,6 +952,15 @@ def sync_connection(client_id, conn_id):
             handlers = {
                 "transactions": sync_pdi_transactions,
                 "settlements": sync_pdi_settlements,
+            }
+        elif conn.provider == "pdi_erp":
+            from services.pdi_erp_sync import (sync_pdi_erp_vendors, sync_pdi_erp_customers,
+                                                sync_pdi_erp_bills, sync_pdi_erp_invoices)
+            handlers = {
+                "vendors": sync_pdi_erp_vendors,
+                "customers": sync_pdi_erp_customers,
+                "bills": sync_pdi_erp_bills,
+                "invoices": sync_pdi_erp_invoices,
             }
         else:
             from services.odoo_sync import sync_customers, sync_vendors, sync_invoices, sync_bills

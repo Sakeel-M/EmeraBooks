@@ -13,7 +13,7 @@ interface IntegrationCardProps {
   name: string;
   description: string;
   icon: React.ReactNode;
-  type: 'zoho' | 'odoo' | 'quickbooks' | 'gilbarco' | 'verifone' | 'pdi';
+  type: 'zoho' | 'odoo' | 'quickbooks' | 'gilbarco' | 'verifone' | 'pdi' | 'pdi_erp';
   connection?: {
     id: string;
     status: string;
@@ -88,6 +88,12 @@ export function IntegrationCard({
           { key: 'client_id', label: 'Client ID', type: 'text', placeholder: 'Your Verifone Cloud client ID', helpText: 'From Verifone Developer Portal (leave blank for demo)', required: false },
           { key: 'client_secret', label: 'Client Secret', type: 'password', placeholder: '••••••••••••••••', helpText: 'OAuth2 client secret', required: false },
           { key: 'demo_mode', label: 'Demo Mode', type: 'text', placeholder: 'true', helpText: 'Enter "true" for sample data (no live API needed)', required: false },
+        ];
+      case 'pdi_erp':
+        return [
+          { key: 'merchant_id', label: 'Company / Merchant ID', type: 'text', placeholder: 'e.g., PDI-ENT-001', helpText: 'Your PDI Enterprise company identifier', required: true },
+          { key: 'api_key', label: 'API Key', type: 'password', placeholder: '••••••••••••••••', helpText: 'PDI Enterprise API key (leave blank for demo)', required: false },
+          { key: 'demo_mode', label: 'Demo Mode', type: 'text', placeholder: 'true', helpText: 'Enter "true" for sample accounting data (GL, AP, AR)', required: false },
         ];
       case 'pdi':
         return [
@@ -185,6 +191,21 @@ export function IntegrationCard({
             </ol>
             <div className="mt-3 p-2 bg-blue-500/10 border border-blue-500/20 rounded text-xs">
               <strong className="text-blue-600">Demo Mode:</strong> Set Demo Mode to "true" to test with sample UAE retail/F&B card transaction data.
+            </div>
+          </div>
+        );
+      case 'pdi_erp':
+        return (
+          <div className="space-y-3 text-sm">
+            <p className="font-medium">PDI Enterprise ERP Setup:</p>
+            <ol className="list-decimal list-inside space-y-2 text-muted-foreground">
+              <li>Contact <strong>PDI Technologies</strong> for Enterprise API access</li>
+              <li>Obtain your <strong>Company/Merchant ID</strong> from PDI admin portal</li>
+              <li>Request API credentials for GL, AP, AR module access</li>
+              <li>PDI Enterprise manages: General Ledger, Accounts Payable, Accounts Receivable, Cash Management</li>
+            </ol>
+            <div className="mt-3 p-2 bg-blue-500/10 border border-blue-500/20 rounded text-xs">
+              <strong className="text-blue-600">Demo Mode:</strong> Set Demo Mode to "true" to test with sample UAE fuel retail accounting data (vendors, customers, invoices, bills).
             </div>
           </div>
         );

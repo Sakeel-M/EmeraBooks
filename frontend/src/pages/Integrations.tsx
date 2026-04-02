@@ -212,6 +212,16 @@ function ERPTab() {
           onDisconnect={() => handleDisconnect("zoho")}
           onSync={(entity, dir) => handleSync("zoho", entity, dir)}
         />
+        <IntegrationCard
+          name="PDI Enterprise ERP"
+          description="Connect PDI Technologies Enterprise ERP — sync vendors, customers, invoices (AR), bills (AP), and financial data from fuel retail & c-store operations."
+          icon={<Building2 className="h-6 w-6 text-teal-600" />}
+          type="pdi_erp"
+          connection={getConnection("pdi_erp")}
+          onConnect={(creds) => handleConnect("pdi_erp", creds)}
+          onDisconnect={() => handleDisconnect("pdi_erp")}
+          onSync={(entity, dir) => handleSync("pdi_erp", entity, dir)}
+        />
       </div>
 
       {/* ── Imported ERP Data ── */}
