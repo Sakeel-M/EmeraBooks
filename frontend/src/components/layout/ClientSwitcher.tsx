@@ -59,7 +59,7 @@ export function ClientSwitcher() {
           ) : (
             <Building2 className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
           )}
-          <span className="truncate font-medium">{client.company_name}</span>
+          <span className="truncate font-medium">{client.name}</span>
           {isCurrentParent && (
             <Badge className="text-[7px] h-4 bg-primary/80 shrink-0">Admin</Badge>
           )}
@@ -85,7 +85,7 @@ export function ClientSwitcher() {
             ) : (
               <Building2 className="mr-2 h-4 w-4 flex-shrink-0" />
             )}
-            <span className="truncate flex-1">{c.company_name}</span>
+            <span className="truncate flex-1">{c.name}</span>
             {c.is_parent && (
               <Badge className="text-[7px] h-3.5 bg-primary/80 ml-1 shrink-0">Admin</Badge>
             )}
