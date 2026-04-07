@@ -2338,10 +2338,10 @@ function ClientManagementTab() {
             </div>
             <div className="space-y-2">
               <Label>Parent Account (Optional)</Label>
-              <Select value={form.parent_id} onValueChange={(v) => setForm({ ...form, parent_id: v })}>
+              <Select value={form.parent_id || "none"} onValueChange={(v) => setForm({ ...form, parent_id: v === "none" ? "" : v })}>
                 <SelectTrigger><SelectValue placeholder="None (standalone account)" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None (Admin Account)</SelectItem>
+                  <SelectItem value="none">None (Standalone / Admin Account)</SelectItem>
                   {clients.filter((c: any) => !c.parent_id).map((c: any) => (
                     <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                   ))}
