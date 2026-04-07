@@ -28,6 +28,7 @@ import {
   Globe,
   Zap,
   Shield,
+  Loader2,
   Link2,
   AlertTriangle,
   RefreshCw,
@@ -57,7 +58,7 @@ function ERPTab() {
   const { clientId, currency } = useActiveClient();
   const queryClient = useQueryClient();
 
-  const { data: connections = [] } = useQuery({
+  const { data: connections = [], isLoading: _connLoad } = useQuery({
     queryKey: ["connections", clientId],
     queryFn: () => database.getConnections(clientId!),
     enabled: !!clientId,
@@ -131,6 +132,15 @@ function ERPTab() {
   });
 
   const totalImported = erpInvoices.length + erpBills.length + erpVendors.length + erpCustomers.length;
+
+  if (_connLoad) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Loading integrations...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">

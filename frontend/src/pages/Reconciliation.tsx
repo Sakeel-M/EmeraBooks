@@ -212,7 +212,7 @@ function BankReconciliationTab() {
   const [newPeriodEnd, setNewPeriodEnd] = useState("");
   const [newEndingBalance, setNewEndingBalance] = useState("");
 
-  const { data: sessions = [] } = useQuery({
+  const { data: sessions = [], isLoading: _sessLoad } = useQuery({
     queryKey: ["recon-sessions", clientId],
     queryFn: () => database.getReconciliationSessions(clientId!),
     enabled: !!clientId,
@@ -237,6 +237,8 @@ function BankReconciliationTab() {
     queryFn: () => database.getMatchingRules(clientId!),
     enabled: !!clientId,
   });
+
+  const _reconLoading = _sessLoad && sessions.length === 0;
 
   const matchedItems = useMemo(
     () => items.filter((i) => i.status === "matched" || i.status === "manual_match"),
@@ -623,6 +625,15 @@ function BankReconciliationTab() {
       toast.error(err.message || "Failed to delete session");
     }
   };
+
+  if (_reconLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Loading reconciliation...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">

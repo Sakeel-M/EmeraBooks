@@ -125,7 +125,7 @@ function RiskOverviewTab() {
   const { startDate, endDate } = useDateRange();
   const riskAlerts = useRiskAlerts();
 
-  const { data: alerts = [] } = useQuery({
+  const { data: alerts = [], isLoading: _alertsLoad } = useQuery({
     queryKey: ["risk-alerts-all", clientId, startDate || "all", endDate || "all"],
     queryFn: () => {
       const opts: any = {};
@@ -180,6 +180,8 @@ function RiskOverviewTab() {
     },
     enabled: !!clientId,
   });
+
+  const _riskLoading = _alertsLoad && alerts.length === 0;
 
   // ── Risk Score Calculation ──
   const riskScore = useMemo(() => {
@@ -270,6 +272,15 @@ function RiskOverviewTab() {
           </p>
         </CardContent>
       </Card>
+    );
+  }
+
+  if (_riskLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Loading risk data...</p>
+      </div>
     );
   }
 

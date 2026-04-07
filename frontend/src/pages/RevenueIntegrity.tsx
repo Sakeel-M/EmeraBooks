@@ -94,6 +94,7 @@ import {
   Pencil,
   Building2,
   Palette,
+  Loader2,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useActiveClient } from "@/hooks/useActiveClient";
@@ -150,6 +151,8 @@ function RevenueOverviewTab() {
     },
     enabled: !!clientId,
   });
+
+  const _revLoading = (invLoading || txnLoading) && transactions.length === 0;
 
   // ── Derived Metrics ──
 
@@ -391,6 +394,15 @@ function RevenueOverviewTab() {
           </p>
         </CardContent>
       </Card>
+    );
+  }
+
+  if (_revLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Loading revenue data...</p>
+      </div>
     );
   }
 
