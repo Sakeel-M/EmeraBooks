@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ChevronsUpDown, Building2, Plus, Shield } from "lucide-react";
+import { ChevronsUpDown, Building2, Plus, Shield, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -15,11 +15,11 @@ import { useOrg } from "@/hooks/useOrg";
 import { useNavigate } from "react-router-dom";
 
 export function ClientSwitcher() {
-  const { client, switchClient, isSwitching } = useActiveClient();
+  const { client, switchClient, isSwitching, isParent } = useActiveClient();
   const { clients } = useOrg();
   const navigate = useNavigate();
 
-  // Organize clients into hierarchy: parents first, then children grouped under parents
+  // Organize: parents first with children nested below
   const hierarchicalClients = useMemo(() => {
     const parents = clients.filter((c: any) => !c.parent_id);
     const children = clients.filter((c: any) => c.parent_id);
@@ -32,18 +32,16 @@ export function ClientSwitcher() {
         .forEach((c: any) => result.push({ client: c, isChild: true }));
     });
 
-    // Add orphan children (parent_id set but parent not in list — shouldn't happen)
+    // Orphan children
     const listed = new Set(result.map((r) => r.client.id));
-    children
-      .filter((c: any) => !listed.has(c.id))
-      .forEach((c: any) => result.push({ client: c, isChild: true }));
+    children.filter((c: any) => !listed.has(c.id)).forEach((c: any) =>
+      result.push({ client: c, isChild: true }),
+    );
 
     return result;
   }, [clients]);
 
   if (!client) return null;
-
-  const isCurrentParent = client.is_parent;
 
   return (
     <DropdownMenu>
@@ -51,22 +49,22 @@ export function ClientSwitcher() {
         <Button
           variant="outline"
           size="sm"
-          className="gap-2 max-w-[240px]"
+          className="gap-2 max-w-[280px]"
           disabled={isSwitching}
         >
-          {isCurrentParent ? (
+          {isParent ? (
             <Shield className="h-4 w-4 flex-shrink-0 text-primary" />
           ) : (
             <Building2 className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
           )}
           <span className="truncate font-medium">{client.name}</span>
-          {isCurrentParent && (
-            <Badge className="text-[7px] h-4 bg-primary/80 shrink-0">Admin</Badge>
+          {isParent && (
+            <Badge className="text-[7px] h-4 bg-primary/80 shrink-0">Main</Badge>
           )}
           <ChevronsUpDown className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-[260px]">
+      <DropdownMenuContent align="start" className="w-[300px]">
         <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-wider">
           Accounts
         </DropdownMenuLabel>
@@ -76,10 +74,10 @@ export function ClientSwitcher() {
             onClick={() => {
               if (c.id !== client.id) switchClient(c.id);
             }}
-            className={`cursor-pointer ${c.id === client.id ? "bg-accent font-medium" : ""} ${isChild ? "pl-7" : ""}`}
+            className={`cursor-pointer ${c.id === client.id ? "bg-accent font-medium" : ""} ${isChild ? "pl-8" : ""}`}
           >
             {isChild ? (
-              <span className="text-muted-foreground mr-1.5">↳</span>
+              <ChevronRight className="h-3 w-3 text-muted-foreground mr-1.5 shrink-0" />
             ) : c.is_parent ? (
               <Shield className="mr-2 h-4 w-4 flex-shrink-0 text-primary" />
             ) : (
@@ -87,7 +85,10 @@ export function ClientSwitcher() {
             )}
             <span className="truncate flex-1">{c.name}</span>
             {c.is_parent && (
-              <Badge className="text-[7px] h-3.5 bg-primary/80 ml-1 shrink-0">Admin</Badge>
+              <Badge className="text-[7px] h-3.5 bg-primary/80 ml-1.5 shrink-0">Main</Badge>
+            )}
+            {isChild && (
+              <span className="text-[9px] text-muted-foreground ml-1 shrink-0">Sub</span>
             )}
           </DropdownMenuItem>
         ))}
