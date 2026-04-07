@@ -7,6 +7,8 @@ interface ActiveClientResponse {
   org_id: string;
   org_name: string | null;
   currency: string;
+  is_parent: boolean;
+  children: Array<{ id: string; name: string; currency: string }>;
 }
 
 export function useActiveClient() {
@@ -32,6 +34,8 @@ export function useActiveClient() {
     orgId: activeClient?.org_id ?? null,
     orgName: activeClient?.org_name ?? null,
     currency: activeClient?.currency ?? "AED",
+    isParent: (activeClient as any)?.is_parent ?? false,
+    children: (activeClient as any)?.children ?? [],
     isLoading,
     switchClient: switchClient.mutate,
     isSwitching: switchClient.isPending,

@@ -37,6 +37,7 @@ import {
   Truck,
   Receipt,
   Trash2,
+  Shield,
 } from "lucide-react";
 import { useActiveClient } from "@/hooks/useActiveClient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -437,7 +438,7 @@ function ERPTab() {
 // ── Banks Tab ─────────────────────────────────────────────────────────────
 
 function BanksTab() {
-  const { clientId, currency } = useActiveClient();
+  const { clientId, currency, isParent } = useActiveClient();
   const queryClient = useQueryClient();
   const { refreshDateRange } = useDateRange();
   const [deleteFileId, setDeleteFileId] = useState<string | null>(null);
@@ -635,21 +636,33 @@ function BanksTab() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Upload area */}
-        <Card className="stat-card-hover">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <CreditCard className="h-4 w-4" />
-              Upload Bank Statement
-            </CardTitle>
-            <CardDescription className="text-xs">
-              Supports Excel (.xlsx, .xls) and CSV files from any bank
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <FileUpload onUploadSuccess={handleUploadSuccess} />
-          </CardContent>
-        </Card>
+        {/* Upload area — disabled for parent/main accounts */}
+        {isParent ? (
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+              <Shield className="h-10 w-10 text-muted-foreground/30 mb-3" />
+              <p className="text-sm font-semibold mb-1">Main Account</p>
+              <p className="text-xs text-muted-foreground max-w-[250px]">
+                Switch to a sub-account to upload bank statements. This main account shows combined data from all sub-accounts.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="stat-card-hover">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <CreditCard className="h-4 w-4" />
+                Upload Bank Statement
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Supports Excel (.xlsx, .xls) and CSV files from any bank
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FileUpload onUploadSuccess={handleUploadSuccess} />
+            </CardContent>
+          </Card>
+        )}
 
         {/* Previous uploads */}
         <div className="space-y-4">
