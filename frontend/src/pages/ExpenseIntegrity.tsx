@@ -137,14 +137,7 @@ function ExpenseOverviewTab() {
     enabled: !!clientId,
   });
 
-  if ((_billsLoad || _txLoad) && transactions.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">Loading expense data...</p>
-      </div>
-    );
-  }
+  const _isLoading = (_billsLoad || _txLoad) && transactions.length === 0;
 
   // ── Derived Metrics ──
 
@@ -332,6 +325,15 @@ function ExpenseOverviewTab() {
           </p>
         </CardContent>
       </Card>
+    );
+  }
+
+  if (_isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Loading expense data...</p>
+      </div>
     );
   }
 

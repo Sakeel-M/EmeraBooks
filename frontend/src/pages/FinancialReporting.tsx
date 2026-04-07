@@ -260,14 +260,7 @@ function ProfitLossTab() {
     enabled: !!clientId,
   });
 
-  if (_frLoad && transactions.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">Loading financial data...</p>
-      </div>
-    );
-  }
+  const _frLoading = _frLoad && transactions.length === 0;
 
   // Previous period totals
   const prevTotals = useMemo(() => {
@@ -363,6 +356,15 @@ function ProfitLossTab() {
 
   if (transactions.length === 0) {
     return <EmptyState text="No transactions for this period" icon={BarChart3} />;
+  }
+
+  if (_frLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Loading financial data...</p>
+      </div>
+    );
   }
 
   return (
