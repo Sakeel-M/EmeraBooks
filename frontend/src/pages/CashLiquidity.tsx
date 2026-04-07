@@ -141,13 +141,13 @@ function CashOverviewTab() {
   const [granularity, setGranularity] = useState<"monthly" | "weekly" | "daily">("monthly");
   const [drillDown, setDrillDown] = useState<{title: string; description?: string; transactions: any[]} | null>(null);
 
-  const { data: bankAccounts = [] } = useQuery({
+  const { data: bankAccounts = [], isLoading: _baLoad } = useQuery({
     queryKey: ["cash-bank-accounts", clientId],
     queryFn: () => database.getBankAccounts(clientId!),
     enabled: !!clientId,
   });
 
-  const { data: transactions = [] } = useQuery({
+  const { data: transactions = [], isLoading: _txLoad } = useQuery({
     queryKey: ["cash-txns", clientId, startDate || "all", endDate || "all"],
     queryFn: () => {
       const opts: any = { limit: 5000 };
@@ -157,6 +157,16 @@ function CashOverviewTab() {
     },
     enabled: !!clientId,
   });
+
+  const _cashLoading = _baLoad || _txLoad;
+  if (_cashLoading && transactions.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Loading cash data...</p>
+      </div>
+    );
+  }
 
   // ── Derived Metrics ──
 

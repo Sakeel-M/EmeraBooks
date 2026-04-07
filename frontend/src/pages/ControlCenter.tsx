@@ -390,6 +390,17 @@ export default function ControlCenter() {
 
   // ── Render ────────────────────────────────────────────────────────────
 
+  if (txnLoading && recentTxns.length === 0) {
+    return (
+      <Layout>
+        <div className="flex flex-col items-center justify-center py-20 gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Loading dashboard...</p>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="space-y-6">

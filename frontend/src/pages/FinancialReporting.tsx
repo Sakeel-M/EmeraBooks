@@ -67,6 +67,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Settings,
+  Loader2,
 } from "lucide-react";
 import { useActiveClient } from "@/hooks/useActiveClient";
 import { useDateRange } from "@/hooks/useDateRange";
@@ -237,7 +238,7 @@ function ProfitLossTab() {
     return { start: format(prevStart, "yyyy-MM-dd"), end: format(prevEnd, "yyyy-MM-dd") };
   }, [start, end]);
 
-  const { data: transactions = [] } = useQuery({
+  const { data: transactions = [], isLoading: _frLoad } = useQuery({
     queryKey: ["fr-txns", clientId, start, end],
     queryFn: () =>
       database.getTransactions(clientId!, {
@@ -258,6 +259,15 @@ function ProfitLossTab() {
       }),
     enabled: !!clientId,
   });
+
+  if (_frLoad && transactions.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Loading financial data...</p>
+      </div>
+    );
+  }
 
   // Previous period totals
   const prevTotals = useMemo(() => {

@@ -89,6 +89,7 @@ import {
   Copy,
   Merge,
   Trash2,
+  Loader2,
 } from "lucide-react";
 import { useActiveClient } from "@/hooks/useActiveClient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -108,7 +109,7 @@ function ExpenseOverviewTab() {
   const { clientId, currency } = useActiveClient();
   const { startDate, endDate } = useDateRange();
 
-  const { data: bills = [] } = useQuery({
+  const { data: bills = [], isLoading: _billsLoad } = useQuery({
     queryKey: ["expense-bills", clientId, startDate || "all", endDate || "all"],
     queryFn: () => {
       const opts: any = {};
@@ -125,7 +126,7 @@ function ExpenseOverviewTab() {
     enabled: !!clientId,
   });
 
-  const { data: transactions = [] } = useQuery({
+  const { data: transactions = [], isLoading: _txLoad } = useQuery({
     queryKey: ["expense-txns", clientId, startDate || "all", endDate || "all"],
     queryFn: () => {
       const opts: any = { limit: 5000 };
@@ -135,6 +136,15 @@ function ExpenseOverviewTab() {
     },
     enabled: !!clientId,
   });
+
+  if ((_billsLoad || _txLoad) && transactions.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Loading expense data...</p>
+      </div>
+    );
+  }
 
   // ── Derived Metrics ──
 
