@@ -125,7 +125,7 @@ function RiskOverviewTab() {
   const { startDate, endDate } = useDateRange();
   const riskAlerts = useRiskAlerts();
 
-  const { data: alerts = [], isLoading: _alertsLoad } = useQuery({
+  const { data: alerts = [], isFetching: _alertsLoad } = useQuery({
     queryKey: ["risk-alerts-all", clientId, startDate || "all", endDate || "all"],
     queryFn: () => {
       const opts: any = {};

@@ -238,7 +238,7 @@ function ProfitLossTab() {
     return { start: format(prevStart, "yyyy-MM-dd"), end: format(prevEnd, "yyyy-MM-dd") };
   }, [start, end]);
 
-  const { data: transactions = [], isLoading: _frLoad } = useQuery({
+  const { data: transactions = [], isFetching: _frLoad } = useQuery({
     queryKey: ["fr-txns", clientId, start, end],
     queryFn: () =>
       database.getTransactions(clientId!, {

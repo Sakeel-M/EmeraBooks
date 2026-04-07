@@ -58,7 +58,7 @@ function ERPTab() {
   const { clientId, currency } = useActiveClient();
   const queryClient = useQueryClient();
 
-  const { data: connections = [], isLoading: _connLoad } = useQuery({
+  const { data: connections = [], isFetching: _connLoad } = useQuery({
     queryKey: ["connections", clientId],
     queryFn: () => database.getConnections(clientId!),
     enabled: !!clientId,

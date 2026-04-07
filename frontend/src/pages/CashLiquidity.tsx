@@ -141,13 +141,13 @@ function CashOverviewTab() {
   const [granularity, setGranularity] = useState<"monthly" | "weekly" | "daily">("monthly");
   const [drillDown, setDrillDown] = useState<{title: string; description?: string; transactions: any[]} | null>(null);
 
-  const { data: bankAccounts = [], isLoading: _baLoad } = useQuery({
+  const { data: bankAccounts = [], isFetching: _baLoad } = useQuery({
     queryKey: ["cash-bank-accounts", clientId],
     queryFn: () => database.getBankAccounts(clientId!),
     enabled: !!clientId,
   });
 
-  const { data: transactions = [], isLoading: _txLoad } = useQuery({
+  const { data: transactions = [], isFetching: _txLoad } = useQuery({
     queryKey: ["cash-txns", clientId, startDate || "all", endDate || "all"],
     queryFn: () => {
       const opts: any = { limit: 5000 };

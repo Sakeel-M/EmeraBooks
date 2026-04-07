@@ -109,7 +109,7 @@ function ExpenseOverviewTab() {
   const { clientId, currency } = useActiveClient();
   const { startDate, endDate } = useDateRange();
 
-  const { data: bills = [], isLoading: _billsLoad } = useQuery({
+  const { data: bills = [], isFetching: _billsLoad } = useQuery({
     queryKey: ["expense-bills", clientId, startDate || "all", endDate || "all"],
     queryFn: () => {
       const opts: any = {};
@@ -126,7 +126,7 @@ function ExpenseOverviewTab() {
     enabled: !!clientId,
   });
 
-  const { data: transactions = [], isLoading: _txLoad } = useQuery({
+  const { data: transactions = [], isFetching: _txLoad } = useQuery({
     queryKey: ["expense-txns", clientId, startDate || "all", endDate || "all"],
     queryFn: () => {
       const opts: any = { limit: 5000 };

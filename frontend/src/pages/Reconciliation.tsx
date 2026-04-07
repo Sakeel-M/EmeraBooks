@@ -212,7 +212,7 @@ function BankReconciliationTab() {
   const [newPeriodEnd, setNewPeriodEnd] = useState("");
   const [newEndingBalance, setNewEndingBalance] = useState("");
 
-  const { data: sessions = [], isLoading: _sessLoad } = useQuery({
+  const { data: sessions = [], isFetching: _sessLoad } = useQuery({
     queryKey: ["recon-sessions", clientId],
     queryFn: () => database.getReconciliationSessions(clientId!),
     enabled: !!clientId,

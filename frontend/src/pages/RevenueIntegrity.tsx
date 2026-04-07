@@ -124,7 +124,7 @@ function RevenueOverviewTab() {
   } | null>(null);
   const [chartDrill, setChartDrill] = useState<{ title: string; description?: string; items: any[] } | null>(null);
 
-  const { data: invoices = [], isLoading: invLoading } = useQuery({
+  const { data: invoices = [], isFetching: invLoading } = useQuery({
     queryKey: ["revenue-invoices", clientId, startDate || "all", endDate || "all"],
     queryFn: () => {
       const opts: { startDate?: string; endDate?: string } = {};
@@ -141,7 +141,7 @@ function RevenueOverviewTab() {
     enabled: !!clientId,
   });
 
-  const { data: transactions = [], isLoading: txnLoading } = useQuery({
+  const { data: transactions = [], isFetching: txnLoading } = useQuery({
     queryKey: ["revenue-txns", clientId, startDate || "all", endDate || "all"],
     queryFn: () => {
       const opts: { startDate?: string; endDate?: string; limit: number } = { limit: 5000 };

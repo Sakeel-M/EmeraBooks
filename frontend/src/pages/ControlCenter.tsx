@@ -177,7 +177,7 @@ export default function ControlCenter() {
   });
 
   // Primary query: uses date range when available, falls back to all transactions
-  const { data: recentTxns = [], isLoading: txnLoading } = useQuery({
+  const { data: recentTxns = [], isFetching: txnLoading } = useQuery({
     queryKey: ["cc-transactions", clientId, startDate || "all", endDate || "all"],
     queryFn: () => {
       const opts: { startDate?: string; endDate?: string; limit: number } = { limit: 5000 };
