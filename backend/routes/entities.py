@@ -328,6 +328,168 @@ def get_accounts(client_id):
     return jsonify([a.to_dict() for a in accounts])
 
 
+@entities_bp.route("/clients/<client_id>/trial-balance", methods=["GET"])
+@require_auth
+@require_client_access
+def get_trial_balance(client_id):
+    """Compute Trial Balance: Opening Balance, Period Debits/Credits, Closing Balance per account."""
+    from permissions import get_effective_client_ids
+    from sqlalchemy import func as sqlfunc
+
+    cids = get_effective_client_ids(client_id)
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+
+    # Get Chart of Accounts
+    accounts = Account.query.filter(Account.client_id.in_(cids)).order_by(Account.code).all()
+    account_map = {a.name.lower(): a for a in accounts}
+
+    # Get ALL transactions for effective client IDs
+    from models.tier2 import Transaction
+
+    base_query = Transaction.query.filter(Transaction.client_id.in_(cids))
+
+    # Opening balance: transactions BEFORE start_date
+    opening_txns = []
+    if start_date:
+        opening_txns = base_query.filter(Transaction.transaction_date < start_date).all()
+
+    # Period transactions: between start_date and end_date
+    period_query = base_query
+    if start_date:
+        period_query = period_query.filter(Transaction.transaction_date >= start_date)
+    if end_date:
+        period_query = period_query.filter(Transaction.transaction_date <= end_date)
+    period_txns = period_query.all()
+
+    # Build TB from transactions grouped by category
+    tb_lines = {}  # key: category_name -> {opening_dr, opening_cr, period_dr, period_cr}
+
+    def add_to_tb(category, amount, is_opening=False):
+        if not category:
+            category = "Other"
+        key = category
+        if key not in tb_lines:
+            # Try to find matching CoA account
+            acct = account_map.get(category.lower())
+            acct_code = acct.code if acct else ""
+            acct_type = acct.type if acct else _guess_account_type(category)
+            tb_lines[key] = {
+                "code": acct_code,
+                "name": category,
+                "type": acct_type,
+                "opening_debit": 0, "opening_credit": 0,
+                "period_debit": 0, "period_credit": 0,
+            }
+        line = tb_lines[key]
+        if is_opening:
+            if amount < 0:
+                line["opening_debit"] += abs(float(amount))
+            else:
+                line["opening_credit"] += float(amount)
+        else:
+            if amount < 0:
+                line["period_debit"] += abs(float(amount))
+            else:
+                line["period_credit"] += float(amount)
+
+    # Process opening transactions
+    for t in opening_txns:
+        cat = t.category or "Other"
+        add_to_tb(cat, float(t.amount), is_opening=True)
+
+    # Process period transactions
+    for t in period_txns:
+        cat = t.category or "Other"
+        add_to_tb(cat, float(t.amount), is_opening=False)
+
+    # Also add CoA accounts that have no transactions (zero balances)
+    for acct in accounts:
+        key = acct.name
+        if key not in tb_lines:
+            tb_lines[key] = {
+                "code": acct.code,
+                "name": acct.name,
+                "type": acct.type or "Asset",
+                "opening_debit": 0, "opening_credit": 0,
+                "period_debit": 0, "period_credit": 0,
+            }
+
+    # Compute closing balances and build response
+    result_accounts = []
+    totals = {"opening_debit": 0, "opening_credit": 0, "period_debit": 0, "period_credit": 0,
+              "closing_debit": 0, "closing_credit": 0}
+
+    # Sort: by type order then code/name
+    type_order = {"Asset": 0, "Liability": 1, "Equity": 2, "Revenue": 3, "Expense": 4}
+    sorted_lines = sorted(tb_lines.values(), key=lambda x: (type_order.get(x["type"], 5), x["code"], x["name"]))
+
+    for line in sorted_lines:
+        # Closing = Opening + Period
+        net_opening = line["opening_debit"] - line["opening_credit"]
+        net_period = line["period_debit"] - line["period_credit"]
+        net_closing = net_opening + net_period
+
+        closing_debit = max(net_closing, 0)
+        closing_credit = abs(min(net_closing, 0))
+
+        entry = {
+            "code": line["code"],
+            "name": line["name"],
+            "type": line["type"],
+            "opening_debit": round(line["opening_debit"], 2),
+            "opening_credit": round(line["opening_credit"], 2),
+            "period_debit": round(line["period_debit"], 2),
+            "period_credit": round(line["period_credit"], 2),
+            "closing_debit": round(closing_debit, 2),
+            "closing_credit": round(closing_credit, 2),
+        }
+        result_accounts.append(entry)
+
+        for k in totals:
+            totals[k] += entry[k]
+
+    # Round totals
+    for k in totals:
+        totals[k] = round(totals[k], 2)
+
+    return jsonify({
+        "period": {"start": start_date, "end": end_date},
+        "accounts": result_accounts,
+        "totals": totals,
+        "account_count": len(result_accounts),
+    })
+
+
+def _guess_account_type(category):
+    """Guess account type from category name for TB display."""
+    cat_lower = (category or "").lower()
+    revenue_kw = ["revenue", "income", "sales", "commission", "interest", "dividend", "rental income", "subscription"]
+    expense_kw = ["expense", "cost", "salary", "rent", "utilities", "marketing", "transport", "fuel",
+                  "food", "entertainment", "professional", "technology", "supplies", "depreciation",
+                  "finance", "bank charge", "insurance", "maintenance", "cleaning", "security"]
+    asset_kw = ["cash", "bank", "receivable", "inventory", "prepaid", "deposit", "equipment", "property"]
+    liability_kw = ["payable", "accrued", "provision", "loan", "lease", "tax payable", "vat payable"]
+    equity_kw = ["capital", "equity", "retained", "drawing", "reserve"]
+
+    for kw in revenue_kw:
+        if kw in cat_lower:
+            return "Revenue"
+    for kw in expense_kw:
+        if kw in cat_lower:
+            return "Expense"
+    for kw in liability_kw:
+        if kw in cat_lower:
+            return "Liability"
+    for kw in asset_kw:
+        if kw in cat_lower:
+            return "Asset"
+    for kw in equity_kw:
+        if kw in cat_lower:
+            return "Equity"
+    return "Expense"  # Default for transaction categories
+
+
 @entities_bp.route("/clients/<client_id>/accounts", methods=["POST"])
 @require_auth
 @require_client_access

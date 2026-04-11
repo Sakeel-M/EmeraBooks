@@ -472,6 +472,14 @@ export const database = {
     return flaskApi.get<any[]>(`/clients/${clientId}/accounts`);
   },
 
+  async getTrialBalance(clientId: string, options?: { startDate?: string; endDate?: string }): Promise<any> {
+    const params = new URLSearchParams();
+    if (options?.startDate) params.set("start_date", options.startDate);
+    if (options?.endDate) params.set("end_date", options.endDate);
+    const qs = params.toString();
+    return flaskApi.get<any>(`/clients/${clientId}/trial-balance${qs ? `?${qs}` : ""}`);
+  },
+
   async createAccount(clientId: string, data: {
     code: string;
     name: string;

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Fragment } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -68,6 +68,9 @@ import {
   AlertTriangle,
   Settings,
   Loader2,
+  BookOpen,
+  CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
 import { useActiveClient } from "@/hooks/useActiveClient";
 import { useDateRange } from "@/hooks/useDateRange";
@@ -1685,6 +1688,182 @@ function CategoryTable({
   );
 }
 
+// ── Trial Balance Tab ─────────────────────────────────────────────────────
+
+function TrialBalanceTab() {
+  const { clientId, currency } = useActiveClient();
+  const { startDate: globalStart, endDate: globalEnd } = useDateRange();
+
+  const { data: tbData, isFetching: tbLoading } = useQuery({
+    queryKey: ["trial-balance", clientId, globalStart || "all", globalEnd || "all"],
+    queryFn: () => database.getTrialBalance(clientId!, {
+      startDate: globalStart || undefined,
+      endDate: globalEnd || undefined,
+    }),
+    enabled: !!clientId,
+  });
+
+  const accounts = tbData?.accounts ?? [];
+  const totals = tbData?.totals ?? { opening_debit: 0, opening_credit: 0, period_debit: 0, period_credit: 0, closing_debit: 0, closing_credit: 0 };
+
+  // Group by account type
+  const grouped = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    accounts.forEach((a: any) => {
+      const t = a.type || "Other";
+      if (!groups[t]) groups[t] = [];
+      groups[t].push(a);
+    });
+    const order = ["Asset", "Liability", "Equity", "Revenue", "Expense", "Other"];
+    return order.filter((t) => groups[t]?.length).map((t) => ({ type: t, items: groups[t] }));
+  }, [accounts]);
+
+  const isBalanced = Math.abs(totals.closing_debit - totals.closing_credit) < 0.02;
+
+  const fmt = (v: number) => v ? formatAmount(v, currency) : "—";
+
+  const handleExportCSV = () => {
+    const lines = ["Account Code,Account Name,Type,Opening Dr,Opening Cr,Period Dr,Period Cr,Closing Dr,Closing Cr"];
+    accounts.forEach((a: any) => {
+      lines.push([a.code, `"${a.name}"`, a.type, a.opening_debit, a.opening_credit, a.period_debit, a.period_credit, a.closing_debit, a.closing_credit].join(","));
+    });
+    lines.push(["", "TOTALS", "", totals.opening_debit, totals.opening_credit, totals.period_debit, totals.period_credit, totals.closing_debit, totals.closing_credit].join(","));
+    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Trial_Balance_${globalStart || "all"}_${globalEnd || "all"}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  if (tbLoading && accounts.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Loading trial balance...</p>
+      </div>
+    );
+  }
+
+  if (accounts.length === 0) {
+    return (
+      <Card className="border-dashed">
+        <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+          <BookOpen className="h-10 w-10 text-muted-foreground/40 mb-3" />
+          <h3 className="text-lg font-semibold mb-1">No Trial Balance Data</h3>
+          <p className="text-sm text-muted-foreground max-w-md">
+            Upload bank statements or set up your Chart of Accounts to generate a Trial Balance.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const typeColors: Record<string, string> = {
+    Asset: "text-blue-600 bg-blue-50",
+    Liability: "text-red-500 bg-red-50",
+    Equity: "text-purple-600 bg-purple-50",
+    Revenue: "text-green-600 bg-green-50",
+    Expense: "text-orange-500 bg-orange-50",
+    Other: "text-gray-500 bg-gray-50",
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <h3 className="text-lg font-semibold">Trial Balance</h3>
+          {isBalanced ? (
+            <Badge className="gap-1 bg-green-600 text-[10px]">
+              <CheckCircle2 className="h-3 w-3" />
+              Balanced
+            </Badge>
+          ) : (
+            <Badge variant="destructive" className="gap-1 text-[10px]">
+              <AlertTriangle className="h-3 w-3" />
+              Unbalanced ({formatAmount(Math.abs(totals.closing_debit - totals.closing_credit), currency)})
+            </Badge>
+          )}
+          <span className="text-xs text-muted-foreground">{accounts.length} accounts</span>
+        </div>
+        <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleExportCSV}>
+          <Download className="h-3 w-3" />
+          Export CSV
+        </Button>
+      </div>
+
+      {/* Trial Balance Table */}
+      <Card>
+        <CardContent className="p-0 overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-muted/60 border-b">
+                <th className="text-left p-2.5 font-semibold w-[60px]">Code</th>
+                <th className="text-left p-2.5 font-semibold">Account Name</th>
+                <th className="text-center p-2.5 font-semibold" colSpan={2}>Opening Balance</th>
+                <th className="text-center p-2.5 font-semibold" colSpan={2}>Period Movement</th>
+                <th className="text-center p-2.5 font-semibold" colSpan={2}>Closing Balance</th>
+              </tr>
+              <tr className="bg-muted/30 border-b text-[10px] text-muted-foreground">
+                <th className="p-1.5"></th>
+                <th className="p-1.5"></th>
+                <th className="text-right p-1.5 font-medium">Debit</th>
+                <th className="text-right p-1.5 font-medium">Credit</th>
+                <th className="text-right p-1.5 font-medium">Debit</th>
+                <th className="text-right p-1.5 font-medium">Credit</th>
+                <th className="text-right p-1.5 font-medium">Debit</th>
+                <th className="text-right p-1.5 font-medium">Credit</th>
+              </tr>
+            </thead>
+            <tbody>
+              {grouped.map(({ type, items }) => (
+                <Fragment key={type}>
+                  {/* Section header */}
+                  <tr className="bg-muted/20">
+                    <td colSpan={8} className="p-2 font-semibold text-xs">
+                      <Badge variant="outline" className={`text-[9px] mr-2 ${typeColors[type] || ""}`}>
+                        {type}
+                      </Badge>
+                      {items.length} account{items.length !== 1 ? "s" : ""}
+                    </td>
+                  </tr>
+                  {/* Account rows */}
+                  {items.map((a: any, i: number) => (
+                    <tr key={`${a.code}-${a.name}-${i}`} className="border-b border-muted/30 hover:bg-muted/20">
+                      <td className="p-2 font-mono text-[10px] text-muted-foreground">{a.code || "—"}</td>
+                      <td className="p-2 font-medium">{a.name}</td>
+                      <td className="p-2 text-right tabular-nums">{a.opening_debit > 0 ? fmt(a.opening_debit) : "—"}</td>
+                      <td className="p-2 text-right tabular-nums">{a.opening_credit > 0 ? fmt(a.opening_credit) : "—"}</td>
+                      <td className="p-2 text-right tabular-nums">{a.period_debit > 0 ? fmt(a.period_debit) : "—"}</td>
+                      <td className="p-2 text-right tabular-nums">{a.period_credit > 0 ? fmt(a.period_credit) : "—"}</td>
+                      <td className="p-2 text-right tabular-nums font-medium">{a.closing_debit > 0 ? fmt(a.closing_debit) : "—"}</td>
+                      <td className="p-2 text-right tabular-nums font-medium">{a.closing_credit > 0 ? fmt(a.closing_credit) : "—"}</td>
+                    </tr>
+                  ))}
+                </Fragment>
+              ))}
+              {/* Totals row */}
+              <tr className="bg-primary/5 border-t-2 border-primary/20 font-bold text-xs">
+                <td className="p-2.5" colSpan={2}>TOTALS</td>
+                <td className="p-2.5 text-right tabular-nums">{fmt(totals.opening_debit)}</td>
+                <td className="p-2.5 text-right tabular-nums">{fmt(totals.opening_credit)}</td>
+                <td className="p-2.5 text-right tabular-nums">{fmt(totals.period_debit)}</td>
+                <td className="p-2.5 text-right tabular-nums">{fmt(totals.period_credit)}</td>
+                <td className="p-2.5 text-right tabular-nums">{fmt(totals.closing_debit)}</td>
+                <td className="p-2.5 text-right tabular-nums">{fmt(totals.closing_credit)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────
 
 export default function FinancialReporting() {
@@ -1719,6 +1898,10 @@ export default function FinancialReporting() {
               <TrendingUp className="h-3.5 w-3.5" />
               Ratios
             </TabsTrigger>
+            <TabsTrigger value="trial-balance" className="gap-1.5">
+              <BookOpen className="h-3.5 w-3.5" />
+              Trial Balance
+            </TabsTrigger>
             <TabsTrigger value="filters" className="gap-1.5">
               <Filter className="h-3.5 w-3.5" />
               Custom Filters
@@ -1736,6 +1919,9 @@ export default function FinancialReporting() {
           </TabsContent>
           <TabsContent value="ratios" className="mt-4">
             <RatiosTab />
+          </TabsContent>
+          <TabsContent value="trial-balance" className="mt-4">
+            <TrialBalanceTab />
           </TabsContent>
           <TabsContent value="filters" className="mt-4">
             <CustomFiltersTab />
