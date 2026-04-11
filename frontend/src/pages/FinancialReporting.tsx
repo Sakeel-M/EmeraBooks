@@ -1851,12 +1851,12 @@ function TrialBalanceTab() {
                     <tr key={`${a.code}-${a.name}-${i}`} className="border-b border-muted/30 hover:bg-muted/20">
                       <td className="p-2 font-mono text-[10px] text-muted-foreground">{a.code || "—"}</td>
                       <td className="p-2 font-medium">{a.name}</td>
-                      <td className="p-2 text-right tabular-nums">{a.opening_debit > 0 ? fmt(a.opening_debit) : "—"}</td>
-                      <td className="p-2 text-right tabular-nums">{a.opening_credit > 0 ? fmt(a.opening_credit) : "—"}</td>
+                      <td className="p-2 text-right tabular-nums text-muted-foreground">{a.opening_debit ? fmt(a.opening_debit) : "0.00"}</td>
+                      <td className="p-2 text-right tabular-nums text-muted-foreground">{a.opening_credit ? fmt(a.opening_credit) : "0.00"}</td>
                       <td className="p-2 text-right tabular-nums">{a.period_debit > 0 ? fmt(a.period_debit) : "—"}</td>
                       <td className="p-2 text-right tabular-nums">{a.period_credit > 0 ? fmt(a.period_credit) : "—"}</td>
-                      <td className="p-2 text-right tabular-nums font-medium">{a.closing_debit > 0 ? fmt(a.closing_debit) : "—"}</td>
-                      <td className="p-2 text-right tabular-nums font-medium">{a.closing_credit > 0 ? fmt(a.closing_credit) : "—"}</td>
+                      <td className="p-2 text-right tabular-nums font-medium">{a.closing_debit ? fmt(a.closing_debit) : "0.00"}</td>
+                      <td className="p-2 text-right tabular-nums font-medium">{a.closing_credit ? fmt(a.closing_credit) : "0.00"}</td>
                     </tr>
                   ))}
                 </Fragment>
