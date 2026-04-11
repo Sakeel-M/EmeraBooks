@@ -1693,6 +1693,7 @@ function CategoryTable({
 function TrialBalanceTab() {
   const { clientId, currency } = useActiveClient();
   const { startDate: globalStart, endDate: globalEnd } = useDateRange();
+  const [viewMode, setViewMode] = useState<"summary" | "monthly">("summary");
 
   const { data: tbData, isFetching: tbLoading } = useQuery({
     queryKey: ["trial-balance", clientId, globalStart || "all", globalEnd || "all"],
@@ -1705,6 +1706,8 @@ function TrialBalanceTab() {
 
   const accounts = tbData?.accounts ?? [];
   const totals = tbData?.totals ?? { opening_debit: 0, opening_credit: 0, period_debit: 0, period_credit: 0, closing_debit: 0, closing_credit: 0 };
+  const months: string[] = tbData?.months ?? [];
+  const monthlyAccounts: any[] = tbData?.monthly_accounts ?? [];
 
   // Group by account type
   const grouped = useMemo(() => {
@@ -1790,13 +1793,92 @@ function TrialBalanceTab() {
           )}
           <span className="text-xs text-muted-foreground">{accounts.length} accounts</span>
         </div>
-        <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleExportCSV}>
-          <Download className="h-3 w-3" />
-          Export CSV
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center border rounded-lg overflow-hidden text-xs">
+            <button
+              className={`px-3 py-1.5 ${viewMode === "summary" ? "bg-primary text-white" : "hover:bg-muted"}`}
+              onClick={() => setViewMode("summary")}
+            >
+              Summary
+            </button>
+            <button
+              className={`px-3 py-1.5 ${viewMode === "monthly" ? "bg-primary text-white" : "hover:bg-muted"}`}
+              onClick={() => setViewMode("monthly")}
+            >
+              Monthly
+            </button>
+          </div>
+          <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleExportCSV}>
+            <Download className="h-3 w-3" />
+            Export CSV
+          </Button>
+        </div>
       </div>
 
-      {/* Trial Balance Table */}
+      {/* Monthly View */}
+      {viewMode === "monthly" && months.length > 0 && (
+        <Card>
+          <CardContent className="p-0 overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-muted/60 border-b">
+                  <th className="text-left p-2.5 font-semibold sticky left-0 bg-muted/60 min-w-[180px]">Account</th>
+                  {months.map((m) => (
+                    <th key={m} className="text-center p-2.5 font-semibold" colSpan={2}>
+                      {new Date(m + "-01").toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                    </th>
+                  ))}
+                </tr>
+                <tr className="bg-muted/30 border-b text-[10px] text-muted-foreground">
+                  <th className="p-1.5 sticky left-0 bg-muted/30"></th>
+                  {months.map((m) => (
+                    <Fragment key={m}>
+                      <th className="text-right p-1.5 font-medium min-w-[90px]">Opening</th>
+                      <th className="text-right p-1.5 font-medium min-w-[90px]">Closing</th>
+                    </Fragment>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {monthlyAccounts.filter((a: any) => a.months?.some((m: any) => m.opening_debit || m.opening_credit || m.closing_debit || m.closing_credit)).map((a: any, i: number) => (
+                  <tr key={`${a.code}-${a.name}-${i}`} className="border-b border-muted/30 hover:bg-muted/20">
+                    <td className="p-2 font-medium sticky left-0 bg-background">
+                      {a.code && <span className="text-[10px] text-muted-foreground font-mono mr-1.5">{a.code}</span>}
+                      {a.name}
+                    </td>
+                    {(a.months || []).map((m: any) => {
+                      const openNet = m.opening_debit - m.opening_credit;
+                      const closeNet = m.closing_debit - m.closing_credit;
+                      return (
+                        <Fragment key={m.month}>
+                          <td className={`p-2 text-right tabular-nums ${openNet > 0 ? "" : openNet < 0 ? "text-red-500" : "text-muted-foreground"}`}>
+                            {openNet !== 0 ? fmt(Math.abs(openNet)) + (openNet > 0 ? " Dr" : " Cr") : "—"}
+                          </td>
+                          <td className={`p-2 text-right tabular-nums font-medium ${closeNet > 0 ? "" : closeNet < 0 ? "text-red-500" : "text-muted-foreground"}`}>
+                            {closeNet !== 0 ? fmt(Math.abs(closeNet)) + (closeNet > 0 ? " Dr" : " Cr") : "—"}
+                          </td>
+                        </Fragment>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
+
+      {viewMode === "monthly" && months.length === 0 && (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <BookOpen className="h-8 w-8 text-muted-foreground/40 mb-2" />
+            <p className="text-sm text-muted-foreground">No monthly data available. Select a date range spanning multiple months.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Summary Table (existing) */}
+      {viewMode === "summary" && (
       <Card>
         <CardContent className="p-0 overflow-x-auto">
           <table className="w-full text-xs">
@@ -1860,6 +1942,7 @@ function TrialBalanceTab() {
           </table>
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }

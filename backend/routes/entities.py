@@ -453,11 +453,69 @@ def get_trial_balance(client_id):
     for k in totals:
         totals[k] = round(totals[k], 2)
 
+    # ── Monthly breakdown ──
+    from collections import defaultdict
+    from datetime import datetime as dt
+
+    # Group period transactions by month
+    monthly_data = defaultdict(lambda: defaultdict(lambda: {"debit": 0, "credit": 0}))
+    months_set = set()
+    for t in period_txns:
+        if t.transaction_date:
+            month_key = t.transaction_date.strftime("%Y-%m")
+            months_set.add(month_key)
+            cat = t.category or "Other"
+            amt = float(t.amount)
+            if amt < 0:
+                monthly_data[cat][month_key]["debit"] += abs(amt)
+            else:
+                monthly_data[cat][month_key]["credit"] += amt
+
+    months_sorted = sorted(months_set)
+
+    # Build monthly per-account: opening + closing for each month
+    monthly_accounts = []
+    for acct in result_accounts:
+        acct_monthly = []
+        running_balance_dr = acct["opening_debit"]
+        running_balance_cr = acct["opening_credit"]
+        for m in months_sorted:
+            m_data = monthly_data.get(acct["name"], {}).get(m, {"debit": 0, "credit": 0})
+            opening_dr = round(running_balance_dr, 2)
+            opening_cr = round(running_balance_cr, 2)
+            # Add period movement
+            running_balance_dr += m_data["debit"]
+            running_balance_cr += m_data["credit"]
+            # Net closing
+            net = running_balance_dr - running_balance_cr
+            closing_dr = round(max(net, 0), 2)
+            closing_cr = round(abs(min(net, 0)), 2)
+            acct_monthly.append({
+                "month": m,
+                "opening_debit": opening_dr,
+                "opening_credit": opening_cr,
+                "debit": round(m_data["debit"], 2),
+                "credit": round(m_data["credit"], 2),
+                "closing_debit": closing_dr,
+                "closing_credit": closing_cr,
+            })
+            # Reset running for next month
+            running_balance_dr = closing_dr
+            running_balance_cr = closing_cr
+        monthly_accounts.append({
+            "code": acct["code"],
+            "name": acct["name"],
+            "type": acct["type"],
+            "months": acct_monthly,
+        })
+
     return jsonify({
         "period": {"start": start_date, "end": end_date},
         "accounts": result_accounts,
         "totals": totals,
         "account_count": len(result_accounts),
+        "months": months_sorted,
+        "monthly_accounts": monthly_accounts,
     })
 
 
