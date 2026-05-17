@@ -1304,8 +1304,7 @@ export default function Integrations() {
             Integrations
           </h1>
           <p className="text-muted-foreground">
-            Connect your data sources — banks, ERPs, POS, CRM, inventory, and
-            payroll.
+            Upload your bank statement to get started — takes less than a minute
           </p>
         </div>
 

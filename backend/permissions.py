@@ -1,9 +1,10 @@
 """Permission helpers — replaces Supabase RLS policies."""
+import os
 import uuid
 from functools import wraps
 from flask import request, g, jsonify
 from models.base import db
-from models.tier0 import OrgMember, Client
+from models.tier0 import OrgMember, Client, UserRole
 
 
 def user_has_client_access(client_id):
@@ -43,6 +44,47 @@ def get_effective_client_ids(client_id):
     for c in children:
         ids.append(c.id)
     return ids
+
+
+def user_has_active_subscription(user_id):
+    """Check if the user's organization has an active (or trialing) subscription."""
+    from models.billing import OrgSubscription
+    member = OrgMember.query.filter_by(user_id=uuid.UUID(str(user_id))).first()
+    if not member:
+        return False
+    sub = OrgSubscription.query.filter_by(org_id=member.org_id).first()
+    if not sub:
+        return False
+    return sub.status in ("active", "trialing")
+
+
+def require_subscription(f):
+    """Decorator: must run AFTER @require_auth. Blocks the request if the user
+    does not have an active subscription. Platform admins bypass the check.
+    Set BILLING_ENFORCED=false to disable enforcement (e.g. before Stripe is set up)."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if os.getenv("BILLING_ENFORCED", "true").lower() in ("0", "false", "no"):
+            return f(*args, **kwargs)
+
+        user_id = g.get("user_id")
+        if not user_id:
+            return jsonify({"error": "Auth required"}), 401
+
+        # Admins always allowed (covers support / impersonation flows)
+        check_id = g.get("real_admin_id") or user_id
+        try:
+            admin_role = UserRole.query.filter_by(user_id=uuid.UUID(check_id), role="admin").first()
+            if admin_role:
+                return f(*args, **kwargs)
+        except Exception:
+            pass
+
+        if not user_has_active_subscription(user_id):
+            return jsonify({"error": "subscription_required"}), 403
+
+        return f(*args, **kwargs)
+    return decorated
 
 
 def require_client_access(f):

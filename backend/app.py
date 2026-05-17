@@ -42,10 +42,13 @@ from routes.reconciliation_crud import reconciliation_crud_bp
 from routes.matching_rules import matching_rules_bp
 from routes.risk_alerts_crud import risk_alerts_crud_bp
 from routes.entities import entities_bp
+from routes.journal_entries import journal_entries_bp
+from routes.document_parser import document_parser_bp
 from routes.categories import categories_bp
 from routes.audit import audit_bp
 from routes.control_settings import control_settings_bp
 from routes.admin import admin_bp
+from routes.billing import billing_bp
 
 app.register_blueprint(tier0_bp)
 app.register_blueprint(bank_accounts_bp)
@@ -55,10 +58,13 @@ app.register_blueprint(reconciliation_crud_bp)
 app.register_blueprint(matching_rules_bp)
 app.register_blueprint(risk_alerts_crud_bp)
 app.register_blueprint(entities_bp)
+app.register_blueprint(journal_entries_bp)
+app.register_blueprint(document_parser_bp)
 app.register_blueprint(categories_bp)
 app.register_blueprint(audit_bp)
 app.register_blueprint(control_settings_bp)
 app.register_blueprint(admin_bp)
+app.register_blueprint(billing_bp)
 
 # ── Security: restrict CORS to known front-end origins ──────────────────────
 _allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
@@ -80,6 +86,9 @@ def _check_api_key():
     """Require X-API-Key or Bearer token when API_SECRET_KEY env var is set."""
     if request.method == "OPTIONS":
         return  # Allow CORS preflight through
+    # Stripe webhook is authenticated via the Stripe-Signature header
+    if request.path == "/api/billing/webhook":
+        return
     # Accept Bearer JWT tokens (new auth flow) — route-level @require_auth validates them
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):

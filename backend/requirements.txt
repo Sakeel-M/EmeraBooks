@@ -27,3 +27,6 @@ psycopg2-binary==2.9.9
 
 # HTTP requests (for Supabase Auth API verification)
 requests>=2.31.0
+
+# Stripe billing
+stripe>=8.0.0

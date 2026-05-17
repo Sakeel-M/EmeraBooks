@@ -29,8 +29,33 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
       setAuthenticated(true);
 
-      // Check if user has an org (skip if already on /onboarding)
-      if (location.pathname !== "/onboarding") {
+      // /pricing and /billing/success skip the subscription check, but they still
+      // require an org — payment is only asked AFTER business profile setup.
+      const billingExempt = ["/pricing", "/billing/success"].includes(location.pathname);
+      const orgExempt = location.pathname === "/onboarding";
+
+      // Platform admins bypass org + subscription gates entirely
+      let isAdmin = false;
+      try {
+        const me = await flaskApi.get<{ is_admin: boolean }>("/me/is-admin");
+        isAdmin = !!me?.is_admin;
+      } catch {
+        // If Flask API is down, fall through to normal checks
+      }
+
+      if (isAdmin) {
+        // Admin landed on /pricing — bounce to dashboard
+        if (location.pathname === "/pricing") {
+          navigate("/", { replace: true });
+          setLoading(false);
+          return;
+        }
+        setLoading(false);
+        return;
+      }
+
+      // Check if user has an org
+      if (!orgExempt) {
         try {
           const result = await flaskApi.get<{ has_org: boolean }>("/me/org-membership");
           if (!result?.has_org) {
@@ -40,6 +65,21 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
           }
         } catch {
           // If Flask API is down, let user through (graceful degradation)
+        }
+      }
+
+      // Check subscription (hard gate — except billing/onboarding pages)
+      if (!billingExempt) {
+        try {
+          const sub = await flaskApi.get<{ status?: string } | null>("/billing/subscription");
+          const isActive = sub && (sub.status === "active" || sub.status === "trialing");
+          if (!isActive) {
+            navigate("/pricing", { replace: true });
+            setLoading(false);
+            return;
+          }
+        } catch {
+          // If billing endpoint is down, let user through (graceful degradation)
         }
       }
 

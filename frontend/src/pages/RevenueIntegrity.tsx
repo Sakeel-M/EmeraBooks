@@ -104,6 +104,14 @@ import { database } from "@/lib/database";
 import { flaskApi } from "@/lib/flaskApi";
 import { formatAmount } from "@/lib/utils";
 import { FC } from "@/components/shared/FormattedCurrency";
+import { DocumentDropzone } from "@/components/shared/DocumentDropzone";
+import {
+  InvoicePreview,
+  DEFAULT_PROFILE,
+  DEFAULT_TEMPLATE,
+  type InvoiceProfile,
+  type InvoiceTemplate,
+} from "@/components/shared/InvoicePreview";
 import { format, subMonths, differenceInDays, isAfter, parseISO } from "date-fns";
 import { resolveIncomeCategory } from "@/lib/sectorMapping";
 import { toast } from "sonner";
@@ -152,6 +160,18 @@ function RevenueOverviewTab() {
     enabled: !!clientId,
   });
 
+  // Bills are needed for the Expenses / Profit KPIs (paid manual bills don't have a transaction row)
+  const { data: bills = [] } = useQuery({
+    queryKey: ["revenue-bills", clientId, startDate || "all", endDate || "all"],
+    queryFn: () => {
+      const opts: { startDate?: string; endDate?: string } = {};
+      if (startDate) opts.startDate = startDate;
+      if (endDate) opts.endDate = endDate;
+      return database.getBills(clientId!, opts);
+    },
+    enabled: !!clientId,
+  });
+
   const _revLoading = (invLoading || txnLoading) && transactions.length === 0;
 
   // ── Derived Metrics ──
@@ -161,10 +181,36 @@ function RevenueOverviewTab() {
     [transactions],
   );
 
-  const totalRevenue = useMemo(
-    () => incomeTxns.reduce((s: number, t: any) => s + t.amount, 0),
-    [incomeTxns],
+  // Total Revenue = bank-statement income + paid manual invoices (no double-count
+  // when an invoice is linked to a bank deposit via PaymentAllocation; today no
+  // allocations exist so we sum both sources directly).
+  const paidInvoiceTotal = useMemo(
+    () => invoices
+      .filter((i: any) => i.status === "paid" && (i.source ?? "manual") === "manual")
+      .reduce((s: number, i: any) => s + Number(i.total || 0), 0),
+    [invoices],
   );
+
+  const totalRevenue = useMemo(
+    () => incomeTxns.reduce((s: number, t: any) => s + t.amount, 0) + paidInvoiceTotal,
+    [incomeTxns, paidInvoiceTotal],
+  );
+
+  const expenseTxns = useMemo(
+    () => transactions.filter((t: any) => t.amount < 0),
+    [transactions],
+  );
+  const paidBillTotal = useMemo(
+    () => bills
+      .filter((b: any) => b.status === "paid" && (b.source ?? "manual") === "manual")
+      .reduce((s: number, b: any) => s + Number(b.total || 0), 0),
+    [bills],
+  );
+  const totalExpenses = useMemo(
+    () => expenseTxns.reduce((s: number, t: any) => s + Math.abs(t.amount), 0) + paidBillTotal,
+    [expenseTxns, paidBillTotal],
+  );
+  const totalProfit = useMemo(() => totalRevenue - totalExpenses, [totalRevenue, totalExpenses]);
 
   const totalInvoiced = useMemo(
     () => invoices.reduce((s: number, i: any) => s + (i.total || 0), 0),
@@ -387,10 +433,9 @@ function RevenueOverviewTab() {
           <div className="rounded-full bg-muted p-4 mb-4">
             <TrendingUp className="h-10 w-10 text-muted-foreground/40" />
           </div>
-          <h3 className="text-lg font-semibold mb-2">No Revenue Data Yet</h3>
+          <h3 className="text-lg font-semibold mb-2">No income data yet</h3>
           <p className="text-sm text-muted-foreground max-w-md mb-4">
-            Upload a bank statement or create invoices to see your revenue
-            overview, trends, and customer insights.
+            Upload your bank statement and we will find your revenue automatically →
           </p>
         </CardContent>
       </Card>
@@ -409,7 +454,7 @@ function RevenueOverviewTab() {
   return (
     <div className="space-y-5">
       {/* ── KPI Row ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <KPICard
           label="Total Revenue"
           value={formatAmount(totalRevenue, currency)}
@@ -417,6 +462,21 @@ function RevenueOverviewTab() {
           color="text-primary"
           trend={monthTrend}
           onClick={() => setDrillDown({ type: "revenue", title: "Total Revenue Breakdown", description: `${incomeTxns.length} income transactions in period`, transactions: incomeTxns })}
+        />
+        <KPICard
+          label="Expenses"
+          value={formatAmount(totalExpenses, currency)}
+          icon={TrendingDown}
+          color="text-red-500"
+          sub={`${expenseTxns.length} txns`}
+          onClick={() => setDrillDown({ type: "outstanding", title: "Expense Transactions", description: `${expenseTxns.length} expense transactions in period`, transactions: expenseTxns })}
+        />
+        <KPICard
+          label="Total Profit"
+          value={formatAmount(totalProfit, currency)}
+          icon={TrendingUp}
+          color={totalProfit >= 0 ? "text-emerald-600" : "text-red-500"}
+          sub="Revenue − Expenses"
         />
         <KPICard
           label="Outstanding"
@@ -814,6 +874,608 @@ const DEFAULT_TEMPLATE: InvoiceTemplate = {
   footer_text: "Thank you for your business!", payment_terms: "Net 30",
 };
 
+// ── Thank-you receipt block (rendered when invoice.status === "paid") ────
+export function ThankYouBlock({
+  invoice,
+  currency,
+  title = "Thank you — Payment received",
+  closingLine = "Thank you for your business.",
+}: {
+  invoice: any;
+  currency: string;
+  title?: string;
+  closingLine?: string;
+}) {
+  const paidAt = invoice.metadata?.paid_at || invoice.updated_at;
+  const method = invoice.metadata?.payment_method || "manual";
+  const fmt = (d: string) => {
+    try { return format(new Date(d), "dd MMM yyyy 'at' HH:mm"); } catch { return d; }
+  };
+  return (
+    <Card className="border-emerald-200 bg-emerald-50/60 dark:border-emerald-800 dark:bg-emerald-950/30">
+      <CardContent className="p-4 space-y-2">
+        <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
+          <CheckCircle2 className="h-5 w-5" />
+          <p className="font-semibold text-sm">{title}</p>
+        </div>
+        <p className="text-sm text-emerald-900 dark:text-emerald-100">
+          Payment of <FC amount={invoice.total || 0} currency={currency} />{" "}
+          {paidAt ? `recorded on ${fmt(paidAt)}` : "recorded"}.
+        </p>
+        <p className="text-xs text-emerald-700 dark:text-emerald-300">
+          Method: <span className="capitalize">{method}</span> · {closingLine}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Receipts tab — final-state ledger of every invoice (Paid/Overdue/Cancelled) ────
+function ReceiptsTab() {
+  const { clientId, currency } = useActiveClient();
+  const { startDate, endDate } = useDateRange();
+  const queryClient = useQueryClient();
+  const [innerTab, setInnerTab] = useState<"paid" | "cancelled">("paid");
+  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
+  const [editing, setEditing] = useState<any>(null);
+  const [editSubtotal, setEditSubtotal] = useState(0);
+  const [editTax, setEditTax] = useState(0);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [profile, setProfile] = useState<InvoiceProfile>(DEFAULT_PROFILE);
+  const [template, setTemplate] = useState<InvoiceTemplate>(DEFAULT_TEMPLATE);
+
+  useEffect(() => {
+    if (!clientId) return;
+    database.getControlSetting(clientId, "invoice_profile")
+      .then((v) => { if (v) setProfile({ ...DEFAULT_PROFILE, ...v }); })
+      .catch(() => {});
+    database.getControlSetting(clientId, "invoice_template")
+      .then((v) => { if (v) setTemplate({ ...DEFAULT_TEMPLATE, ...v }); })
+      .catch(() => {});
+  }, [clientId]);
+  const [showAddReceipt, setShowAddReceipt] = useState(false);
+  const [addForm, setAddForm] = useState({
+    customer_name: "",
+    invoice_number: "",
+    invoice_date: format(new Date(), "yyyy-MM-dd"),
+    subtotal: "",
+    tax_amount: "0",
+    status: "paid" as "paid" | "cancelled",
+  });
+  const [savingAdd, setSavingAdd] = useState(false);
+  const [parsingDoc, setParsingDoc] = useState(false);
+  const [parsedFileName, setParsedFileName] = useState<string | undefined>();
+  const [parseError, setParseError] = useState<string | undefined>();
+
+  const { data: rawInvoices = [], isFetching } = useQuery({
+    queryKey: ["revenue-invoices", clientId, startDate || "all", endDate || "all"],
+    queryFn: () => {
+      const opts: { startDate?: string; endDate?: string } = {};
+      if (startDate) opts.startDate = startDate;
+      if (endDate) opts.endDate = endDate;
+      return database.getInvoices(clientId!, opts);
+    },
+    enabled: !!clientId,
+  });
+
+  const finalInvoices = useMemo(
+    () => rawInvoices.filter((i: any) =>
+      i.status === "paid" || i.status === "cancelled"
+    ),
+    [rawInvoices],
+  );
+
+  const counts = useMemo(() => {
+    const c = { paid: 0, cancelled: 0 };
+    finalInvoices.forEach((i: any) => {
+      if (i.status === "paid") c.paid++;
+      else if (i.status === "cancelled") c.cancelled++;
+    });
+    return c;
+  }, [finalInvoices]);
+
+  const totals = useMemo(() => {
+    const t = { paid: 0, cancelled: 0 };
+    finalInvoices.forEach((i: any) => {
+      const amt = Number(i.total || 0);
+      if (i.status === "paid") t.paid += amt;
+      else if (i.status === "cancelled") t.cancelled += amt;
+    });
+    return t;
+  }, [finalInvoices]);
+
+  const visible = useMemo(
+    () => finalInvoices.filter((i: any) => i.status === innerTab),
+    [finalInvoices, innerTab],
+  );
+
+  const fmtDate = (d: string | null) => {
+    if (!d) return "—";
+    try { return format(new Date(d), "dd/MM/yyyy"); } catch { return d; }
+  };
+
+  const openEdit = (inv: any) => {
+    setEditing(inv);
+    setEditSubtotal(Number(inv.subtotal || 0));
+    setEditTax(Number(inv.tax_amount || 0));
+  };
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    setSavingEdit(true);
+    try {
+      const newTotal = editSubtotal + editTax;
+      await flaskApi.patch(`/invoices/${editing.id}`, {
+        subtotal: editSubtotal,
+        tax_amount: editTax,
+        total: newTotal,
+      });
+      queryClient.invalidateQueries({ queryKey: ["revenue-invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["cc-invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["fr-invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["rev-txns-pay"] });
+      queryClient.invalidateQueries({ queryKey: ["revenue-txns"] });
+      toast.success("Receipt updated");
+      setEditing(null);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update receipt");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const restoreToSent = async (inv: any) => {
+    try {
+      await flaskApi.patch(`/invoices/${inv.id}`, { status: "sent" });
+      queryClient.invalidateQueries({ queryKey: ["revenue-invoices"] });
+      toast.success(`${inv.invoice_number || "Invoice"} restored to Sent`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to restore");
+    }
+  };
+
+  if (isFetching && finalInvoices.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Inner status sub-tabs + Add button */}
+      <div className="flex items-center gap-1 border-b pb-px">
+        {(["paid", "cancelled"] as const).map((s) => {
+          const active = innerTab === s;
+          const label = s.charAt(0).toUpperCase() + s.slice(1);
+          return (
+            <button
+              key={s}
+              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+              onClick={() => setInnerTab(s)}
+            >
+              {label} <span className="text-muted-foreground ml-1.5">{counts[s]}</span>
+            </button>
+          );
+        })}
+        <Button
+          size="sm"
+          className="gap-1.5 ml-auto mb-1"
+          onClick={() => setShowAddReceipt(true)}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add Invoice Receipt
+        </Button>
+      </div>
+
+      {/* Summary card for active sub-tab */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {(["paid", "cancelled"] as const).map((s) => {
+          const active = innerTab === s;
+          const colors = {
+            paid: "text-emerald-600",
+            cancelled: "text-muted-foreground",
+          };
+          return (
+            <Card key={s} className={`${active ? "border-primary" : ""}`}>
+              <CardContent className="p-4">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">{s}</p>
+                <p className={`text-2xl font-bold mt-1 ${colors[s]}`}>
+                  <FC amount={totals[s]} currency={currency} />
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{counts[s]} invoice{counts[s] !== 1 ? "s" : ""}</p>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Receipts table */}
+      {visible.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+            <Receipt className="h-10 w-10 text-muted-foreground/40 mb-3" />
+            <h3 className="text-lg font-semibold mb-1">No {innerTab} receipts</h3>
+            <p className="text-sm text-muted-foreground">
+              {innerTab === "paid"
+                ? "Mark an invoice as paid from the Invoices tab to see it here."
+                : "No cancelled invoices in this period."}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0 overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[140px]">Invoice #</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead className="text-right">Subtotal</TableHead>
+                  <TableHead className="text-right">Tax</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  {innerTab === "paid" && <TableHead>Paid At</TableHead>}
+                  <TableHead className="w-[120px] text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visible.map((inv: any) => (
+                  <TableRow
+                    key={inv.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => setSelectedInvoice(inv)}
+                  >
+                    <TableCell className="font-mono text-xs">{inv.invoice_number || "—"}</TableCell>
+                    <TableCell className="font-medium text-sm">{inv.v2_customers?.name || inv.customer_name || "—"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{fmtDate(inv.invoice_date)}</TableCell>
+                    <TableCell className="text-right text-sm"><FC amount={inv.subtotal || 0} currency={currency} /></TableCell>
+                    <TableCell className="text-right text-sm text-muted-foreground"><FC amount={inv.tax_amount || 0} currency={currency} /></TableCell>
+                    <TableCell className="text-right text-sm font-semibold"><FC amount={inv.total || 0} currency={currency} /></TableCell>
+                    {innerTab === "paid" && (
+                      <TableCell className="text-xs text-muted-foreground">
+                        {inv.metadata?.paid_at ? fmtDate(inv.metadata.paid_at) : fmtDate(inv.updated_at)}
+                      </TableCell>
+                    )}
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => openEdit(inv)}
+                        title="Edit amount and tax"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      {(innerTab === "overdue" || innerTab === "cancelled") && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => restoreToSent(inv)}
+                          title="Restore to Sent"
+                        >
+                          Restore
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Edit amount/tax dialog */}
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit Receipt</DialogTitle>
+            <DialogDescription>
+              Update the amount and tax for {editing?.invoice_number || "this receipt"}. Total recalculates automatically.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Subtotal</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={editSubtotal}
+                onChange={(e) => setEditSubtotal(parseFloat(e.target.value) || 0)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Tax</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={editTax}
+                onChange={(e) => setEditTax(parseFloat(e.target.value) || 0)}
+              />
+            </div>
+            <div className="flex justify-between pt-1 border-t">
+              <span className="text-sm font-medium">New Total</span>
+              <span className="text-sm font-bold"><FC amount={editSubtotal + editTax} currency={currency} /></span>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setEditing(null)}>Cancel</Button>
+              <Button size="sm" onClick={saveEdit} disabled={savingEdit}>
+                {savingEdit ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Receipt detail sheet */}
+      <Sheet open={!!selectedInvoice} onOpenChange={() => setSelectedInvoice(null)}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <div className="flex items-center justify-between pr-4">
+              <SheetTitle className="font-mono">{selectedInvoice?.invoice_number || "Receipt"}</SheetTitle>
+              {selectedInvoice && <InvoiceStatusBadge status={selectedInvoice.status} />}
+            </div>
+            <SheetDescription>
+              {selectedInvoice?.v2_customers?.name || selectedInvoice?.customer_name || "—"}
+            </SheetDescription>
+          </SheetHeader>
+          {selectedInvoice && (
+            <div className="space-y-4 pt-4">
+              <div data-print-region>
+              <InvoicePreview
+                profile={profile}
+                template={template}
+                customerName={selectedInvoice.v2_customers?.name || selectedInvoice.customer_name || "—"}
+                invoiceNumber={selectedInvoice.invoice_number || "—"}
+                invoiceDate={selectedInvoice.invoice_date || ""}
+                dueDate={selectedInvoice.due_date || selectedInvoice.invoice_date || ""}
+                lineItems={
+                  Array.isArray(selectedInvoice.line_items) && selectedInvoice.line_items.length > 0
+                    ? selectedInvoice.line_items.map((li: any, i: number) => ({
+                        id: String(i),
+                        description: li.description || "",
+                        quantity: Number(li.quantity || 1),
+                        unit_price: Number(li.unit_price || 0),
+                        tax_rate: Number(li.tax_rate ?? 0),
+                      }))
+                    : [{
+                        id: "0",
+                        description: selectedInvoice.description || selectedInvoice.notes || selectedInvoice.invoice_number || "Receipt",
+                        quantity: 1,
+                        unit_price: Number(selectedInvoice.subtotal || selectedInvoice.total || 0),
+                        tax_rate: Number(selectedInvoice.subtotal || 0) > 0
+                          ? +((Number(selectedInvoice.tax_amount || 0) / Number(selectedInvoice.subtotal || 1)) * 100).toFixed(2)
+                          : 0,
+                      }]
+                }
+                subtotal={Number(selectedInvoice.subtotal || 0)}
+                totalTax={Number(selectedInvoice.tax_amount || 0)}
+                grandTotal={Number(selectedInvoice.total || 0)}
+                notes={selectedInvoice.notes || ""}
+                currency={currency}
+                fmtDate={fmtDate}
+                stamp={selectedInvoice.status === "paid" ? "paid" : selectedInvoice.status === "cancelled" ? "cancelled" : null}
+              />
+              </div>
+
+              {selectedInvoice.status === "paid" && (
+                <ThankYouBlock invoice={selectedInvoice} currency={currency} />
+              )}
+              {selectedInvoice.status === "cancelled" && (
+                <Card className="border-muted bg-muted/30">
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">Cancelled</p>
+                      <p className="text-xs text-muted-foreground">
+                        This invoice was cancelled on {fmtDate(selectedInvoice.updated_at)}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              {selectedInvoice.status === "overdue" && (
+                <Card className="border-red-200 bg-red-50/60 dark:border-red-800 dark:bg-red-950/30">
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <AlertTriangle className="h-5 w-5 text-red-500" />
+                    <div>
+                      <p className="text-sm font-medium text-red-700 dark:text-red-300">Overdue</p>
+                      <p className="text-xs text-red-700/80 dark:text-red-300/80">
+                        Due date was {fmtDate(selectedInvoice.due_date)}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => openEdit(selectedInvoice)}>
+                  <Pencil className="h-3.5 w-3.5" /> Edit Amount/Tax
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => window.print()}>
+                  <Download className="h-3.5 w-3.5" /> Download
+                </Button>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Add Invoice Receipt — quick manual entry */}
+      <Dialog open={showAddReceipt} onOpenChange={setShowAddReceipt}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Invoice Receipt</DialogTitle>
+            <DialogDescription>
+              Record a previously-issued invoice that's already paid or cancelled.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <DocumentDropzone
+              busy={parsingDoc}
+              filename={parsedFileName}
+              error={parseError}
+              onUpload={async (f) => {
+                setParsingDoc(true);
+                setParseError(undefined);
+                setParsedFileName(f.name);
+                try {
+                  const data = await database.parseDocument(f, "invoice");
+                  setAddForm((prev) => ({
+                    ...prev,
+                    customer_name: data.counterparty_name || prev.customer_name,
+                    invoice_number: data.doc_number || prev.invoice_number,
+                    invoice_date: data.doc_date || prev.invoice_date,
+                    subtotal: data.subtotal != null ? String(data.subtotal) : prev.subtotal,
+                    tax_amount: data.tax_amount != null ? String(data.tax_amount) : prev.tax_amount,
+                  }));
+                  toast.success("Fields auto-filled — please review.");
+                } catch (e: any) {
+                  setParseError(e?.message || "Failed to parse document");
+                  toast.error(e?.message || "Failed to parse document");
+                } finally {
+                  setParsingDoc(false);
+                }
+              }}
+            />
+            <div className="relative flex items-center my-2">
+              <div className="flex-grow border-t border-muted-foreground/20" />
+              <span className="flex-shrink-0 px-3 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                or fill manually
+              </span>
+              <div className="flex-grow border-t border-muted-foreground/20" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Customer</label>
+              <Input
+                value={addForm.customer_name}
+                onChange={(e) => setAddForm({ ...addForm, customer_name: e.target.value })}
+                placeholder="Customer name"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Invoice #</label>
+                <Input
+                  value={addForm.invoice_number}
+                  onChange={(e) => setAddForm({ ...addForm, invoice_number: e.target.value })}
+                  placeholder="auto"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Date</label>
+                <Input
+                  type="date"
+                  value={addForm.invoice_date}
+                  onChange={(e) => setAddForm({ ...addForm, invoice_date: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Subtotal</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={addForm.subtotal}
+                  onChange={(e) => setAddForm({ ...addForm, subtotal: e.target.value })}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Tax</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={addForm.tax_amount}
+                  onChange={(e) => setAddForm({ ...addForm, tax_amount: e.target.value })}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Status</label>
+              <div className="flex gap-2">
+                {(["paid", "cancelled"] as const).map((s) => (
+                  <Button
+                    key={s}
+                    type="button"
+                    variant={addForm.status === s ? "default" : "outline"}
+                    size="sm"
+                    className="flex-1 capitalize"
+                    onClick={() => setAddForm({ ...addForm, status: s })}
+                  >
+                    {s}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-between text-sm pt-2 border-t">
+              <span className="text-muted-foreground">Total</span>
+              <span className="font-bold">
+                <FC amount={(parseFloat(addForm.subtotal) || 0) + (parseFloat(addForm.tax_amount) || 0)} currency={currency} />
+              </span>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowAddReceipt(false)} disabled={savingAdd}>Cancel</Button>
+            <Button
+              disabled={savingAdd || !addForm.customer_name || !addForm.subtotal}
+              onClick={async () => {
+                if (!clientId) return;
+                setSavingAdd(true);
+                try {
+                  const subtotal = parseFloat(addForm.subtotal) || 0;
+                  const tax = parseFloat(addForm.tax_amount) || 0;
+                  const invoiceNumber = addForm.invoice_number || `INV-${format(new Date(), "yyyyMM")}-${String(finalInvoices.length + 1).padStart(3, "0")}`;
+                  await database.createInvoice(clientId, {
+                    customer_name: addForm.customer_name,
+                    invoice_number: invoiceNumber,
+                    invoice_date: addForm.invoice_date,
+                    due_date: addForm.invoice_date,
+                    subtotal,
+                    tax_amount: tax,
+                    total: subtotal + tax,
+                    status: addForm.status,
+                  });
+                  queryClient.invalidateQueries({ queryKey: ["revenue-invoices"] });
+                  queryClient.invalidateQueries({ queryKey: ["cc-invoices"] });
+                  queryClient.invalidateQueries({ queryKey: ["fr-invoices"] });
+                  toast.success(`Receipt ${invoiceNumber} saved`);
+                  setShowAddReceipt(false);
+                  setAddForm({
+                    customer_name: "",
+                    invoice_number: "",
+                    invoice_date: format(new Date(), "yyyy-MM-dd"),
+                    subtotal: "",
+                    tax_amount: "0",
+                    status: "paid",
+                  });
+                  setParsedFileName(undefined);
+                  setParseError(undefined);
+                } catch (err: any) {
+                  toast.error(err?.message || "Failed to save receipt");
+                } finally {
+                  setSavingAdd(false);
+                }
+              }}
+            >
+              {savingAdd ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Receipt"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 function InvoicesTab() {
   const { clientId, currency, client } = useActiveClient();
   const businessSector = client?.industry || null;
@@ -865,7 +1527,7 @@ function InvoicesTab() {
     } catch (err: any) { toast.error(err.message || "Failed to save template"); }
   };
 
-  const { data: invoices = [] } = useQuery({
+  const { data: rawInvoices = [] } = useQuery({
     queryKey: ["revenue-invoices", clientId, startDate || "all", endDate || "all"],
     queryFn: () => {
       const opts: { startDate?: string; endDate?: string } = {};
@@ -875,6 +1537,12 @@ function InvoicesTab() {
     },
     enabled: !!clientId,
   });
+
+  // All manual invoices across every status (draft, sent, paid, overdue, cancelled)
+  const invoices = useMemo(
+    () => rawInvoices.filter((i: any) => (i.source ?? "manual") === "manual"),
+    [rawInvoices],
+  );
 
   const totalAmount = useMemo(() => invoices.reduce((s: number, i: any) => s + (i.total || 0), 0), [invoices]);
 
@@ -946,8 +1614,8 @@ function InvoicesTab() {
         </div>
       </div>
 
-      {/* Status tabs */}
-      <div className="flex items-center gap-1 border-b pb-px">
+      {/* Status tabs — all invoice statuses */}
+      <div className="flex items-center gap-1 border-b pb-px flex-wrap">
         {["all", "draft", "sent", "paid", "overdue", "cancelled"].map((s) => (
           <button
             key={s}
@@ -1028,10 +1696,16 @@ function InvoicesTab() {
                       value={isOverdue ? "overdue" : inv.status}
                       onValueChange={async (newStatus) => {
                         try {
-                          await flaskApi.patch(`/invoices/${inv.id}`, { status: newStatus });
+                          const body: any = { status: newStatus };
+                          if (newStatus === "paid") {
+                            body.metadata = { paid_at: new Date().toISOString(), payment_method: "manual" };
+                          }
+                          await flaskApi.patch(`/invoices/${inv.id}`, body);
                           queryClient.invalidateQueries({ queryKey: ["revenue-invoices"] });
                           queryClient.invalidateQueries({ queryKey: ["cc-invoices"] });
                           queryClient.invalidateQueries({ queryKey: ["fr-invoices"] });
+                          queryClient.invalidateQueries({ queryKey: ["rev-txns-pay"] });
+                          queryClient.invalidateQueries({ queryKey: ["revenue-txns"] });
                           toast.success(`Status → ${newStatus}`);
                         } catch (err: any) {
                           toast.error(err.message || "Failed to update");
@@ -1096,10 +1770,16 @@ function InvoicesTab() {
                           value={isOverdue ? "overdue" : inv.status}
                           onValueChange={async (newStatus) => {
                             try {
-                              await flaskApi.patch(`/invoices/${inv.id}`, { status: newStatus });
+                              const body: any = { status: newStatus };
+                              if (newStatus === "paid") {
+                                body.metadata = { paid_at: new Date().toISOString(), payment_method: "manual" };
+                              }
+                              await flaskApi.patch(`/invoices/${inv.id}`, body);
                               queryClient.invalidateQueries({ queryKey: ["revenue-invoices"] });
                               queryClient.invalidateQueries({ queryKey: ["cc-invoices"] });
                               queryClient.invalidateQueries({ queryKey: ["fr-invoices"] });
+                              queryClient.invalidateQueries({ queryKey: ["rev-txns-pay"] });
+                              queryClient.invalidateQueries({ queryKey: ["revenue-txns"] });
                               toast.success(`Status → ${newStatus}`);
                             } catch (err: any) {
                               toast.error(err.message || "Failed to update");
@@ -1160,19 +1840,34 @@ function InvoicesTab() {
                   <Trash2 className="h-3.5 w-3.5" />
                   {deleting ? "Deleting..." : "Delete"}
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-xs"
+                  onClick={() => window.print()}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download
+                </Button>
                 <div className="ml-auto flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">Status:</span>
                   <Select
                     value={selectedInvoice.status}
                     onValueChange={async (newStatus) => {
                       try {
-                        await flaskApi.patch(`/invoices/${selectedInvoice.id}`, { status: newStatus });
-                        setSelectedInvoice({ ...selectedInvoice, status: newStatus });
+                        const body: any = { status: newStatus };
+                        if (newStatus === "paid") {
+                          body.metadata = { paid_at: new Date().toISOString(), payment_method: "manual" };
+                        }
+                        const updated = await flaskApi.patch<any>(`/invoices/${selectedInvoice.id}`, body);
+                        setSelectedInvoice({ ...selectedInvoice, ...updated, status: newStatus });
                         queryClient.invalidateQueries({ queryKey: ["revenue-invoices"] });
                         queryClient.invalidateQueries({ queryKey: ["cc-invoices"] });
                         queryClient.invalidateQueries({ queryKey: ["fr-invoices"] });
                         queryClient.invalidateQueries({ queryKey: ["cash-invoices"] });
                         queryClient.invalidateQueries({ queryKey: ["ai-score-invoices"] });
+                        queryClient.invalidateQueries({ queryKey: ["rev-txns-pay"] });
+                        queryClient.invalidateQueries({ queryKey: ["revenue-txns"] });
                         toast.success(`Status updated to ${newStatus}`);
                       } catch (err: any) {
                         toast.error(err.message || "Failed to update status");
@@ -1192,6 +1887,7 @@ function InvoicesTab() {
               </div>
 
               {/* Invoice preview card — uses saved profile & template */}
+              <div data-print-region>
               {(() => {
                 const accent = template.accent_color || "#2563eb";
                 const isModern = template.layout === "modern";
@@ -1303,6 +1999,25 @@ function InvoicesTab() {
                   </Card>
                 );
               })()}
+              </div>
+
+              {/* ── Receipt / status banners ── */}
+              {selectedInvoice.status === "paid" && (
+                <ThankYouBlock invoice={selectedInvoice} currency={currency} />
+              )}
+              {selectedInvoice.status === "cancelled" && (
+                <Card className="border-muted bg-muted/30">
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">Cancelled</p>
+                      <p className="text-xs text-muted-foreground">
+                        This invoice was cancelled on {fmtDate(selectedInvoice.updated_at)}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
         </SheetContent>
@@ -4335,10 +5050,10 @@ export default function RevenueIntegrity() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold font-heading gradient-text">
-            Revenue Integrity
+            Revenue
           </h1>
           <p className="text-muted-foreground">
-            Protect income — track collections, monitor AR, and detect revenue gaps.
+            See what you've earned, what's been paid, and what's still outstanding
           </p>
         </div>
 
@@ -4352,9 +5067,9 @@ export default function RevenueIntegrity() {
               <FileText className="h-3.5 w-3.5" />
               Invoices
             </TabsTrigger>
-            <TabsTrigger value="aging" className="gap-1.5">
-              <Clock className="h-3.5 w-3.5" />
-              AR Aging
+            <TabsTrigger value="receipts" className="gap-1.5">
+              <Receipt className="h-3.5 w-3.5" />
+              Receipts
             </TabsTrigger>
             <TabsTrigger value="customers" className="gap-1.5">
               <Users className="h-3.5 w-3.5" />
@@ -4376,8 +5091,8 @@ export default function RevenueIntegrity() {
           <TabsContent value="invoices" className="mt-4">
             <InvoicesTab />
           </TabsContent>
-          <TabsContent value="aging" className="mt-4">
-            <ARAgingTab />
+          <TabsContent value="receipts" className="mt-4">
+            <ReceiptsTab />
           </TabsContent>
           <TabsContent value="customers" className="mt-4">
             <CustomersTab />

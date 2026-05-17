@@ -5,8 +5,8 @@ import {
   TrendingDown,
   Landmark,
   BarChart3,
+  BookOpen,
   Plug,
-  ShieldAlert,
   Settings,
   LogOut,
   ChevronUp,
@@ -28,7 +28,6 @@ import {
   SidebarMenuButton,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -40,28 +39,25 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useRiskAlerts } from "@/hooks/useRiskAlerts";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 
 const menuItems = [
-  { title: "Control Center", url: "/", icon: LayoutDashboard },
-  { title: "Reconciliation", url: "/reconciliation", icon: GitCompareArrows },
-  { title: "Revenue Integrity", url: "/revenue", icon: TrendingUp },
-  { title: "Expense Integrity", url: "/expenses", icon: TrendingDown },
-  { title: "Cash & Liquidity", url: "/cash", icon: Landmark },
-  { title: "Financial Reports", url: "/reports", icon: BarChart3 },
+  { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Revenue", url: "/revenue", icon: TrendingUp },
+  { title: "Expenses", url: "/expenses", icon: TrendingDown },
+  { title: "Cash & Bank", url: "/cash", icon: Landmark },
+  { title: "Ledger", url: "/ledger", icon: BookOpen },
+  { title: "Reports", url: "/reports", icon: BarChart3 },
   { title: "Integrations", url: "/integrations", icon: Plug },
-  { title: "Risk Monitor", url: "/risk", icon: ShieldAlert, showBadge: true },
-  { title: "Control Settings", url: "/settings", icon: Settings },
+  { title: "Reconciliation", url: "/reconciliation", icon: GitCompareArrows },
+  { title: "Settings", url: "/settings", icon: Settings },
 ];
 
 export function AppSidebar() {
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
   const navigate = useNavigate();
-  const { totalOpen, breakdown } = useRiskAlerts();
   const { isAdmin } = useIsAdmin();
-  const flagCount = (breakdown.flaggedRecon || 0) + (breakdown.overdueInvoices || 0) + (breakdown.overdueBills || 0);
 
   const { data: user } = useQuery({
     queryKey: ["current-user"],
@@ -132,26 +128,7 @@ export function AppSidebar() {
                     >
                       <item.icon className="w-5 h-5 flex-shrink-0" />
                       {!isCollapsed && (
-                        <>
-                          <span className="flex-1">{item.title}</span>
-                          {item.showBadge && (totalOpen > 0 || flagCount > 0) && (
-                            <div className="flex items-center gap-1">
-                              {totalOpen > 0 && (
-                                <Badge
-                                  variant="destructive"
-                                  className="h-5 min-w-[20px] px-1.5 text-xs"
-                                >
-                                  {totalOpen > 99 ? "99+" : totalOpen}
-                                </Badge>
-                              )}
-                              {flagCount > 0 && (
-                                <span className="text-[9px] text-muted-foreground">
-                                  +{flagCount}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </>
+                        <span className="flex-1">{item.title}</span>
                       )}
                     </NavLink>
                   </SidebarMenuButton>

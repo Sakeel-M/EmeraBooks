@@ -18,7 +18,8 @@ export default function Auth() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  // Where to go after login (default: /)
+  // Where to go after login. Default: ProtectedRoute will route a fresh user
+  // to /pricing automatically (no active subscription) — so / is safe as default.
   const returnTo = searchParams.get("returnTo") || "/";
 
   useEffect(() => {

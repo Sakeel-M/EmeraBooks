@@ -88,6 +88,8 @@ import { flaskApi } from "@/lib/flaskApi";
 import { toast } from "sonner";
 import { useOrg } from "@/hooks/useOrg";
 import { format } from "date-fns";
+import { BillingTab } from "@/components/settings/BillingTab";
+import { CreditCard } from "lucide-react";
 
 // ── Chart of Accounts Tab ─────────────────────────────────────────────────
 
@@ -2851,7 +2853,7 @@ export default function ControlSettings() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold font-heading gradient-text">
-            Control Settings
+            Settings
           </h1>
           <p className="text-muted-foreground">
             Manage your business profile, Chart of Accounts, matching rules,
@@ -2881,6 +2883,10 @@ export default function ControlSettings() {
               <ScrollText className="h-3.5 w-3.5" />
               Audit Log
             </TabsTrigger>
+            <TabsTrigger value="billing" className="gap-1.5">
+              <CreditCard className="h-3.5 w-3.5" />
+              Billing
+            </TabsTrigger>
             <TabsTrigger value="roles" className="gap-1.5">
               <Users className="h-3.5 w-3.5" />
               User Roles
@@ -2905,6 +2911,9 @@ export default function ControlSettings() {
           </TabsContent>
           <TabsContent value="audit" className="mt-4">
             <AuditLogTab />
+          </TabsContent>
+          <TabsContent value="billing" className="mt-4">
+            <BillingTab />
           </TabsContent>
           <TabsContent value="roles" className="mt-4">
             <UserRolesTab />

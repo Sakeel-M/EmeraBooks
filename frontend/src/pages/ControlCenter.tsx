@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { Layout } from "@/components/layout/Layout";
 import {
   Card,
@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -45,6 +46,7 @@ import {
   BarChart3,
   CircleDot,
   Receipt,
+  Coins,
   Sparkles,
   Loader2,
   RefreshCw,
@@ -61,7 +63,7 @@ import { toast } from "sonner";
 import { formatAmount } from "@/lib/utils";
 import { FC } from "@/components/shared/FormattedCurrency";
 import { useNavigate } from "react-router-dom";
-import { format, differenceInDays, parseISO, isAfter } from "date-fns";
+import { format, differenceInDays, parseISO, isAfter, startOfMonth } from "date-fns";
 import { getCanonicalCategory } from "@/lib/sectorMapping";
 import { useAIScore, type AIScoreResult } from "@/hooks/useAIScore";
 import { useDateRange } from "@/hooks/useDateRange";
@@ -293,8 +295,8 @@ export default function ControlCenter() {
   const riskScore = useMemo(() => {
     // No data at all → score is 0 (not applicable)
     if (!hasAnyData) return 0;
-    // 1. Reconciliation (30%): match rate from sessions
-    const reconFactor = reconStats.matchRate * 0.3;
+    // 1. Reconciliation (30%): hidden — full credit while feature is disabled
+    const reconFactor = 30;
     // 2. Alert resolution (20%): 0 open = full score
     const alertFactor = totalOpen === 0 ? 20 : Math.max(0, 20 - totalOpen * 2);
     // 3. AR health (15%): non-overdue / total AR
@@ -311,7 +313,7 @@ export default function ControlCenter() {
   }, [hasAnyData, reconStats.matchRate, totalOpen, uploadedFiles, arExposure, apExposure]);
 
   const riskLevel =
-    !hasAnyData ? "No Data" : riskScore >= 81 ? "Low Risk" : riskScore >= 61 ? "Medium Risk" : riskScore >= 41 ? "High Risk" : "Critical Risk";
+    !hasAnyData ? "Nothing here yet" : riskScore >= 81 ? "Low Risk" : riskScore >= 61 ? "Medium Risk" : riskScore >= 41 ? "High Risk" : "Critical Risk";
 
   const riskColor =
     riskScore >= 81 ? "text-green-600" : riskScore >= 61 ? "text-emerald-500" : riskScore >= 41 ? "text-amber-500" : "text-red-500";
@@ -319,18 +321,36 @@ export default function ControlCenter() {
   const riskBadgeColor =
     riskScore >= 81 ? "bg-green-100 text-green-700 border-green-200" : riskScore >= 61 ? "bg-emerald-100 text-emerald-700 border-emerald-200" : riskScore >= 41 ? "bg-amber-100 text-amber-700 border-amber-200" : "bg-red-100 text-red-700 border-red-200";
 
+  // Paid manual invoices/bills don't have a transaction row — fold them in so
+  // Dashboard totals match Revenue/Expense pages.
+  const paidManualInvoiceTotal = useMemo(
+    () => invoices
+      .filter((i: any) => i.status === "paid" && (i.source ?? "manual") === "manual")
+      .reduce((s: number, i: any) => s + Number(i.total || 0), 0),
+    [invoices],
+  );
+
+  const paidManualBillTotal = useMemo(
+    () => bills
+      .filter((b: any) => b.status === "paid" && (b.source ?? "manual") === "manual")
+      .reduce((s: number, b: any) => s + Number(b.total || 0), 0),
+    [bills],
+  );
+
   // Total revenue across the entire selected date range
   const totalRevenue = useMemo(() => {
-    return recentTxns
+    const txnIncome = recentTxns
       .filter((t: any) => t.amount > 0)
       .reduce((s: number, t: any) => s + t.amount, 0);
-  }, [recentTxns]);
+    return txnIncome + paidManualInvoiceTotal;
+  }, [recentTxns, paidManualInvoiceTotal]);
 
   const totalExpenses = useMemo(() => {
-    return recentTxns
+    const txnExpense = recentTxns
       .filter((t: any) => t.amount < 0)
       .reduce((s: number, t: any) => s + Math.abs(t.amount), 0);
-  }, [recentTxns]);
+    return txnExpense + paidManualBillTotal;
+  }, [recentTxns, paidManualBillTotal]);
 
   const revenueTrend = useMemo(() => {
     if (monthlyRevenue.length < 2) return 0;
@@ -347,6 +367,68 @@ export default function ControlCenter() {
     }
     return bankTotal;
   }, [cashPosition, bankAccounts, recentTxns]);
+
+  // Profit derivations — bank amounts are VAT-inclusive (UAE 5%).
+  // netProfitAfterVAT = gross profit once 5% output VAT minus 5% input VAT is remitted to FTA.
+  const grossProfit = useMemo(() => totalRevenue - totalExpenses, [totalRevenue, totalExpenses]);
+  const netProfitAfterVAT = useMemo(() => grossProfit / 1.05, [grossProfit]);
+  const vatPayable = useMemo(() => grossProfit - netProfitAfterVAT, [grossProfit, netProfitAfterVAT]);
+
+  // ── Taxation card — custom date range + persisted rates ─────────────────
+  const [taxFrom, setTaxFrom] = useState<string>(() => format(startOfMonth(new Date()), "yyyy-MM-dd"));
+  const [taxTo, setTaxTo] = useState<string>(() => format(new Date(), "yyyy-MM-dd"));
+  const [vatRate, setVatRate] = useState<number>(5);
+  const [ctRate, setCtRate] = useState<number>(9);
+
+  useEffect(() => {
+    if (!clientId) return;
+    database.getControlSetting(clientId, "tax_vat_rate")
+      .then((v) => { if (v != null && !isNaN(Number(v))) setVatRate(Number(v)); })
+      .catch(() => {});
+    database.getControlSetting(clientId, "tax_corporate_rate")
+      .then((v) => { if (v != null && !isNaN(Number(v))) setCtRate(Number(v)); })
+      .catch(() => {});
+  }, [clientId]);
+
+  const { data: taxTxns = [] } = useQuery({
+    queryKey: ["cc-tax-txns", clientId, taxFrom, taxTo],
+    queryFn: () => database.getTransactions(clientId!, { startDate: taxFrom, endDate: taxTo, limit: 5000 }),
+    enabled: !!clientId && !!taxFrom && !!taxTo,
+  });
+
+  const { data: taxInvoices = [] } = useQuery({
+    queryKey: ["cc-tax-invoices", clientId, taxFrom, taxTo],
+    queryFn: () => database.getInvoices(clientId!, { startDate: taxFrom, endDate: taxTo }),
+    enabled: !!clientId && !!taxFrom && !!taxTo,
+  });
+
+  const { data: taxBills = [] } = useQuery({
+    queryKey: ["cc-tax-bills", clientId, taxFrom, taxTo],
+    queryFn: () => database.getBills(clientId!, { startDate: taxFrom, endDate: taxTo }),
+    enabled: !!clientId && !!taxFrom && !!taxTo,
+  });
+
+  const { taxRevenue, taxProfit, vatAmount, corporateTax } = useMemo(() => {
+    let inc = 0, exp = 0;
+    taxTxns.forEach((t: any) => {
+      if (t.amount > 0) inc += t.amount;
+      else exp += Math.abs(t.amount);
+    });
+    // Add paid manual invoices / bills inside the window so manual entries reflect here too
+    inc += taxInvoices
+      .filter((i: any) => i.status === "paid" && (i.source ?? "manual") === "manual")
+      .reduce((s: number, i: any) => s + Number(i.total || 0), 0);
+    exp += taxBills
+      .filter((b: any) => b.status === "paid" && (b.source ?? "manual") === "manual")
+      .reduce((s: number, b: any) => s + Number(b.total || 0), 0);
+    const profit = inc - exp;
+    return {
+      taxRevenue: inc,
+      taxProfit: profit,
+      vatAmount: inc * (vatRate / 100),
+      corporateTax: Math.max(0, profit) * (ctRate / 100),
+    };
+  }, [taxTxns, taxInvoices, taxBills, vatRate, ctRate]);
 
   // ── AI Risk Score ────────────────────────────────────────────────────
 
@@ -407,12 +489,10 @@ export default function ControlCenter() {
         {/* ── Header ── */}
         <div>
           <h1 className="text-2xl font-bold font-heading gradient-text">
-            Control Center
+            Dashboard
           </h1>
           <p className="text-muted-foreground">
-            {client?.name
-              ? `Executive overview for ${client.name}`
-              : "Financial health at a glance"}
+            Your business at a glance — books, cash, and VAT status in one place
           </p>
         </div>
 
@@ -426,12 +506,11 @@ export default function ControlCenter() {
         {/* ── Hero: Basic Insight + AI Insight + Quick Stats ── */}
         <Card className="stat-card-hover chart-enter overflow-hidden border-0 shadow-md">
           <CardContent className="p-6">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6 items-center">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-center">
                 {/* Basic Insight — circle gauge */}
                 <div
                   className="flex flex-col items-center cursor-pointer gap-1.5"
                   onClick={() => {
-                    const reconFactor = reconStats.matchRate * 0.3;
                     const alertFactor = totalOpen === 0 ? 20 : Math.max(0, 20 - totalOpen * 2);
                     const arTotal = arExposure.count;
                     const arHealthPct = arTotal > 0 ? ((arTotal - arExposure.overdueCount) / arTotal) * 100 : 100;
@@ -442,15 +521,14 @@ export default function ControlCenter() {
                     const dataFresh = uploadedFiles.length > 0 ? 20 : 0;
                     setDrillDown({
                       title: `Basic Insight — ${riskScore}/100 (${riskLevel})`,
-                      description: "Rule-based risk score from 5 weighted factors.",
+                      description: "Rule-based risk score from 4 weighted factors.",
                       transactions: [],
                       summary: [
                         { label: "Risk Score", value: `${riskScore}/100` },
                         { label: "Level", value: riskLevel },
-                        { label: "Factors", value: "5 weighted" },
+                        { label: "Factors", value: "4 weighted" },
                       ],
                       riskBreakdown: [
-                        { name: "Reconciliation", weight: 30, score: Math.round(reconFactor), maxScore: 30, detail: `Match rate: ${reconStats.matchRate.toFixed(1)}% across ${sessions.length} session(s)`, status: reconStats.matchRate >= 90 ? "good" : reconStats.matchRate >= 70 ? "warning" : "critical" },
                         { name: "Alert Resolution", weight: 20, score: Math.round(alertFactor), maxScore: 20, detail: `${totalOpen} open alert(s) — ${bySeverity.critical} critical, ${bySeverity.high} high`, status: totalOpen === 0 ? "good" : totalOpen <= 3 ? "warning" : "critical" },
                         { name: "AR Health", weight: 15, score: Math.round(arFactor), maxScore: 15, detail: `${arExposure.overdueCount} overdue of ${arTotal} unpaid invoice(s) — ${formatAmount(arExposure.total, currency)} outstanding`, status: arExposure.overdueCount === 0 ? "good" : arExposure.overdueCount <= 3 ? "warning" : "critical" },
                         { name: "AP Health", weight: 15, score: Math.round(apFactor), maxScore: 15, detail: `${apExposure.overdueCount} overdue of ${apTotal} unpaid bill(s) — ${formatAmount(apExposure.total, currency)} outstanding`, status: apExposure.overdueCount === 0 ? "good" : apExposure.overdueCount <= 3 ? "warning" : "critical" },
@@ -480,6 +558,17 @@ export default function ControlCenter() {
                 <div className="flex flex-col items-center gap-1.5">
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold flex items-center gap-1">
                     <Sparkles className="h-3 w-3" /> AI Insight
+                    {aiScore?.score != null && (
+                      <button
+                        type="button"
+                        onClick={handleGenerateAI}
+                        disabled={aiGenerating}
+                        title="Refresh AI score"
+                        className="ml-1 inline-flex items-center justify-center h-5 w-5 rounded-full text-emerald-600 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
+                      >
+                        {aiGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                      </button>
+                    )}
                   </p>
                   {aiScore?.score != null ? (
                     <>
@@ -514,16 +603,6 @@ export default function ControlCenter() {
                         </div>
                       </div>
                       <span className={`text-[9px] font-medium px-2 py-0.5 rounded-full border ${aiRiskBadgeColor}`}>{aiScore.level || "AI Score"}</span>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-5 text-[9px] text-muted-foreground gap-1 px-1"
-                        onClick={handleGenerateAI}
-                        disabled={aiGenerating}
-                      >
-                        {aiGenerating ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <RefreshCw className="h-2.5 w-2.5" />}
-                        Refresh
-                      </Button>
                     </>
                   ) : (
                     <div className="flex flex-col items-center justify-center" style={{ width: 100, height: 100 }}>
@@ -551,43 +630,8 @@ export default function ControlCenter() {
                 <div
                   className="text-center space-y-1 cursor-pointer hover:bg-muted/30 rounded-lg p-2 -m-2 transition-colors"
                   onClick={() => {
-                    if (sessions.length > 0) {
-                      setDrillDown({
-                        title: "Match Rate — Reconciliation",
-                        description: `${sessions.length} session(s) · ${reconStats.totalMatched + reconStats.totalFlagged} items processed`,
-                        transactions: flaggedItems.map((item: any) => ({
-                          ...item,
-                          transaction_date: item.source_a_date || item.source_b_date || null,
-                          description: item.source_a_desc || item.source_b_desc || item.flag_type || "Flagged item",
-                          amount: item.source_a_amount ?? item.source_b_amount ?? item.difference ?? 0,
-                        })),
-                        summary: [
-                          { label: "Match Rate", value: `${reconStats.matchRate.toFixed(1)}%` },
-                          { label: "Matched", value: String(reconStats.totalMatched) },
-                          { label: "Flagged", value: String(reconStats.totalFlagged) },
-                          { label: "Sessions", value: String(sessions.length) },
-                        ],
-                      });
-                    } else {
-                      navigate("/reconciliation");
-                    }
-                  }}
-                >
-                  <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">
-                    Match Rate
-                  </p>
-                  <p className="text-2xl font-bold text-primary">
-                    {reconStats.matchRate.toFixed(1)}%
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {reconStats.totalMatched + reconStats.totalFlagged} items processed
-                  </p>
-                </div>
-                <div
-                  className="text-center space-y-1 cursor-pointer hover:bg-muted/30 rounded-lg p-2 -m-2 transition-colors"
-                  onClick={() => {
                     {
-                      const allItemsTotal = totalOpen + (breakdown.flaggedRecon || 0) + (breakdown.overdueInvoices || 0) + (breakdown.overdueBills || 0);
+                      const allItemsTotal = totalOpen + (breakdown.overdueInvoices || 0) + (breakdown.overdueBills || 0);
                       if (allItemsTotal > 0) {
                         const openAlerts = riskAlerts.filter((a: any) => a.status === "open" || a.status === "new");
                         const alertTxns = openAlerts.map((a: any) => ({
@@ -596,13 +640,6 @@ export default function ControlCenter() {
                           description: a.title || a.description || a.alert_type || "Risk Alert",
                           amount: a.amount || 0,
                           category: a.alert_type === "anomaly" ? "Anomaly" : `Risk: ${a.severity}`,
-                        }));
-                        const flaggedTxns = flaggedItems.map((f: any) => ({
-                          id: f.id,
-                          transaction_date: f.source_a_date,
-                          description: f.source_a_desc || f.flag_type || "Flagged Item",
-                          amount: f.source_a_amount || f.difference || 0,
-                          category: "Flagged Reconciliation",
                         }));
                         const overdueInvTxns = invoices
                           .filter((i: any) => i.status !== "paid" && i.status !== "cancelled" && i.due_date && new Date(i.due_date) < new Date())
@@ -626,14 +663,13 @@ export default function ControlCenter() {
                         const summaryItems: { label: string; value: string }[] = [];
                         if (breakdown.riskAlerts > 0) summaryItems.push({ label: "Risk Alerts", value: String(breakdown.riskAlerts) });
                         if (breakdown.anomalies > 0) summaryItems.push({ label: "Anomalies", value: String(breakdown.anomalies) });
-                        if (breakdown.flaggedRecon > 0) summaryItems.push({ label: "Flagged Reconciliation", value: String(breakdown.flaggedRecon) });
                         if (breakdown.overdueInvoices > 0) summaryItems.push({ label: "Overdue Invoices", value: String(breakdown.overdueInvoices) });
                         if (breakdown.overdueBills > 0) summaryItems.push({ label: "Overdue Bills", value: String(breakdown.overdueBills) });
 
                         setDrillDown({
                           title: "All Open Alerts",
                           description: `${totalOpen} risk alert(s) + ${allItemsTotal - totalOpen} flags requiring attention`,
-                          transactions: [...alertTxns, ...flaggedTxns, ...overdueInvTxns, ...overdueBillTxns],
+                          transactions: [...alertTxns, ...overdueInvTxns, ...overdueBillTxns],
                           summary: summaryItems,
                         });
                       } else {
@@ -731,39 +767,6 @@ export default function ControlCenter() {
                     : "text-muted-foreground",
             },
             {
-              label: "Match Rate",
-              value: `${reconStats.matchRate.toFixed(1)}%`,
-              icon: GitCompareArrows,
-              trend: null as number | null,
-              onClick: () => {
-                if (sessions.length > 0) {
-                  setDrillDown({
-                    title: "Match Rate — Reconciliation",
-                    description: `${sessions.length} session(s) · ${reconStats.totalMatched + reconStats.totalFlagged} items processed`,
-                    transactions: flaggedItems.map((item: any) => ({
-                      ...item,
-                      transaction_date: item.source_a_date || item.source_b_date || null,
-                      description: item.source_a_desc || item.source_b_desc || item.flag_type || "Flagged item",
-                      amount: item.source_a_amount ?? item.source_b_amount ?? item.difference ?? 0,
-                    })),
-                    summary: [
-                      { label: "Match Rate", value: `${reconStats.matchRate.toFixed(1)}%` },
-                      { label: "Matched", value: String(reconStats.totalMatched) },
-                      { label: "Flagged", value: String(reconStats.totalFlagged) },
-                    ],
-                  });
-                } else {
-                  navigate("/reconciliation");
-                }
-              },
-              color:
-                reconStats.matchRate >= 90
-                  ? "text-green-600"
-                  : reconStats.matchRate >= 70
-                    ? "text-amber-500"
-                    : "text-muted-foreground",
-            },
-            {
               label: "Expenses",
               value: <FC amount={totalExpenses} currency={currency} />,
               icon: TrendingDown,
@@ -808,7 +811,35 @@ export default function ControlCenter() {
               },
               color: "text-primary",
             },
-          ].map((kpi) => (
+            {
+              label: "Total Profit",
+              value: <FC amount={grossProfit} currency={currency} />,
+              icon: Coins,
+              trend: null as number | null,
+              subtitle: (
+                <span className="text-[11px] text-muted-foreground">
+                  After 5% VAT: <FC amount={netProfitAfterVAT} currency={currency} />
+                </span>
+              ),
+              onClick: () => {
+                setDrillDown({
+                  title: "Total Profit — VAT Breakdown",
+                  description: "Gross profit and net-of-VAT profit for the selected period",
+                  transactions: recentTxns,
+                  summary: [
+                    { label: "Total Revenue (VAT-inclusive)", value: <FC amount={totalRevenue} currency={currency} /> },
+                    { label: "Total Expenses (VAT-inclusive)", value: <FC amount={totalExpenses} currency={currency} /> },
+                    { label: "Gross Profit", value: <FC amount={grossProfit} currency={currency} /> },
+                    { label: "Output VAT (5%)", value: <FC amount={(totalRevenue * 0.05) / 1.05} currency={currency} /> },
+                    { label: "Input VAT (5%)", value: <FC amount={(totalExpenses * 0.05) / 1.05} currency={currency} /> },
+                    { label: "Net VAT Payable to FTA", value: <FC amount={vatPayable} currency={currency} /> },
+                    { label: "Net Profit (after VAT)", value: <FC amount={netProfitAfterVAT} currency={currency} /> },
+                  ],
+                });
+              },
+              color: grossProfit >= 0 ? "text-emerald-600" : "text-red-500",
+            },
+          ].map((kpi: any) => (
             <Card
               key={kpi.label}
               className="stat-card-hover cursor-pointer group"
@@ -838,6 +869,7 @@ export default function ControlCenter() {
                     </span>
                   )}
                 </div>
+                {kpi.subtitle && <div className="mt-1">{kpi.subtitle}</div>}
               </CardContent>
             </Card>
           ))}
@@ -943,137 +975,136 @@ export default function ControlCenter() {
             </CardContent>
           </Card>
 
-          {/* Reconciliation — PieChart donut */}
+          {/* Taxation */}
+          <Card className="stat-card-hover cursor-pointer" onClick={() => navigate("/reports")}>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium">Tax Vat Calculation</CardTitle>
+                <Landmark className="h-4 w-4 text-muted-foreground" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div
+                className="flex items-center gap-2 mb-3"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Input
+                  type="date"
+                  value={taxFrom}
+                  onChange={(e) => setTaxFrom(e.target.value)}
+                  className="h-8 text-xs"
+                />
+                <span className="text-xs text-muted-foreground">to</span>
+                <Input
+                  type="date"
+                  value={taxTo}
+                  onChange={(e) => setTaxTo(e.target.value)}
+                  className="h-8 text-xs"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Revenue</span>
+                  <span className="font-medium"><FC amount={taxRevenue} currency={currency} /></span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Profit (Revenue − Expenses)</span>
+                  <span className={taxProfit >= 0 ? "text-emerald-600 font-medium" : "text-red-500 font-medium"}>
+                    <FC amount={taxProfit} currency={currency} />
+                  </span>
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <Receipt className="h-3.5 w-3.5 text-amber-600" />
+                    VAT ({vatRate}% of Revenue)
+                  </span>
+                  <span className="text-amber-600 font-medium"><FC amount={vatAmount} currency={currency} /></span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <Landmark className="h-3.5 w-3.5 text-amber-600" />
+                    Corporate Tax ({ctRate}% of Profit)
+                  </span>
+                  <span className="text-amber-600 font-medium"><FC amount={corporateTax} currency={currency} /></span>
+                </div>
+              </div>
+
+              <p className="text-[10px] text-muted-foreground text-center mt-3">
+                Edit rates in Reports → Taxation
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Cash Position */}
           <Card
-            className="stat-card-hover chart-enter cursor-pointer"
+            className="stat-card-hover cursor-pointer"
             onClick={() => {
-              if (sessions.length > 0) {
-                setDrillDown({
-                  title: "Reconciliation Summary",
-                  description: `${sessions.length} session(s) completed`,
-                  transactions: flaggedItems.map((item: any) => ({
-                    ...item,
-                    transaction_date: item.source_a_date || item.source_b_date || null,
-                    description: item.source_a_desc || item.source_b_desc || item.flag_type || "—",
-                    amount: item.source_a_amount ?? item.source_b_amount ?? item.difference ?? 0,
-                  })),
-                  summary: [
-                    { label: "Matched", value: String(reconStats.totalMatched) },
-                    { label: "Flagged", value: String(reconStats.totalFlagged) },
-                    { label: "Match Rate", value: `${reconStats.matchRate.toFixed(1)}%` },
-                  ],
-                });
-              } else {
-                navigate("/reconciliation");
-              }
+              const activeBanks = bankAccounts.filter((a: any) => a.is_active);
+              setDrillDown({
+                title: "Cash Position — Account Details",
+                description: `${activeBanks.length} active account(s) · ${recentTxns.length} transactions`,
+                transactions: recentTxns.slice(0, 100),
+                summary: [
+                  { label: "Total Balance", value: <FC amount={totalBalance} currency={currency} /> },
+                  { label: "Accounts", value: String(activeBanks.length) },
+                  { label: "Net Flow", value: <FC amount={recentTxns.reduce((s: number, t: any) => s + (t.amount || 0), 0)} currency={currency} /> },
+                ],
+              });
             }}
           >
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium">
-                  Reconciliation
+                  Cash Position
                 </CardTitle>
-                <GitCompareArrows className="h-4 w-4 text-muted-foreground" />
+                <Landmark className="h-4 w-4 text-muted-foreground" />
               </div>
             </CardHeader>
             <CardContent>
-              {sessions.length === 0 && recentTxns.length === 0 && !txnLoading ? (
+              {bankAccounts.length === 0 ? (
                 <EmptyState
-                  icon={GitCompareArrows}
-                  text="No reconciliations yet"
-                  cta="Upload a bank statement to start"
+                  icon={Landmark}
+                  text="No bank data yet"
+                  cta="Upload your first bank statement to get started"
                   onClick={() => navigate("/integrations")}
                 />
-              ) : sessions.length === 0 ? (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-full bg-amber-50 p-2">
-                      <GitCompareArrows className="h-5 w-5 text-amber-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">Ready to reconcile</p>
-                      <p className="text-xs text-muted-foreground">
-                        {recentTxns.length} transactions available
-                      </p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-center">
-                    <div className="p-2 rounded bg-muted/50">
-                      <p className="text-lg font-bold text-primary">
-                        {recentTxns.filter((t: any) => t.amount > 0).length}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">Credits</p>
-                    </div>
-                    <div className="p-2 rounded bg-muted/50">
-                      <p className="text-lg font-bold text-red-500">
-                        {recentTxns.filter((t: any) => t.amount < 0).length}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">Debits</p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full text-xs"
-                    onClick={(e) => { e.stopPropagation(); navigate("/reconciliation"); }}
-                  >
-                    Start Reconciliation <ArrowRight className="h-3 w-3 ml-1" />
-                  </Button>
-                </div>
               ) : (
-                <div className="flex items-center gap-6">
-                  <ChartContainer
-                    config={reconChartConfig}
-                    className="h-[160px] w-[160px] shrink-0 !aspect-square"
-                  >
-                    <PieChart>
-                      <Pie
-                        data={reconPieData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={48}
-                        outerRadius={68}
-                        paddingAngle={3}
-                        dataKey="value"
-                        strokeWidth={0}
-                      >
-                        {reconPieData.map((entry, i) => (
-                          <Cell key={i} fill={entry.fill} />
-                        ))}
-                      </Pie>
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                    </PieChart>
-                  </ChartContainer>
-                  <div className="flex-1 space-y-3">
-                    <div>
-                      <span className="text-3xl font-bold text-primary">
-                        {reconStats.matchRate.toFixed(0)}%
-                      </span>
-                      <span className="text-sm text-muted-foreground ml-1">
-                        match rate
-                      </span>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-[hsl(143_44%_28%)]" />
-                        <span className="text-sm flex-1">Matched</span>
-                        <span className="font-semibold text-sm">
-                          {reconStats.totalMatched}
+                <div className="space-y-3">
+                  {Object.entries(cashPosition).map(([cur, total]) => (
+                    <div key={cur}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                          {cur}
+                        </span>
+                        <span className="text-lg font-bold">
+                          <FC amount={total} currency={cur} />
                         </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-[hsl(45_93%_47%)]" />
-                        <span className="text-sm flex-1">Flagged</span>
-                        <span className="font-semibold text-sm text-amber-600">
-                          {reconStats.totalFlagged}
-                        </span>
-                      </div>
+                      <Progress value={100} className="h-1.5" />
                     </div>
-                    <Separator />
-                    <p className="text-xs text-muted-foreground">
-                      {sessions.length} session
-                      {sessions.length !== 1 && "s"} completed
-                    </p>
+                  ))}
+                  <Separator />
+                  <div className="space-y-1.5 max-h-[100px] overflow-y-auto">
+                    {bankAccounts
+                      .filter((a: any) => a.is_active)
+                      .map((a: any) => (
+                        <div
+                          key={a.id}
+                          className="flex items-center justify-between text-xs"
+                        >
+                          <span className="text-muted-foreground truncate">
+                            {a.bank_name}
+                            {a.account_number
+                              ? ` ···${a.account_number.slice(-4)}`
+                              : ""}
+                          </span>
+                          <span className="font-medium">
+                            <FC amount={a.current_balance} currency={a.currency} />
+                          </span>
+                        </div>
+                      ))}
                   </div>
                 </div>
               )}
@@ -1082,7 +1113,7 @@ export default function ControlCenter() {
 
           {/* AR Exposure */}
           <Card
-            className="stat-card-hover cursor-pointer"
+            className="stat-card-hover cursor-pointer self-start"
             onClick={() => {
               const unpaid = invoices.filter((i: any) => i.status !== "paid" && i.status !== "cancelled");
               setDrillDown({
@@ -1206,280 +1237,6 @@ export default function ControlCenter() {
             </CardContent>
           </Card>
 
-          {/* Open Mismatches */}
-          <Card
-            className="stat-card-hover cursor-pointer"
-            onClick={() => {
-              if (flaggedItems.length > 0) {
-                const byType: Record<string, any[]> = {};
-                flaggedItems.forEach((item: any) => {
-                  const t = item.flag_type || "unmatched";
-                  (byType[t] = byType[t] || []).push(item);
-                });
-                const totalAmt = flaggedItems.reduce((s: number, i: any) => {
-                  const amt = Math.abs(i.source_a_amount ?? i.source_b_amount ?? i.difference ?? 0);
-                  return s + amt;
-                }, 0);
-                setDrillDown({
-                  title: "Open Mismatches",
-                  description: `${flaggedItems.length} unresolved flagged item(s) totaling ${formatAmount(totalAmt, currency)}`,
-                  transactions: flaggedItems.map((i: any) => ({
-                    id: i.id,
-                    transaction_date: i.source_a_date || i.source_b_date,
-                    description: i.source_a_desc || i.source_b_desc || i.flag_type || "Mismatch",
-                    amount: i.source_a_amount ?? i.source_b_amount ?? i.difference ?? 0,
-                    category: FLAG_LABELS[i.flag_type] || i.flag_type || "Flagged",
-                  })),
-                  summary: [
-                    { label: "Total Flagged", value: String(flaggedItems.length) },
-                    { label: "Total Amount", value: <FC amount={totalAmt} currency={currency} /> },
-                    { label: "Types", value: String(Object.keys(byType).length) },
-                  ],
-                });
-              } else {
-                navigate("/reconciliation");
-              }
-            }}
-          >
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium">
-                  Open Mismatches
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  {flaggedItems.length > 0 && (
-                    <Badge variant="destructive" className="text-[10px] h-5">
-                      {flaggedItems.length}
-                    </Badge>
-                  )}
-                  <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {flaggedItems.length === 0 ? (
-                <div className="flex items-center gap-3 py-6 justify-center">
-                  <div className="rounded-full bg-green-50 p-3">
-                    <CheckCircle2 className="h-6 w-6 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-green-600">No open mismatches</p>
-                    <p className="text-xs text-muted-foreground">All items reconciled</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {flaggedItems
-                    .filter((item: any) => {
-                      const amt = Math.abs(item.source_a_amount ?? item.source_b_amount ?? item.difference ?? 0);
-                      return amt > 0;
-                    })
-                    .slice(0, 5)
-                    .map((item: any) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center gap-2 text-xs py-1.5 border-b border-muted last:border-0"
-                    >
-                      <Badge
-                        variant="outline"
-                        className={`text-[9px] shrink-0 ${
-                          item.flag_type?.includes("missing") ? "text-red-600 border-red-200" :
-                          item.flag_type === "duplicate_suspect" ? "text-purple-600 border-purple-200" :
-                          item.flag_type === "large_transaction" ? "text-red-600 border-red-200" :
-                          item.flag_type === "round_amount" ? "text-blue-600 border-blue-200" :
-                          "text-amber-600 border-amber-200"
-                        }`}
-                      >
-                        {FLAG_LABELS[item.flag_type] || item.flag_type || "Flagged"}
-                      </Badge>
-                      <span className="truncate flex-1 text-muted-foreground">
-                        {(item.source_a_desc || item.source_b_desc || "Mismatch").slice(0, 40)}
-                      </span>
-                      <span className="font-semibold shrink-0">
-                        <FC amount={Math.abs(item.source_a_amount ?? item.source_b_amount ?? item.difference ?? 0)} currency={currency} />
-                      </span>
-                    </div>
-                  ))}
-                  {flaggedItems.filter((i: any) => Math.abs(i.source_a_amount ?? i.source_b_amount ?? i.difference ?? 0) === 0).length > 0 && (
-                    <p className="text-[10px] text-muted-foreground">
-                      +{flaggedItems.filter((i: any) => Math.abs(i.source_a_amount ?? i.source_b_amount ?? i.difference ?? 0) === 0).length} items with zero amount
-                    </p>
-                  )}
-                  {flaggedItems.length > 5 && (
-                    <Button
-                      variant="link"
-                      size="sm"
-                      className="px-0 text-xs"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate("/reconciliation");
-                      }}
-                    >
-                      View all {flaggedItems.length} mismatches
-                      <ArrowRight className="h-3 w-3 ml-1" />
-                    </Button>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Cash Position */}
-          <Card
-            className="stat-card-hover cursor-pointer"
-            onClick={() => {
-              const activeBanks = bankAccounts.filter((a: any) => a.is_active);
-              setDrillDown({
-                title: "Cash Position — Account Details",
-                description: `${activeBanks.length} active account(s) · ${recentTxns.length} transactions`,
-                transactions: recentTxns.slice(0, 100),
-                summary: [
-                  { label: "Total Balance", value: <FC amount={totalBalance} currency={currency} /> },
-                  { label: "Accounts", value: String(activeBanks.length) },
-                  { label: "Net Flow", value: <FC amount={recentTxns.reduce((s: number, t: any) => s + (t.amount || 0), 0)} currency={currency} /> },
-                ],
-              });
-            }}
-          >
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium">
-                  Cash Position
-                </CardTitle>
-                <Landmark className="h-4 w-4 text-muted-foreground" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              {bankAccounts.length === 0 ? (
-                <EmptyState
-                  icon={Landmark}
-                  text="No bank accounts connected"
-                  cta="Connect a bank account"
-                  onClick={() => navigate("/integrations")}
-                />
-              ) : (
-                <div className="space-y-3">
-                  {Object.entries(cashPosition).map(([cur, total]) => (
-                    <div key={cur}>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
-                          {cur}
-                        </span>
-                        <span className="text-lg font-bold">
-                          <FC amount={total} currency={cur} />
-                        </span>
-                      </div>
-                      <Progress value={100} className="h-1.5" />
-                    </div>
-                  ))}
-                  <Separator />
-                  <div className="space-y-1.5 max-h-[100px] overflow-y-auto">
-                    {bankAccounts
-                      .filter((a: any) => a.is_active)
-                      .map((a: any) => (
-                        <div
-                          key={a.id}
-                          className="flex items-center justify-between text-xs"
-                        >
-                          <span className="text-muted-foreground truncate">
-                            {a.bank_name}
-                            {a.account_number
-                              ? ` ···${a.account_number.slice(-4)}`
-                              : ""}
-                          </span>
-                          <span className="font-medium">
-                            <FC amount={a.current_balance} currency={a.currency} />
-                          </span>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Active Alerts */}
-          <Card className="stat-card-hover">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium">
-                  Active Alerts
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  {totalOpen > 0 && (
-                    <Badge variant="destructive" className="text-[10px] h-5">
-                      {totalOpen}
-                    </Badge>
-                  )}
-                  <ShieldAlert className="h-4 w-4 text-muted-foreground" />
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {totalOpen === 0 && breakdown.flaggedRecon === 0 && breakdown.overdueInvoices === 0 && breakdown.overdueBills === 0 ? (
-                <div className="flex items-center gap-3 py-6 justify-center">
-                  <div className="rounded-full bg-green-50 p-3">
-                    <CheckCircle2 className="h-6 w-6 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-green-600">
-                      All Clear
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      No active alerts
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {([
-                    { label: "Risk Alerts", count: breakdown.riskAlerts, icon: ShieldAlert, color: "text-red-500", bg: "bg-red-50", route: "/risk" },
-                    { label: "Anomalies", count: breakdown.anomalies, icon: Zap, color: "text-purple-500", bg: "bg-purple-50", route: "/risk" },
-                    { label: "Flagged Reconciliation", count: breakdown.flaggedRecon, icon: FileWarning, color: "text-amber-500", bg: "bg-amber-50", route: "/reconciliation" },
-                    { label: "Overdue Invoices", count: breakdown.overdueInvoices, icon: Clock, color: "text-orange-500", bg: "bg-orange-50", route: "/revenue" },
-                    { label: "Overdue Bills", count: breakdown.overdueBills, icon: Clock, color: "text-rose-500", bg: "bg-rose-50", route: "/expenses" },
-                  ])
-                    .filter((s) => s.count > 0)
-                    .map((item) => {
-                      const Icon = item.icon;
-                      return (
-                        <div
-                          key={item.label}
-                          className="flex items-center gap-2.5 p-1.5 -mx-1.5 rounded-md cursor-pointer hover:bg-muted/50 transition-colors"
-                          onClick={() => navigate(item.route)}
-                        >
-                          <div className={`rounded-md p-1 ${item.bg} shrink-0`}>
-                            <Icon className={`h-3.5 w-3.5 ${item.color}`} />
-                          </div>
-                          <span className="text-sm flex-1">{item.label}</span>
-                          <Badge
-                            variant="outline"
-                            className={`text-[10px] h-5 ${item.color} border-current/20`}
-                          >
-                            {item.count}
-                          </Badge>
-                        </div>
-                      );
-                    })}
-                  {/* Severity sub-row for risk alerts */}
-                  {breakdown.riskAlerts > 0 && (bySeverity.critical > 0 || bySeverity.high > 0) && (
-                    <div className="flex items-center gap-1.5 pl-8 mt-0.5">
-                      {bySeverity.critical > 0 && (
-                        <Badge variant="outline" className="text-[9px] h-4 text-red-600 border-red-200">
-                          {bySeverity.critical} critical
-                        </Badge>
-                      )}
-                      {bySeverity.high > 0 && (
-                        <Badge variant="outline" className="text-[9px] h-4 text-orange-600 border-orange-200">
-                          {bySeverity.high} high
-                        </Badge>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
         </div>
 
         {/* ── System Health ── */}
@@ -1500,12 +1257,6 @@ export default function ControlCenter() {
                 active={connections.length > 0}
                 icon={Plug}
                 label={`Integrations: ${connections.length > 0 ? `${connections.length} connected` : "None"}`}
-              />
-              <Separator orientation="vertical" className="h-5 hidden sm:block" />
-              <StatusDot
-                active={sessions.length > 0}
-                icon={GitCompareArrows}
-                label={`Reconciliation: ${sessions.length > 0 ? `${sessions.length} sessions` : "Not started"}`}
               />
               {connections.slice(0, 3).map((conn: any) => (
                 <span key={conn.id} className="contents">
@@ -1663,9 +1414,6 @@ export default function ControlCenter() {
               <div className="rounded-lg bg-muted/50 p-3 space-y-2">
                 <p className="text-xs font-medium">How to improve your score</p>
                 <ul className="text-[10px] text-muted-foreground leading-relaxed list-disc list-inside space-y-1">
-                  {riskScore < 100 && reconStats.matchRate < 90 && (
-                    <li>Run reconciliation sessions to increase match rate above 90%</li>
-                  )}
                   {totalOpen > 0 && (
                     <li>Resolve {totalOpen} open risk alert(s) — especially {bySeverity.critical} critical</li>
                   )}
@@ -1679,19 +1427,11 @@ export default function ControlCenter() {
                     <li>Upload at least one bank statement to earn data freshness points</li>
                   )}
                   {riskScore >= 90 && (
-                    <li>Your risk score is excellent! Continue regular reconciliations to maintain it.</li>
+                    <li>Your risk score is excellent! Keep reviewing alerts and clearing overdue items to maintain it.</li>
                   )}
                 </ul>
               </div>
 
-              <Button
-                variant="outline"
-                className="w-full text-xs"
-                onClick={() => { setDrillDown(null); navigate("/risk"); }}
-              >
-                Open Risk Monitor
-                <ArrowRight className="h-3.5 w-3.5 ml-2" />
-              </Button>
             </div>
           </SheetContent>
         </Sheet>
@@ -1855,16 +1595,6 @@ export default function ControlCenter() {
                 })}
               </div>
 
-              <Separator />
-
-              <Button
-                variant="outline"
-                className="w-full text-xs"
-                onClick={() => { setDrillDown(null); navigate("/risk"); }}
-              >
-                Open Risk Monitor for Full Analysis
-                <ArrowRight className="h-3.5 w-3.5 ml-2" />
-              </Button>
             </div>
           </SheetContent>
         </Sheet>

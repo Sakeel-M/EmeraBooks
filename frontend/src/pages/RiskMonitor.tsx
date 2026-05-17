@@ -374,7 +374,6 @@ function RiskOverviewTab() {
               <ChecklistItem label="Bank accounts detected" done={bankAccounts.length > 0} />
               <ChecklistItem label="Bills/Vendors synced" done={bills.length > 0} />
               <ChecklistItem label="Invoices/Customers synced" done={invoices.length > 0} />
-              <ChecklistItem label="Reconciliation run" done={flaggedItems.length > 0 || alerts.some((a: any) => a.alert_type?.includes("reconciliation"))} />
               <ChecklistItem label="No critical alerts" done={riskAlerts.critical === 0} />
               <ChecklistItem label="No overdue payables" done={overdueAP === 0} />
               <ChecklistItem label="No overdue receivables" done={overdueAR === 0} />
@@ -1477,10 +1476,6 @@ function UnresolvedMismatchesTab() {
         <Badge variant="destructive" className="text-xs">
           {items.length} unresolved
         </Badge>
-        <Button size="sm" variant="outline" className="gap-1.5 text-xs ml-auto" onClick={() => navigate("/reconciliation")}>
-          <ExternalLink className="h-3.5 w-3.5" />
-          Go to Reconciliation
-        </Button>
       </div>
 
       <Card>
@@ -1615,13 +1610,10 @@ function ControlCompletionTab() {
     const hasAnyRecon = reconSessions.length > 0;
 
     return [
-      { label: "Bank reconciliation completed this month", done: reconThisMonth },
       { label: "All risk alerts addressed", done: allAlertsAddressed, detail: openAlerts.length > 0 ? `${openAlerts.length} open` : undefined },
       { label: "All flagged items resolved", done: allFlagsResolved, detail: unresolvedFlags.length > 0 ? `${unresolvedFlags.length} unresolved` : undefined },
-      { label: "All bank accounts reconciled (within 30 days)", done: allAccountsReconciled },
       { label: "Chart of Accounts configured", done: coaSetUp },
       { label: "Bank accounts connected", done: banksConnected },
-      { label: "Reconciliation process started", done: hasAnyRecon },
     ];
   }, [reconSessions, alerts, flaggedItems, bankAccounts, accounts]);
 

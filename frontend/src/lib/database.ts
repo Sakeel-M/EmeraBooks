@@ -136,7 +136,63 @@ export interface RiskAlert {
 
 // ── Database Operations (all via Flask API) ─────────────────────────────
 
+export interface OrgSubscription {
+  id: string;
+  org_id: string;
+  billing_email: string;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  plan_tier: "starter" | "pro" | null;
+  status: "active" | "trialing" | "past_due" | "canceled" | "incomplete" | "unpaid";
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+  created_at: string;
+  updated_at: string;
+  my_role?: "owner" | "admin" | "member";
+}
+
+export interface BillingInvoice {
+  id: string;
+  number: string | null;
+  status: string;
+  amount_due: number;
+  amount_paid: number;
+  currency: string;
+  created: number;
+  period_start: number;
+  period_end: number;
+  hosted_invoice_url: string | null;
+  invoice_pdf: string | null;
+  description: string | null;
+}
+
 export const database = {
+
+  // ── Billing / Stripe ─────────────────────────────────────────────────
+
+  async getSubscription(): Promise<OrgSubscription | null> {
+    return flaskApi.get<OrgSubscription | null>("/billing/subscription");
+  },
+
+  async createCheckoutSession(plan: "starter" | "pro"): Promise<{ url: string }> {
+    return flaskApi.post<{ url: string }>("/billing/checkout", { plan });
+  },
+
+  async openBillingPortal(): Promise<{ url: string }> {
+    return flaskApi.post<{ url: string }>("/billing/portal", {});
+  },
+
+  async cancelSubscription(): Promise<OrgSubscription> {
+    return flaskApi.post<OrgSubscription>("/billing/cancel", {});
+  },
+
+  async reactivateSubscription(): Promise<OrgSubscription> {
+    return flaskApi.post<OrgSubscription>("/billing/reactivate", {});
+  },
+
+  async getBillingInvoices(): Promise<{ invoices: BillingInvoice[] }> {
+    return flaskApi.get<{ invoices: BillingInvoice[] }>("/billing/invoices");
+  },
 
   // ── Organization & Client ────────────────────────────────────────────
 
@@ -399,6 +455,32 @@ export const database = {
     return flaskApi.post<any>(`/clients/${clientId}/invoices`, data);
   },
 
+  // ── Journal Entries ──────────────────────────────────────────────────
+
+  async getJournalEntries(
+    clientId: string,
+    options?: { startDate?: string; endDate?: string; accountId?: string },
+  ): Promise<any[]> {
+    const params = new URLSearchParams();
+    if (options?.startDate) params.set("start_date", options.startDate);
+    if (options?.endDate) params.set("end_date", options.endDate);
+    if (options?.accountId) params.set("account_id", options.accountId);
+    const qs = params.toString();
+    return flaskApi.get<any[]>(`/clients/${clientId}/journal-entries${qs ? `?${qs}` : ""}`);
+  },
+
+  async createJournalEntry(clientId: string, data: any): Promise<any> {
+    return flaskApi.post<any>(`/clients/${clientId}/journal-entries`, data);
+  },
+
+  async updateJournalEntry(entryId: string, data: any): Promise<any> {
+    return flaskApi.patch<any>(`/journal-entries/${entryId}`, data);
+  },
+
+  async deleteJournalEntry(entryId: string): Promise<void> {
+    await flaskApi.del(`/journal-entries/${entryId}`);
+  },
+
   // ── Bills ────────────────────────────────────────────────────────────
 
   async getBills(clientId: string, options?: { status?: string; startDate?: string; endDate?: string; source?: string }): Promise<any[]> {
@@ -544,5 +626,24 @@ export const database = {
 
   async setControlSetting(clientId: string, key: string, value: any): Promise<void> {
     await flaskApi.put(`/clients/${clientId}/settings/${key}`, { setting_value: value });
+  },
+
+  // ── Single-document parser (Add Invoice/Bill Receipt dialogs) ────────
+  async parseDocument(
+    file: File,
+    kind: "invoice" | "bill",
+  ): Promise<{
+    counterparty_name?: string | null;
+    doc_number?: string | null;
+    doc_date?: string | null;
+    subtotal?: number | null;
+    tax_amount?: number | null;
+    total?: number | null;
+    currency?: string | null;
+  }> {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("kind", kind);
+    return flaskApi.postForm<any>("/parse-document", fd);
   },
 };

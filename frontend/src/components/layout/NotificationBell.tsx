@@ -29,7 +29,7 @@ export function NotificationBell() {
           variant="ghost"
           size="icon"
           className="relative"
-          onClick={() => navigate("/risk")}
+          onClick={() => navigate("/")}
         >
           <Bell className="h-5 w-5" />
           {totalOpen > 0 && (

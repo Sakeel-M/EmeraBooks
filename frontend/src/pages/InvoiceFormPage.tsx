@@ -46,7 +46,9 @@ import {
   Send,
   Download,
   Copy,
+  Info,
 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useActiveClient } from "@/hooks/useActiveClient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { database } from "@/lib/database";
@@ -58,38 +60,14 @@ import { toast } from "sonner";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-interface LineItem {
-  id: string;
-  description: string;
-  quantity: number;
-  unit_price: number;
-  tax_rate: number;
-}
-
-interface InvoiceProfile {
-  company_name: string;
-  address_line1: string;
-  address_line2: string;
-  city: string;
-  country: string;
-  phone: string;
-  email: string;
-  trn: string;
-  logo_text: string;
-  logo_url: string;
-}
-
-interface InvoiceTemplate {
-  accent_color: string;
-  layout: "classic" | "modern" | "minimal";
-  show_logo: boolean;
-  show_trn: boolean;
-  show_due_date: boolean;
-  show_notes: boolean;
-  show_payment_terms: boolean;
-  footer_text: string;
-  payment_terms: string;
-}
+import {
+  InvoicePreview,
+  DEFAULT_PROFILE,
+  DEFAULT_TEMPLATE,
+  type InvoiceProfile,
+  type InvoiceTemplate,
+  type LineItem,
+} from "@/components/shared/InvoicePreview";
 
 const ACCENT_COLORS = [
   { name: "Blue", value: "#2563eb" },
@@ -100,19 +78,6 @@ const ACCENT_COLORS = [
   { name: "Slate", value: "#475569" },
 ];
 
-const DEFAULT_PROFILE: InvoiceProfile = {
-  company_name: "",
-  address_line1: "",
-  address_line2: "",
-  city: "",
-  country: "UAE",
-  phone: "",
-  email: "",
-  trn: "",
-  logo_text: "",
-  logo_url: "",
-};
-
 function readFileAsDataURL(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -121,18 +86,6 @@ function readFileAsDataURL(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
-
-const DEFAULT_TEMPLATE: InvoiceTemplate = {
-  accent_color: "#2563eb",
-  layout: "classic",
-  show_logo: true,
-  show_trn: true,
-  show_due_date: true,
-  show_notes: true,
-  show_payment_terms: true,
-  footer_text: "Thank you for your business!",
-  payment_terms: "Net 30",
-};
 
 function newLineItem(): LineItem {
   return { id: crypto.randomUUID(), description: "", quantity: 1, unit_price: 0, tax_rate: 5 };
@@ -156,6 +109,8 @@ export default function InvoiceFormPage() {
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState("draft");
   const [lineItems, setLineItems] = useState<LineItem[]>([newLineItem()]);
+  const [taxExempt, setTaxExempt] = useState(false);
+  const [zeroTax, setZeroTax] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
@@ -209,6 +164,8 @@ export default function InvoiceFormPage() {
           setCategory(inv.category || "Professional Services");
           setNotes(inv.notes || "");
           setStatus(inv.status || "draft");
+          setTaxExempt(!!inv.metadata?.tax_exempt);
+          setZeroTax(!!inv.metadata?.zero_tax);
           // Load line items from stored data, or reconstruct from totals
           if (inv.line_items && Array.isArray(inv.line_items) && inv.line_items.length > 0) {
             setLineItems(inv.line_items.map((li: any) => ({
@@ -246,9 +203,12 @@ export default function InvoiceFormPage() {
     () => lineItems.reduce((s, li) => s + li.quantity * li.unit_price, 0),
     [lineItems],
   );
+  const noTax = taxExempt || zeroTax;
   const totalTax = useMemo(
-    () => lineItems.reduce((s, li) => s + li.quantity * li.unit_price * (li.tax_rate / 100), 0),
-    [lineItems],
+    () => noTax
+      ? 0
+      : lineItems.reduce((s, li) => s + li.quantity * li.unit_price * (li.tax_rate / 100), 0),
+    [lineItems, noTax],
   );
   const grandTotal = subtotal + totalTax;
 
@@ -290,9 +250,10 @@ export default function InvoiceFormPage() {
           description: li.description,
           quantity: li.quantity,
           unit_price: li.unit_price,
-          tax_rate: li.tax_rate,
+          tax_rate: noTax ? 0 : li.tax_rate,
         })),
         status: sendStatus || status,
+        metadata: { tax_exempt: taxExempt, zero_tax: zeroTax },
       };
 
       if (editId) {
@@ -430,11 +391,51 @@ export default function InvoiceFormPage() {
             {/* Line Items */}
             <Card>
               <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-3">
                   <CardTitle className="text-sm font-semibold">Line Items</CardTitle>
-                  <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={() => setLineItems([...lineItems, newLineItem()])}>
-                    <Plus className="h-3 w-3" /> Add Item
-                  </Button>
+                  <TooltipProvider delayDuration={150}>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <div className="flex items-center gap-1.5">
+                        <Switch
+                          id="zero-tax"
+                          checked={zeroTax}
+                          onCheckedChange={setZeroTax}
+                        />
+                        <Label htmlFor="zero-tax" className="text-xs cursor-pointer">
+                          Zero Tax
+                        </Label>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs text-xs">
+                            Zero-rates the entire invoice. Per-line tax dropdowns become disabled and the Tax row is hidden from the total. Use this for goods/services with a 0% VAT rate (e.g. exports, certain healthcare, education).
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Switch
+                          id="tax-exempt"
+                          checked={taxExempt}
+                          onCheckedChange={setTaxExempt}
+                        />
+                        <Label htmlFor="tax-exempt" className="text-xs cursor-pointer">
+                          Tax exempt
+                        </Label>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs text-xs">
+                            Marks the invoice as VAT-exempt (outside the scope of VAT) — different from zero-rated. Per-line tax stays at 0 and is hidden from the total. Common for residential rent, local passenger transport, and certain financial services.
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={() => setLineItems([...lineItems, newLineItem()])}>
+                        <Plus className="h-3 w-3" /> Add Item
+                      </Button>
+                    </div>
+                  </TooltipProvider>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -448,7 +449,8 @@ export default function InvoiceFormPage() {
                   <div className="col-span-1"></div>
                 </div>
                 {lineItems.map((li) => {
-                  const lineTotal = li.quantity * li.unit_price * (1 + li.tax_rate / 100);
+                  const effectiveTaxRate = noTax ? 0 : li.tax_rate;
+                  const lineTotal = li.quantity * li.unit_price * (1 + effectiveTaxRate / 100);
                   return (
                     <div key={li.id} className="grid grid-cols-12 gap-2 items-center">
                       <div className="col-span-5">
@@ -480,14 +482,21 @@ export default function InvoiceFormPage() {
                         />
                       </div>
                       <div className="col-span-1">
-                        <Input
-                          type="number"
-                          min="0"
-                          max="100"
-                          value={li.tax_rate}
-                          onChange={(e) => updateLineItem(li.id, "tax_rate", parseFloat(e.target.value) || 0)}
-                          className="text-sm h-9"
-                        />
+                        <Select
+                          value={String(effectiveTaxRate)}
+                          onValueChange={(v) => updateLineItem(li.id, "tax_rate", parseFloat(v) || 0)}
+                          disabled={noTax}
+                        >
+                          <SelectTrigger className="h-9 text-sm px-2">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="5">5%</SelectItem>
+                            <SelectItem value="0">0% (Exempt)</SelectItem>
+                            <SelectItem value="10">10%</SelectItem>
+                            <SelectItem value="15">15%</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="col-span-1 text-right text-sm font-medium">
                         <FC amount={lineTotal} currency={currency} />
@@ -515,10 +524,12 @@ export default function InvoiceFormPage() {
                     <span className="text-muted-foreground">Subtotal</span>
                     <span><FC amount={subtotal} currency={currency} /></span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Tax</span>
-                    <span><FC amount={totalTax} currency={currency} /></span>
-                  </div>
+                  {totalTax > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Tax</span>
+                      <span><FC amount={totalTax} currency={currency} /></span>
+                    </div>
+                  )}
                   <Separator />
                   <div className="flex justify-between font-bold text-base">
                     <span>Total</span>
@@ -559,7 +570,7 @@ export default function InvoiceFormPage() {
           <div className="lg:col-span-2">
             <div className="sticky top-20">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Live Preview</p>
-              <InvoiceLivePreview
+              <InvoicePreview
                 profile={profile}
                 template={template}
                 customerName={customerName}
@@ -806,7 +817,7 @@ export default function InvoiceFormPage() {
             <div className="space-y-2">
               <Label className="text-xs font-semibold">Preview</Label>
               <div className="transform scale-[0.6] origin-top-left -mb-40">
-                <InvoiceLivePreview
+                <InvoicePreview
                   profile={profile}
                   template={template}
                   customerName={customerName || "Sample Customer"}
@@ -838,7 +849,7 @@ export default function InvoiceFormPage() {
             <DialogTitle>Invoice Preview</DialogTitle>
             <DialogDescription>This is how your invoice will look.</DialogDescription>
           </DialogHeader>
-          <InvoiceLivePreview
+          <InvoicePreview
             profile={profile}
             template={template}
             customerName={customerName}
@@ -859,176 +870,3 @@ export default function InvoiceFormPage() {
   );
 }
 
-// ── Live Preview Component ─────────────────────────────────────────────────
-
-function InvoiceLivePreview({
-  profile,
-  template,
-  customerName,
-  invoiceNumber,
-  invoiceDate,
-  dueDate,
-  lineItems,
-  subtotal,
-  totalTax,
-  grandTotal,
-  notes,
-  currency,
-  fmtDate,
-}: {
-  profile: InvoiceProfile;
-  template: InvoiceTemplate;
-  customerName: string;
-  invoiceNumber: string;
-  invoiceDate: string;
-  dueDate: string;
-  lineItems: LineItem[];
-  subtotal: number;
-  totalTax: number;
-  grandTotal: number;
-  notes: string;
-  currency: string;
-  fmtDate: (d: string) => string;
-}) {
-  const accent = template.accent_color;
-  const isModern = template.layout === "modern";
-  const isMinimal = template.layout === "minimal";
-
-  return (
-    <Card className="border shadow-sm overflow-hidden">
-      {/* Top accent bar (classic + modern) */}
-      {!isMinimal && (
-        <div
-          className={isModern ? "w-full h-2" : "w-full h-1"}
-          style={{ backgroundColor: accent }}
-        />
-      )}
-
-      <CardContent className="p-5 space-y-4 text-sm">
-        {/* Header: Company info + INVOICE title */}
-        <div className={`flex ${isModern ? "flex-col gap-3" : "justify-between items-start"}`}>
-          {/* Company */}
-          <div>
-            {template.show_logo && (
-              profile.logo_url ? (
-                <img src={profile.logo_url} alt="Logo" className="h-12 w-auto object-contain mb-1" />
-              ) : profile.logo_text || profile.company_name ? (
-                <p className="font-bold text-lg" style={{ color: accent }}>
-                  {profile.logo_text || profile.company_name}
-                </p>
-              ) : (
-                <div className="w-24 h-8 rounded border-2 border-dashed border-muted-foreground/20 flex items-center justify-center">
-                  <span className="text-[9px] text-muted-foreground">Logo</span>
-                </div>
-              )
-            )}
-            {profile.company_name && (profile.logo_url || (profile.logo_text && profile.company_name !== profile.logo_text)) && (
-              <p className="text-xs font-medium">{profile.company_name}</p>
-            )}
-            {profile.address_line1 && <p className="text-[10px] text-muted-foreground">{profile.address_line1}</p>}
-            {profile.address_line2 && <p className="text-[10px] text-muted-foreground">{profile.address_line2}</p>}
-            {(profile.city || profile.country) && (
-              <p className="text-[10px] text-muted-foreground">
-                {[profile.city, profile.country].filter(Boolean).join(", ")}
-              </p>
-            )}
-            {profile.phone && <p className="text-[10px] text-muted-foreground">{profile.phone}</p>}
-            {profile.email && <p className="text-[10px] text-muted-foreground">{profile.email}</p>}
-            {template.show_trn && profile.trn && (
-              <p className="text-[10px] text-muted-foreground">TRN: {profile.trn}</p>
-            )}
-          </div>
-
-          {/* Invoice meta */}
-          <div className={isModern ? "" : "text-right"}>
-            <p className="font-bold text-xl tracking-tight" style={{ color: accent }}>
-              INVOICE
-            </p>
-            <p className="text-xs font-mono text-muted-foreground">{invoiceNumber || "—"}</p>
-            <p className="text-[10px] text-muted-foreground mt-1">Date: {fmtDate(invoiceDate)}</p>
-            {template.show_due_date && (
-              <p className="text-[10px] text-muted-foreground">Due: {fmtDate(dueDate)}</p>
-            )}
-            {template.show_payment_terms && (
-              <p className="text-[10px] text-muted-foreground">Terms: {template.payment_terms}</p>
-            )}
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* Bill To */}
-        <div>
-          <p className="text-[9px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: accent }}>
-            Bill To
-          </p>
-          <p className="font-medium">{customerName || "—"}</p>
-        </div>
-
-        <Separator />
-
-        {/* Line items table */}
-        <div>
-          <div
-            className="grid grid-cols-12 text-[9px] font-semibold uppercase tracking-wider pb-1.5 mb-1 border-b-2"
-            style={{ borderColor: accent, color: accent }}
-          >
-            <div className="col-span-5">Description</div>
-            <div className="col-span-2 text-right">Qty</div>
-            <div className="col-span-2 text-right">Price</div>
-            <div className="col-span-1 text-right">Tax</div>
-            <div className="col-span-2 text-right">Amount</div>
-          </div>
-          {lineItems.map((li) => (
-            <div key={li.id} className="grid grid-cols-12 text-xs py-1 border-b border-muted/50">
-              <div className="col-span-5 truncate">{li.description || "—"}</div>
-              <div className="col-span-2 text-right">{li.quantity}</div>
-              <div className="col-span-2 text-right"><FC amount={li.unit_price} currency={currency} /></div>
-              <div className="col-span-1 text-right text-muted-foreground">{li.tax_rate}%</div>
-              <div className="col-span-2 text-right font-medium">
-                <FC amount={li.quantity * li.unit_price * (1 + li.tax_rate / 100)} currency={currency} />
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Totals */}
-        <div className="space-y-1 max-w-[200px] ml-auto text-xs">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Subtotal</span>
-            <span><FC amount={subtotal} currency={currency} /></span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Tax</span>
-            <span><FC amount={totalTax} currency={currency} /></span>
-          </div>
-          <div
-            className="flex justify-between font-bold text-sm pt-1 mt-1 border-t-2"
-            style={{ borderColor: accent }}
-          >
-            <span>Total</span>
-            <span style={{ color: accent }}><FC amount={grandTotal} currency={currency} /></span>
-          </div>
-        </div>
-
-        {/* Notes */}
-        {template.show_notes && notes && (
-          <>
-            <Separator />
-            <div>
-              <p className="text-[9px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: accent }}>Notes</p>
-              <p className="text-xs text-muted-foreground whitespace-pre-line">{notes}</p>
-            </div>
-          </>
-        )}
-
-        {/* Footer */}
-        {template.footer_text && (
-          <div className="text-center pt-2 border-t">
-            <p className="text-[10px] text-muted-foreground italic">{template.footer_text}</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}

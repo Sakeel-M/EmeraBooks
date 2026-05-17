@@ -89,7 +89,9 @@ import {
   Copy,
   Merge,
   Trash2,
+  Download,
   Loader2,
+  Pencil,
 } from "lucide-react";
 import { useActiveClient } from "@/hooks/useActiveClient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -102,6 +104,8 @@ import { getCanonicalCategory } from "@/lib/sectorMapping";
 import { toast } from "sonner";
 import { useDateRange } from "@/hooks/useDateRange";
 import { TransactionDetailSheet } from "@/components/shared/TransactionDetailSheet";
+import { DocumentDropzone } from "@/components/shared/DocumentDropzone";
+import { ThankYouBlock } from "./RevenueIntegrity";
 
 // ── Expense Overview Tab ─────────────────────────────────────────────────
 
@@ -146,9 +150,19 @@ function ExpenseOverviewTab() {
     [transactions],
   );
 
+  // Total Expenses = bank-statement outflows + paid manual bills (no PaymentAllocation
+  // dedup yet — same as Revenue. Mirrors the Revenue page behaviour: marking a bill paid
+  // moves the number immediately.)
+  const paidBillTotal = useMemo(
+    () => bills
+      .filter((b: any) => b.status === "paid" && (b.source ?? "manual") === "manual")
+      .reduce((s: number, b: any) => s + Number(b.total || 0), 0),
+    [bills],
+  );
+
   const totalExpenses = useMemo(
-    () => expenseTxns.reduce((s: number, t: any) => s + Math.abs(t.amount), 0),
-    [expenseTxns],
+    () => expenseTxns.reduce((s: number, t: any) => s + Math.abs(t.amount), 0) + paidBillTotal,
+    [expenseTxns, paidBillTotal],
   );
 
   const totalBilled = useMemo(
@@ -318,10 +332,9 @@ function ExpenseOverviewTab() {
           <div className="rounded-full bg-muted p-4 mb-4">
             <TrendingDown className="h-10 w-10 text-muted-foreground/40" />
           </div>
-          <h3 className="text-lg font-semibold mb-2">No Expense Data Yet</h3>
+          <h3 className="text-lg font-semibold mb-2">No expenses yet</h3>
           <p className="text-sm text-muted-foreground max-w-md mb-4">
-            Upload a bank statement or create bills to see your expense overview,
-            trends, and vendor insights.
+            Your spending will appear automatically after your first upload →
           </p>
         </CardContent>
       </Card>
@@ -782,6 +795,551 @@ function ExpenseOverviewTab() {
   );
 }
 
+// ── Bill Receipts Tab — final-state ledger of bills (Paid/Partial/Overdue/Cancelled) ──
+
+function BillReceiptsTab() {
+  const { clientId, currency } = useActiveClient();
+  const { startDate, endDate } = useDateRange();
+  const queryClient = useQueryClient();
+  const [innerTab, setInnerTab] = useState<"paid" | "partial" | "cancelled">("paid");
+  const [selectedBill, setSelectedBill] = useState<any>(null);
+  const [editing, setEditing] = useState<any>(null);
+  const [editSubtotal, setEditSubtotal] = useState(0);
+  const [editTax, setEditTax] = useState(0);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [showAddReceipt, setShowAddReceipt] = useState(false);
+  const [addForm, setAddForm] = useState({
+    vendor_name: "",
+    bill_number: "",
+    bill_date: format(new Date(), "yyyy-MM-dd"),
+    subtotal: "",
+    tax_amount: "0",
+    status: "paid" as "paid" | "partial" | "cancelled",
+  });
+  const [savingAdd, setSavingAdd] = useState(false);
+  const [parsingDoc, setParsingDoc] = useState(false);
+  const [parsedFileName, setParsedFileName] = useState<string | undefined>();
+  const [parseError, setParseError] = useState<string | undefined>();
+
+  const { data: rawBills = [], isFetching } = useQuery({
+    queryKey: ["expense-bills", clientId, startDate || "all", endDate || "all"],
+    queryFn: () => {
+      const opts: any = {};
+      if (startDate) opts.startDate = startDate;
+      if (endDate) opts.endDate = endDate;
+      return database.getBills(clientId!, opts);
+    },
+    enabled: !!clientId,
+  });
+
+  const finalBills = useMemo(
+    () => rawBills.filter((b: any) =>
+      b.status === "paid" || b.status === "partial" || b.status === "cancelled",
+    ),
+    [rawBills],
+  );
+
+  const counts = useMemo(() => {
+    const c = { paid: 0, partial: 0, cancelled: 0 };
+    finalBills.forEach((b: any) => {
+      if (b.status === "paid") c.paid++;
+      else if (b.status === "partial") c.partial++;
+      else if (b.status === "cancelled") c.cancelled++;
+    });
+    return c;
+  }, [finalBills]);
+
+  const totals = useMemo(() => {
+    const t = { paid: 0, partial: 0, cancelled: 0 };
+    finalBills.forEach((b: any) => {
+      const amt = Number(b.total || 0);
+      if (b.status === "paid") t.paid += amt;
+      else if (b.status === "partial") t.partial += amt;
+      else if (b.status === "cancelled") t.cancelled += amt;
+    });
+    return t;
+  }, [finalBills]);
+
+  const visible = useMemo(
+    () => finalBills.filter((b: any) => b.status === innerTab),
+    [finalBills, innerTab],
+  );
+
+  const fmtDate = (d: string | null) => {
+    if (!d) return "—";
+    try { return format(new Date(d), "dd/MM/yyyy"); } catch { return d; }
+  };
+
+  const openEdit = (b: any) => {
+    setEditing(b);
+    setEditSubtotal(Number(b.subtotal || 0));
+    setEditTax(Number(b.tax_amount || 0));
+  };
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    setSavingEdit(true);
+    try {
+      const newTotal = editSubtotal + editTax;
+      await flaskApi.patch(`/bills/${editing.id}`, {
+        subtotal: editSubtotal,
+        tax_amount: editTax,
+        total: newTotal,
+      });
+      queryClient.invalidateQueries({ queryKey: ["expense-bills"] });
+      queryClient.invalidateQueries({ queryKey: ["cc-bills"] });
+      queryClient.invalidateQueries({ queryKey: ["fr-bills"] });
+      queryClient.invalidateQueries({ queryKey: ["exp-txns"] });
+      queryClient.invalidateQueries({ queryKey: ["exp-txns-pay"] });
+      toast.success("Receipt updated");
+      setEditing(null);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update receipt");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const restoreToPending = async (b: any) => {
+    try {
+      await flaskApi.patch(`/bills/${b.id}`, { status: "pending" });
+      queryClient.invalidateQueries({ queryKey: ["expense-bills"] });
+      toast.success(`${b.bill_number || "Bill"} restored to Pending`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to restore");
+    }
+  };
+
+  if (isFetching && finalBills.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Inner status sub-tabs + Add button */}
+      <div className="flex items-center gap-1 border-b pb-px">
+        {(["paid", "partial", "cancelled"] as const).map((s) => {
+          const active = innerTab === s;
+          const label = s.charAt(0).toUpperCase() + s.slice(1);
+          return (
+            <button
+              key={s}
+              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+              onClick={() => setInnerTab(s)}
+            >
+              {label} <span className="text-muted-foreground ml-1.5">{counts[s]}</span>
+            </button>
+          );
+        })}
+        <Button
+          size="sm"
+          className="gap-1.5 ml-auto mb-1"
+          onClick={() => setShowAddReceipt(true)}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add Bill Receipt
+        </Button>
+      </div>
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {(["paid", "partial", "cancelled"] as const).map((s) => {
+          const active = innerTab === s;
+          const colors: Record<typeof s, string> = {
+            paid: "text-emerald-600",
+            partial: "text-amber-600",
+            cancelled: "text-muted-foreground",
+          };
+          return (
+            <Card key={s} className={`${active ? "border-primary" : ""}`}>
+              <CardContent className="p-4">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">{s}</p>
+                <p className={`text-2xl font-bold mt-1 ${colors[s]}`}>
+                  <FC amount={totals[s]} currency={currency} />
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{counts[s]} bill{counts[s] !== 1 ? "s" : ""}</p>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Bill Receipts table */}
+      {visible.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+            <Receipt className="h-10 w-10 text-muted-foreground/40 mb-3" />
+            <h3 className="text-lg font-semibold mb-1">No {innerTab} bills</h3>
+            <p className="text-sm text-muted-foreground">
+              {innerTab === "paid"
+                ? "Mark a bill as paid from the Bills tab to see it here."
+                : innerTab === "partial"
+                ? "No partially-paid bills in this period."
+                : "No cancelled bills in this period."}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0 overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[140px]">Bill #</TableHead>
+                  <TableHead>Vendor</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead className="text-right">Subtotal</TableHead>
+                  <TableHead className="text-right">Tax</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  {innerTab === "paid" && <TableHead>Paid At</TableHead>}
+                  <TableHead className="w-[140px] text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visible.map((b: any) => (
+                  <TableRow
+                    key={b.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => setSelectedBill(b)}
+                  >
+                    <TableCell className="font-mono text-xs">{b.bill_number || "—"}</TableCell>
+                    <TableCell className="font-medium text-sm">{cleanVendorName(b.v2_vendors?.name || b.vendor_name || b.description || b.notes || "—")}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{fmtDate(b.bill_date)}</TableCell>
+                    <TableCell className="text-right text-sm"><FC amount={b.subtotal || 0} currency={currency} /></TableCell>
+                    <TableCell className="text-right text-sm text-muted-foreground"><FC amount={b.tax_amount || 0} currency={currency} /></TableCell>
+                    <TableCell className="text-right text-sm font-semibold"><FC amount={b.total || 0} currency={currency} /></TableCell>
+                    {innerTab === "paid" && (
+                      <TableCell className="text-xs text-muted-foreground">
+                        {b.metadata?.paid_at ? fmtDate(b.metadata.paid_at) : fmtDate(b.updated_at)}
+                      </TableCell>
+                    )}
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => openEdit(b)}
+                        title="Edit amount and tax"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      {(innerTab === "overdue" || innerTab === "cancelled") && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => restoreToPending(b)}
+                          title="Restore to Pending"
+                        >
+                          Restore
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Edit amount/tax dialog */}
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit Receipt</DialogTitle>
+            <DialogDescription>
+              Update the amount and tax for {editing?.bill_number || "this bill receipt"}. Total recalculates automatically.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Subtotal</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={editSubtotal}
+                onChange={(e) => setEditSubtotal(parseFloat(e.target.value) || 0)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Tax</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={editTax}
+                onChange={(e) => setEditTax(parseFloat(e.target.value) || 0)}
+              />
+            </div>
+            <div className="flex justify-between pt-1 border-t">
+              <span className="text-sm font-medium">New Total</span>
+              <span className="text-sm font-bold"><FC amount={editSubtotal + editTax} currency={currency} /></span>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setEditing(null)}>Cancel</Button>
+              <Button size="sm" onClick={saveEdit} disabled={savingEdit}>
+                {savingEdit ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bill receipt detail sheet */}
+      <Sheet open={!!selectedBill} onOpenChange={() => setSelectedBill(null)}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <div className="flex items-center justify-between pr-4">
+              <SheetTitle className="font-mono">{selectedBill?.bill_number || "Bill"}</SheetTitle>
+              {selectedBill && <BillStatusBadge status={selectedBill.status} />}
+            </div>
+            <SheetDescription>
+              {cleanVendorName(selectedBill?.v2_vendors?.name || selectedBill?.vendor_name || selectedBill?.description || selectedBill?.notes || "—")}
+            </SheetDescription>
+          </SheetHeader>
+          {selectedBill && (
+            <div className="space-y-4 pt-4">
+              <div data-print-region>
+                <BillDetail bill={selectedBill} currency={currency} />
+              </div>
+
+              {selectedBill.status === "paid" && (
+                <ThankYouBlock
+                  invoice={selectedBill}
+                  currency={currency}
+                  title="Payment recorded — Bill settled"
+                  closingLine="Bill cleared from accounts payable."
+                />
+              )}
+              {selectedBill.status === "partial" && (
+                <Card className="border-amber-200 bg-amber-50/60 dark:border-amber-800 dark:bg-amber-950/30">
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <AlertTriangle className="h-5 w-5 text-amber-600" />
+                    <div>
+                      <p className="text-sm font-medium text-amber-700 dark:text-amber-300">Partially paid</p>
+                      <p className="text-xs text-amber-700/80 dark:text-amber-300/80">
+                        Some payment received. Mark as Paid once fully settled.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              {selectedBill.status === "cancelled" && (
+                <Card className="border-muted bg-muted/30">
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">Cancelled</p>
+                      <p className="text-xs text-muted-foreground">
+                        Cancelled on {fmtDate(selectedBill.updated_at)}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              {selectedBill.status === "overdue" && (
+                <Card className="border-red-200 bg-red-50/60 dark:border-red-800 dark:bg-red-950/30">
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <AlertTriangle className="h-5 w-5 text-red-500" />
+                    <div>
+                      <p className="text-sm font-medium text-red-700 dark:text-red-300">Overdue</p>
+                      <p className="text-xs text-red-700/80 dark:text-red-300/80">
+                        Due date was {fmtDate(selectedBill.due_date)}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => openEdit(selectedBill)}>
+                  <Pencil className="h-3.5 w-3.5" /> Edit Amount/Tax
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => window.print()}>
+                  <Download className="h-3.5 w-3.5" /> Download
+                </Button>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Add Bill Receipt — quick manual entry */}
+      <Dialog open={showAddReceipt} onOpenChange={setShowAddReceipt}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Bill Receipt</DialogTitle>
+            <DialogDescription>
+              Record a previously-received bill that's already paid, partial, or cancelled.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <DocumentDropzone
+              busy={parsingDoc}
+              filename={parsedFileName}
+              error={parseError}
+              onUpload={async (f) => {
+                setParsingDoc(true);
+                setParseError(undefined);
+                setParsedFileName(f.name);
+                try {
+                  const data = await database.parseDocument(f, "bill");
+                  setAddForm((prev) => ({
+                    ...prev,
+                    vendor_name: data.counterparty_name || prev.vendor_name,
+                    bill_number: data.doc_number || prev.bill_number,
+                    bill_date: data.doc_date || prev.bill_date,
+                    subtotal: data.subtotal != null ? String(data.subtotal) : prev.subtotal,
+                    tax_amount: data.tax_amount != null ? String(data.tax_amount) : prev.tax_amount,
+                  }));
+                  toast.success("Fields auto-filled — please review.");
+                } catch (e: any) {
+                  setParseError(e?.message || "Failed to parse document");
+                  toast.error(e?.message || "Failed to parse document");
+                } finally {
+                  setParsingDoc(false);
+                }
+              }}
+            />
+            <div className="relative flex items-center my-2">
+              <div className="flex-grow border-t border-muted-foreground/20" />
+              <span className="flex-shrink-0 px-3 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                or fill manually
+              </span>
+              <div className="flex-grow border-t border-muted-foreground/20" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Vendor</label>
+              <Input
+                value={addForm.vendor_name}
+                onChange={(e) => setAddForm({ ...addForm, vendor_name: e.target.value })}
+                placeholder="Vendor name"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Bill #</label>
+                <Input
+                  value={addForm.bill_number}
+                  onChange={(e) => setAddForm({ ...addForm, bill_number: e.target.value })}
+                  placeholder="auto"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Date</label>
+                <Input
+                  type="date"
+                  value={addForm.bill_date}
+                  onChange={(e) => setAddForm({ ...addForm, bill_date: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Subtotal</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={addForm.subtotal}
+                  onChange={(e) => setAddForm({ ...addForm, subtotal: e.target.value })}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Tax</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={addForm.tax_amount}
+                  onChange={(e) => setAddForm({ ...addForm, tax_amount: e.target.value })}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Status</label>
+              <div className="flex gap-2">
+                {(["paid", "partial", "cancelled"] as const).map((s) => (
+                  <Button
+                    key={s}
+                    type="button"
+                    variant={addForm.status === s ? "default" : "outline"}
+                    size="sm"
+                    className="flex-1 capitalize"
+                    onClick={() => setAddForm({ ...addForm, status: s })}
+                  >
+                    {s}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-between text-sm pt-2 border-t">
+              <span className="text-muted-foreground">Total</span>
+              <span className="font-bold">
+                <FC amount={(parseFloat(addForm.subtotal) || 0) + (parseFloat(addForm.tax_amount) || 0)} currency={currency} />
+              </span>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowAddReceipt(false)} disabled={savingAdd}>Cancel</Button>
+            <Button
+              disabled={savingAdd || !addForm.vendor_name || !addForm.subtotal}
+              onClick={async () => {
+                if (!clientId) return;
+                setSavingAdd(true);
+                try {
+                  const subtotal = parseFloat(addForm.subtotal) || 0;
+                  const tax = parseFloat(addForm.tax_amount) || 0;
+                  const billNumber = addForm.bill_number || `BILL-${format(new Date(), "yyyyMM")}-${String(finalBills.length + 1).padStart(3, "0")}`;
+                  await database.createBill(clientId, {
+                    vendor_name: addForm.vendor_name,
+                    bill_number: billNumber,
+                    bill_date: addForm.bill_date,
+                    due_date: addForm.bill_date,
+                    subtotal,
+                    tax_amount: tax,
+                    total: subtotal + tax,
+                    status: addForm.status,
+                  } as any);
+                  queryClient.invalidateQueries({ queryKey: ["expense-bills"] });
+                  queryClient.invalidateQueries({ queryKey: ["cc-bills"] });
+                  queryClient.invalidateQueries({ queryKey: ["fr-bills"] });
+                  toast.success(`Receipt ${billNumber} saved`);
+                  setShowAddReceipt(false);
+                  setAddForm({
+                    vendor_name: "",
+                    bill_number: "",
+                    bill_date: format(new Date(), "yyyy-MM-dd"),
+                    subtotal: "",
+                    tax_amount: "0",
+                    status: "paid",
+                  });
+                  setParsedFileName(undefined);
+                  setParseError(undefined);
+                } catch (err: any) {
+                  toast.error(err?.message || "Failed to save receipt");
+                } finally {
+                  setSavingAdd(false);
+                }
+              }}
+            >
+              {savingAdd ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Receipt"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 // ── Bills Tab ──────────────────────────────────────────────────────────────
 
 function BillsTab() {
@@ -807,7 +1365,7 @@ function BillsTab() {
     category: "Other",
   });
 
-  const { data: bills = [] } = useQuery({
+  const { data: rawBills = [] } = useQuery({
     queryKey: ["expense-bills", clientId, startDate || "all", endDate || "all"],
     queryFn: () => {
       const opts: any = {};
@@ -817,6 +1375,12 @@ function BillsTab() {
     },
     enabled: !!clientId,
   });
+
+  // All manual bills across every status (open, pending, paid, partial, overdue, cancelled)
+  const bills = useMemo(
+    () => rawBills.filter((b: any) => (b.source ?? "manual") === "manual"),
+    [rawBills],
+  );
 
   const { data: vendors = [] } = useQuery({
     queryKey: ["expense-vendors-bt", clientId],
@@ -898,13 +1462,6 @@ function BillsTab() {
 
   const filtered = useMemo(() => {
     if (statusFilter === "all") return bills;
-    if (statusFilter === "overdue") {
-      return bills.filter((b: any) => {
-        if (b.status === "paid" || b.status === "cancelled") return false;
-        if (!b.due_date) return false;
-        return isAfter(new Date(), parseISO(b.due_date));
-      });
-    }
     return bills.filter((b: any) => b.status === statusFilter);
   }, [bills, statusFilter]);
 
@@ -922,25 +1479,30 @@ function BillsTab() {
     return counts;
   }, [bills]);
 
-  if (bills.length === 0) {
-    return (
-      <Card className="border-dashed">
-        <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="rounded-full bg-muted p-4 mb-4">
-            <Receipt className="h-10 w-10 text-muted-foreground/40" />
-          </div>
-          <h3 className="text-lg font-semibold mb-2">No Bills Yet</h3>
-          <p className="text-sm text-muted-foreground max-w-md">
-            Bills will appear here after uploading bank statements or syncing
-            from your ERP system.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
+  const isEmpty = bills.length === 0;
 
   return (
     <div className="space-y-4">
+      {isEmpty && (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="rounded-full bg-muted p-4 mb-4">
+              <Receipt className="h-10 w-10 text-muted-foreground/40" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">No Bills Yet</h3>
+            <p className="text-sm text-muted-foreground max-w-md mb-4">
+              Bills will appear here after uploading bank statements, syncing
+              from your ERP system, or adding them manually.
+            </p>
+            <Button size="sm" className="gap-1.5" onClick={() => setShowCreateForm(true)}>
+              <Plus className="h-3.5 w-3.5" />
+              Create Bill
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+      {!isEmpty && (
+      <>
       {/* Duplicate Vendor Detection Banner */}
       {duplicateVendors.length > 0 && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
@@ -963,7 +1525,7 @@ function BillsTab() {
       {/* Filter buttons + Create */}
       <Card>
         <CardContent className="p-3 flex items-center gap-3 flex-wrap">
-          {["all", "pending", "paid", "overdue", "partial", "cancelled"].map(
+          {["all", "open", "pending", "paid", "partial", "overdue", "cancelled"].map(
             (s) => (
               <Button
                 key={s}
@@ -1068,6 +1630,8 @@ function BillsTab() {
           </Table>
         </CardContent>
       </Card>
+      </>
+      )}
 
       {/* Detail sheet */}
       <Sheet
@@ -1104,19 +1668,28 @@ function BillsTab() {
                   <Trash2 className="h-3.5 w-3.5" />
                   Delete
                 </Button>
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => window.print()}>
+                  <Download className="h-3.5 w-3.5" /> Download
+                </Button>
                 <div className="ml-auto flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">Status:</span>
                   <Select
                     value={selectedBill.status}
                     onValueChange={async (newStatus) => {
                       try {
-                        await flaskApi.patch(`/bills/${selectedBill.id}`, { status: newStatus });
-                        setSelectedBill({ ...selectedBill, status: newStatus });
+                        const body: any = { status: newStatus };
+                        if (newStatus === "paid") {
+                          body.metadata = { paid_at: new Date().toISOString(), payment_method: "manual" };
+                        }
+                        const updated = await flaskApi.patch<any>(`/bills/${selectedBill.id}`, body);
+                        setSelectedBill({ ...selectedBill, ...updated, status: newStatus });
                         queryClient.invalidateQueries({ queryKey: ["expense-bills", clientId] });
                         queryClient.invalidateQueries({ queryKey: ["cc-bills"] });
                         queryClient.invalidateQueries({ queryKey: ["fr-bills"] });
                         queryClient.invalidateQueries({ queryKey: ["cash-bills"] });
                         queryClient.invalidateQueries({ queryKey: ["ai-score-bills"] });
+                        queryClient.invalidateQueries({ queryKey: ["exp-txns"] });
+                        queryClient.invalidateQueries({ queryKey: ["exp-txns-pay"] });
                         toast.success(`Status updated to ${newStatus}`);
                       } catch (err: any) {
                         toast.error(err.message || "Failed to update status");
@@ -1127,14 +1700,55 @@ function BillsTab() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {["open", "pending", "paid", "overdue", "cancelled"].map((s) => (
+                      {["open", "pending", "paid", "partial", "overdue", "cancelled"].map((s) => (
                         <SelectItem key={s} value={s} className="text-xs capitalize">{s}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
-              <BillDetail bill={selectedBill} currency={currency} />
+              <div data-print-region>
+                <BillDetail bill={selectedBill} currency={currency} />
+              </div>
+
+              {/* Status banners */}
+              {selectedBill.status === "paid" && (
+                <ThankYouBlock
+                  invoice={selectedBill}
+                  currency={currency}
+                  title="Payment recorded — Bill settled"
+                  closingLine="Bill cleared from accounts payable."
+                />
+              )}
+              {selectedBill.status === "partial" && (
+                <Card className="border-amber-200 bg-amber-50/60 dark:border-amber-800 dark:bg-amber-950/30">
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <AlertTriangle className="h-5 w-5 text-amber-600" />
+                    <div>
+                      <p className="text-sm font-medium text-amber-700 dark:text-amber-300">Partially paid</p>
+                      <p className="text-xs text-amber-700/80 dark:text-amber-300/80">
+                        Some payment has been received. Mark as Paid once the bill is fully settled.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              {selectedBill.status === "cancelled" && (
+                <Card className="border-muted bg-muted/30">
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">Cancelled</p>
+                      <p className="text-xs text-muted-foreground">
+                        This bill was cancelled on{" "}
+                        {selectedBill.updated_at
+                          ? format(new Date(selectedBill.updated_at), "dd MMM yyyy")
+                          : "—"}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
         </SheetContent>
@@ -1487,14 +2101,23 @@ function APAgingTab() {
 // ── Vendors Tab ───────────────────────────────────────────────────────────
 
 const cleanVendorName = (raw: string) => {
-  let s = raw.trim();
-  // Strip "Pos-DD/MM/YY-" prefix
-  s = s.replace(/^Pos-\d{2}\/\d{2}\/\d{2,4}-/i, "");
-  // Strip "Upos Purchase DD/MM/YYYY HH:MM " prefix
-  s = s.replace(/^Upos\s+Purchase\s+\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}\s*/i, "");
-  // Strip "POS-DD/MM/YY-" prefix
-  s = s.replace(/^POS-\d{2}\/\d{2}\/\d{2,4}-/i, "");
-  return s.trim();
+  if (!raw) return "—";
+  let s = String(raw).trim();
+  // Strip "POS-DD/MM/YY-" or "POS-DD/MM/YYYY-" prefix (case-insensitive)
+  s = s.replace(/^POS-\d{2}\/\d{2}\/\d{2,4}-?/i, "");
+  // Strip "UPOS Purchase DD/MM/YYYY HH:MM " prefix
+  s = s.replace(/^UPOS\s+Purchase\s+\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}\s*/i, "");
+  // Strip "Card Purchase YYYY-MM-DD " prefix
+  s = s.replace(/^Card\s+Purchase\s+\d{4}-\d{2}-\d{2}\s*/i, "");
+  // Strip leading "POS " / "ECOM " / "CARD " keyword
+  s = s.replace(/^(POS|ECOM|CARD|VISA)\s+/i, "");
+  // Strip leading transfer prefixes like "IBFT FROM ", "IBFT TO ", "MOBN TRF FROM "
+  s = s.replace(/^(IBFT|MOBN|NEFT|RTGS)(\s+TRF)?\s+(FROM|TO)\s+/i, "");
+  // Strip trailing reference numbers: "-123456789" or " 123456789" at the end
+  s = s.replace(/[\s-]+\d{6,}\s*$/, "");
+  // Collapse repeated whitespace
+  s = s.replace(/\s+/g, " ").trim();
+  return s || "—";
 };
 
 function VendorsTab() {
@@ -2063,7 +2686,7 @@ function BillDetail({
           <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
             Vendor
           </p>
-          <p className="font-medium">{bill.v2_vendors?.name || "—"}</p>
+          <p className="font-medium">{cleanVendorName(bill.v2_vendors?.name || bill.vendor_name || bill.description || bill.notes || "—")}</p>
         </div>
         <div>
           <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
@@ -3160,11 +3783,10 @@ export default function ExpenseIntegrity() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold font-heading gradient-text">
-            Expense Integrity
+            Expenses
           </h1>
           <p className="text-muted-foreground">
-            Control outflows — track payments, monitor AP, detect duplicate
-            vendors, and flag variance.
+            Track what you owe, catch duplicate charges, and stay on top of supplier payments
           </p>
         </div>
 
@@ -3178,9 +3800,9 @@ export default function ExpenseIntegrity() {
               <Receipt className="h-3.5 w-3.5" />
               Bills
             </TabsTrigger>
-            <TabsTrigger value="aging" className="gap-1.5">
-              <Clock className="h-3.5 w-3.5" />
-              AP Aging
+            <TabsTrigger value="receipts" className="gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Bill Receipts
             </TabsTrigger>
             <TabsTrigger value="vendors" className="gap-1.5">
               <Store className="h-3.5 w-3.5" />
@@ -3202,8 +3824,8 @@ export default function ExpenseIntegrity() {
           <TabsContent value="bills" className="mt-4">
             <BillsTab />
           </TabsContent>
-          <TabsContent value="aging" className="mt-4">
-            <APAgingTab />
+          <TabsContent value="receipts" className="mt-4">
+            <BillReceiptsTab />
           </TabsContent>
           <TabsContent value="vendors" className="mt-4">
             <VendorsTab />

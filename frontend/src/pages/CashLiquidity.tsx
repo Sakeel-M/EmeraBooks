@@ -324,10 +324,9 @@ function CashOverviewTab() {
           <div className="rounded-full bg-muted p-4 mb-4">
             <Landmark className="h-10 w-10 text-muted-foreground/40" />
           </div>
-          <h3 className="text-lg font-semibold mb-2">No Cash Data Yet</h3>
+          <h3 className="text-lg font-semibold mb-2">No bank data yet</h3>
           <p className="text-sm text-muted-foreground max-w-md mb-4">
-            Upload a bank statement or add bank accounts to see your cash
-            position, flow analysis, and liquidity metrics.
+            Upload a statement to see your cash position in real time →
           </p>
         </CardContent>
       </Card>
@@ -854,17 +853,6 @@ function BankAccountsTab() {
 
   return (
     <div className="space-y-5">
-      {/* Stale account warning */}
-      {staleAccounts.length > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-4 py-3">
-          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-          <p className="text-sm text-amber-800 dark:text-amber-200">
-            {staleAccounts.length} account{staleAccounts.length !== 1 ? "s" : ""} not reconciled in over 30 days.
-            <button onClick={() => navigate("/reconciliation")} className="underline ml-1 font-medium">Reconcile now</button>
-          </p>
-        </div>
-      )}
-
       {/* Summary */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <KPICard
@@ -907,9 +895,6 @@ function BankAccountsTab() {
         {/* Account Cards */}
         <div className="md:col-span-2 space-y-3">
           {accountStats.map((acc: any) => {
-            const rs = reconStatus[acc.id];
-            const statusLabel = rs?.status === "reconciled" ? "Reconciled" : rs?.status === "pending" ? "Pending" : "Unreconciled";
-            const statusColor = rs?.status === "reconciled" ? "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400" : rs?.status === "pending" ? "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400" : "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400";
             return (
             <Card key={acc.id} className="stat-card-hover">
               <CardContent className="p-4">
@@ -919,16 +904,10 @@ function BankAccountsTab() {
                       <p className="font-medium text-sm">
                         {acc.account_name || "Untitled Account"}
                       </p>
-                      <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${statusColor}`}>
-                        {statusLabel}
-                      </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {acc.bank_name}
                       {acc.account_number && ` · ···${acc.account_number.slice(-4)}`}
-                      {rs?.lastDate && (
-                        <span className="ml-1.5">· Last reconciled {format(new Date(rs.lastDate), "dd MMM yyyy")}</span>
-                      )}
                     </p>
                   </div>
                   <div className="text-right">
@@ -977,10 +956,6 @@ function BankAccountsTab() {
                   <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1" onClick={() => navigate("/cash?tab=transactions")}>
                     <Eye className="h-3 w-3" />
                     Transactions
-                  </Button>
-                  <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1" onClick={() => navigate("/reconciliation")}>
-                    <ArrowRight className="h-3 w-3" />
-                    Reconcile
                   </Button>
                 </div>
               </CardContent>
@@ -2741,7 +2716,7 @@ function getCategoryStyle(name: string) {
   return CATEGORY_STYLE[name] || { icon: HelpCircle, border: "border-l-neutral-400", bg: "bg-neutral-50" };
 }
 
-function CashLedgerTab() {
+export function CashLedgerTab() {
   const { clientId, currency, client } = useActiveClient();
   const businessSector = client?.industry || null;
   const { startDate, endDate } = useDateRange();
@@ -3245,11 +3220,10 @@ export default function CashLiquidity() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold font-heading gradient-text">
-            Cash & Liquidity
+            Cash & Bank
           </h1>
           <p className="text-muted-foreground">
-            Financial stability monitoring — bank balances, cash flow analysis,
-            and liquidity risk.
+            Always know how much cash you have and where it's going
           </p>
         </div>
 
@@ -3265,15 +3239,11 @@ export default function CashLiquidity() {
             </TabsTrigger>
             <TabsTrigger value="risk" className="gap-1.5">
               <ShieldAlert className="h-3.5 w-3.5" />
-              Liquidity Risk
+              Cash Health
             </TabsTrigger>
             <TabsTrigger value="transactions" className="gap-1.5">
               <ArrowRightLeft className="h-3.5 w-3.5" />
               Transactions
-            </TabsTrigger>
-            <TabsTrigger value="ledger" className="gap-1.5">
-              <BookOpen className="h-3.5 w-3.5" />
-              Ledger
             </TabsTrigger>
           </TabsList>
 
@@ -3288,9 +3258,6 @@ export default function CashLiquidity() {
           </TabsContent>
           <TabsContent value="transactions" className="mt-4">
             <RecentTransactionsTab />
-          </TabsContent>
-          <TabsContent value="ledger" className="mt-4">
-            <CashLedgerTab />
           </TabsContent>
         </Tabs>
       </div>

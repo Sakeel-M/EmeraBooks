@@ -127,6 +127,7 @@ def create_bill(client_id):
         status=data.get("status", "open"),
         category=data.get("category"),
         notes=data.get("notes"),
+        metadata_=data.get("metadata") or {},
     )
     db.session.add(bill)
     db.session.commit()
@@ -142,10 +143,20 @@ def update_bill(bill_id):
     if not user_has_client_access(bill.client_id):
         return jsonify({"error": "Access denied"}), 403
     data = request.get_json()
+    prev_status = bill.status
     for key in ("bill_number", "bill_date", "due_date", "subtotal",
                 "tax_amount", "total", "currency", "status", "category", "notes"):
         if key in data:
             setattr(bill, key, data[key])
+    if "metadata" in data and isinstance(data["metadata"], dict):
+        merged = dict(bill.metadata_ or {})
+        merged.update(data["metadata"])
+        bill.metadata_ = merged
+    if data.get("status") == "paid" and prev_status != "paid":
+        meta = dict(bill.metadata_ or {})
+        meta.setdefault("paid_at", datetime.now(timezone.utc).isoformat())
+        meta.setdefault("payment_method", data.get("payment_method", "manual"))
+        bill.metadata_ = meta
     if "vendor_id" in data:
         bill.vendor_id = uuid.UUID(data["vendor_id"]) if data["vendor_id"] else None
     elif "vendor_name" in data and data["vendor_name"]:
@@ -212,6 +223,7 @@ def create_invoice(client_id):
         description=data.get("description"),
         line_items=data.get("line_items"),
         notes=data.get("notes"),
+        metadata_=data.get("metadata") or {},
     )
     db.session.add(invoice)
     db.session.commit()
@@ -283,11 +295,21 @@ def update_invoice(invoice_id):
     if not user_has_client_access(invoice.client_id):
         return jsonify({"error": "Access denied"}), 403
     data = request.get_json()
+    prev_status = invoice.status
     for key in ("invoice_number", "invoice_date", "due_date", "subtotal",
                 "tax_amount", "total", "currency", "status", "category", "notes",
                 "description", "line_items"):
         if key in data:
             setattr(invoice, key, data[key])
+    if "metadata" in data and isinstance(data["metadata"], dict):
+        merged = dict(invoice.metadata_ or {})
+        merged.update(data["metadata"])
+        invoice.metadata_ = merged
+    if data.get("status") == "paid" and prev_status != "paid":
+        meta = dict(invoice.metadata_ or {})
+        meta.setdefault("paid_at", datetime.now(timezone.utc).isoformat())
+        meta.setdefault("payment_method", data.get("payment_method", "manual"))
+        invoice.metadata_ = meta
     if "customer_id" in data:
         invoice.customer_id = uuid.UUID(data["customer_id"]) if data["customer_id"] else None
     elif "customer_name" in data and data["customer_name"]:

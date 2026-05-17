@@ -9,6 +9,51 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "https://hnvwrxkjnnepnchjunel.supabase.
 _DEFAULT_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhudndyeGtqbm5lcG5jaGp1bmVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5NTAwNTksImV4cCI6MjA3ODUyNjA1OX0.O1nrpKaT0zd2KW5CixqyM8GqMQ1FruGn9bTz66Bhxcs"
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY") or _DEFAULT_ANON_KEY
 
+# Paths that don't require an active subscription (billing flows + org onboarding).
+_SUBSCRIPTION_BYPASS_PREFIXES = (
+    "/api/billing/",
+    "/api/health",
+    "/api/organizations",  # Org create/read needed during onboarding
+    "/api/me/",            # /api/me/org-membership etc. used by ProtectedRoute
+    "/api/admin/",         # Platform admins always bypass anyway
+)
+
+
+def _path_bypasses_subscription(path):
+    return any(path == p.rstrip("/") or path.startswith(p) for p in _SUBSCRIPTION_BYPASS_PREFIXES)
+
+
+def _enforce_subscription_for_request(user_id):
+    """Returns a (response, status) tuple if blocked, or None if allowed."""
+    if os.getenv("BILLING_ENFORCED", "true").lower() in ("0", "false", "no"):
+        return None
+    from flask import request as _req
+    if _path_bypasses_subscription(_req.path):
+        return None
+    # Admin bypass
+    try:
+        from models.tier0 import UserRole
+        admin_role = UserRole.query.filter_by(user_id=_uuid.UUID(user_id), role="admin").first()
+        if admin_role:
+            return None
+    except Exception:
+        pass
+    try:
+        from models.tier0 import OrgMember
+        from models.billing import OrgSubscription
+        member = OrgMember.query.filter_by(user_id=_uuid.UUID(user_id)).first()
+        if not member:
+            # Not in any org yet — let the org/onboarding flow handle it
+            return None
+        sub = OrgSubscription.query.filter_by(org_id=member.org_id).first()
+        if sub and sub.status in ("active", "trialing"):
+            return None
+    except Exception as e:
+        # If billing model isn't migrated yet, fail open so the app still boots.
+        print(f"[auth] subscription check skipped: {e}")
+        return None
+    return jsonify({"error": "subscription_required"}), 403
+
 
 def require_auth(f):
     """Decorator: verifies Supabase token via Auth API and sets g.user_id.
@@ -83,6 +128,11 @@ def require_auth(f):
             return jsonify({"error": "Auth verification timed out"}), 503
         except requests.exceptions.RequestException as e:
             return jsonify({"error": f"Auth verification failed: {e}"}), 503
+
+        # Subscription gate (skipped for billing/health/org/admin paths and admins)
+        blocked = _enforce_subscription_for_request(g.user_id)
+        if blocked is not None:
+            return blocked
 
         return f(*args, **kwargs)
     return decorated

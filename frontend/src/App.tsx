@@ -7,14 +7,16 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import Onboarding from "./pages/Onboarding";
+import Pricing from "./pages/Pricing";
+import BillingSuccess from "./pages/BillingSuccess";
 import ControlCenter from "./pages/ControlCenter";
 import Reconciliation from "./pages/Reconciliation";
 import RevenueIntegrity from "./pages/RevenueIntegrity";
 import ExpenseIntegrity from "./pages/ExpenseIntegrity";
 import CashLiquidity from "./pages/CashLiquidity";
+import Ledger from "./pages/Ledger";
 import FinancialReporting from "./pages/FinancialReporting";
 import Integrations from "./pages/Integrations";
-import RiskMonitor from "./pages/RiskMonitor";
 import ControlSettings from "./pages/ControlSettings";
 import InvoiceFormPage from "./pages/InvoiceFormPage";
 import { AdminGuard } from "./components/admin/AdminGuard";
@@ -59,21 +61,26 @@ const App = () => (
               <Route path="/admin/users/:userId" element={<P><AdminGuard><AdminUserDetail /></AdminGuard></P>} />
               <Route path="/admin/orgs" element={<P><AdminGuard><AdminOrgs /></AdminGuard></P>} />
               <Route path="/onboarding" element={<P><Onboarding /></P>} />
+              <Route path="/pricing" element={<P><Pricing /></P>} />
+              <Route path="/billing/success" element={<P><BillingSuccess /></P>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </>
           ) : (
             <>
               {/* App domain: user routes + admin routes */}
               <Route path="/onboarding" element={<P><Onboarding /></P>} />
+              <Route path="/pricing" element={<P><Pricing /></P>} />
+              <Route path="/billing/success" element={<P><BillingSuccess /></P>} />
               <Route path="/" element={<P><ControlCenter /></P>} />
               <Route path="/reconciliation" element={<P><Reconciliation /></P>} />
               <Route path="/revenue" element={<P><RevenueIntegrity /></P>} />
               <Route path="/revenue/invoices/new" element={<P><InvoiceFormPage /></P>} />
               <Route path="/expenses" element={<P><ExpenseIntegrity /></P>} />
               <Route path="/cash" element={<P><CashLiquidity /></P>} />
+              <Route path="/ledger" element={<P><Ledger /></P>} />
               <Route path="/reports" element={<P><FinancialReporting /></P>} />
               <Route path="/integrations" element={<P><Integrations /></P>} />
-              <Route path="/risk" element={<P><RiskMonitor /></P>} />
+              <Route path="/risk" element={<Navigate to="/" replace />} />
               <Route path="/settings" element={<P><ControlSettings /></P>} />
               <Route path="/admin" element={<P><AdminGuard><AdminDashboard /></AdminGuard></P>} />
               <Route path="/admin/users" element={<P><AdminGuard><AdminUsers /></AdminGuard></P>} />

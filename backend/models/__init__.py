@@ -4,6 +4,8 @@ from models.tier1 import Connection, SyncRun, BankAccount, UploadedFile
 from models.tier2 import Transaction, Account, Vendor, Customer, Bill, Invoice, PaymentAllocation
 from models.tier3 import ReconciliationSession, ReconciliationItem, MatchingRule
 from models.tier4 import RiskAlert, VarianceBaseline, ControlSetting, AuditLog
+from models.billing import OrgSubscription
+from models.journal import JournalEntry, JournalEntryLine
 
 __all__ = [
     "db",
@@ -12,4 +14,6 @@ __all__ = [
     "Transaction", "Account", "Vendor", "Customer", "Bill", "Invoice", "PaymentAllocation",
     "ReconciliationSession", "ReconciliationItem", "MatchingRule",
     "RiskAlert", "VarianceBaseline", "ControlSetting", "AuditLog",
+    "OrgSubscription",
+    "JournalEntry", "JournalEntryLine",
 ]

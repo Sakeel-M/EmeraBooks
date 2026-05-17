@@ -5,8 +5,26 @@ import { database } from "@/lib/database";
 import { flaskApi } from "@/lib/flaskApi";
 import { formatAmount } from "@/lib/utils";
 import { getCanonicalCategory } from "@/lib/sectorMapping";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { differenceInDays, parseISO, isAfter } from "date-fns";
+
+const AI_SCORE_STORAGE_PREFIX = "ai-score:";
+
+function readCachedScore(key: string): { score: AIScoreResult; generatedAt: string } | null {
+  try {
+    const raw = localStorage.getItem(AI_SCORE_STORAGE_PREFIX + key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+function writeCachedScore(key: string, score: AIScoreResult): string {
+  const generatedAt = new Date().toISOString();
+  try {
+    localStorage.setItem(AI_SCORE_STORAGE_PREFIX + key, JSON.stringify({ score, generatedAt }));
+  } catch {}
+  return generatedAt;
+}
 
 export interface AIFactor {
   name: string;
@@ -222,9 +240,25 @@ export function useAIScore() {
 
   // Cache key includes client + date range so different ranges get different scores
   const cacheKey = ["ai-risk-score", clientId, startDate || "all", endDate || "all"];
+  const storageKey = `${clientId || "no-client"}:${startDate || "all"}:${endDate || "all"}`;
 
   // Manual trigger state — tracks loading across generate calls
   const [manualLoading, setManualLoading] = useState(false);
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
+
+  // Hydrate from localStorage on mount / when storage key changes so the score
+  // survives a hard refresh.
+  useEffect(() => {
+    if (!clientId) return;
+    const cached = readCachedScore(storageKey);
+    if (cached?.score) {
+      queryClient.setQueryData(cacheKey, cached.score);
+      setGeneratedAt(cached.generatedAt);
+    } else {
+      setGeneratedAt(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
 
   // The cached AI score — only fetched when explicitly triggered via generate()
   const {
@@ -248,17 +282,21 @@ export function useAIScore() {
     try {
       // Invalidate first so staleTime doesn't prevent re-fetch
       await queryClient.invalidateQueries({ queryKey: cacheKey });
-      await queryClient.fetchQuery({
+      const fresh = await queryClient.fetchQuery({
         queryKey: cacheKey,
         queryFn: () => flaskApi.post<AIScoreResult>("/risk/ai-score", { summary: summaryPayload }),
         staleTime: 0, // Force fresh fetch
       });
+      if (fresh) {
+        const ts = writeCachedScore(storageKey, fresh);
+        setGeneratedAt(ts);
+      }
     } catch (e) {
       console.error("AI score generation failed:", e);
     } finally {
       setManualLoading(false);
     }
-  }, [queryClient, cacheKey, summaryPayload]);
+  }, [queryClient, cacheKey, summaryPayload, storageKey]);
 
   const aiGenerating = isFetching || manualLoading;
 
@@ -267,5 +305,6 @@ export function useAIScore() {
     aiGenerating,
     generate,
     hasData: !!summaryPayload,
+    generatedAt,
   };
 }

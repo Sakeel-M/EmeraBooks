@@ -88,9 +88,173 @@ def risk_score():
         return jsonify({'error': f'Risk scoring failed: {str(e)}'}), 500
 
 
+def _rule_based_score(summary):
+    """
+    Deterministic rule-based risk score used as a fallback when OpenAI is
+    unavailable (no key, quota exhausted, network error). Produces the same
+    response shape as the AI path so the frontend renders identically.
+    """
+    def clamp(v, lo=0, hi=100):
+        return max(lo, min(hi, v))
+
+    cur = summary.get('currency', 'USD')
+    total_income = float(summary.get('totalIncome', 0) or 0)
+    total_expenses = float(summary.get('totalExpenses', 0) or 0)
+    net_income = float(summary.get('netIncome', 0) or 0)
+    cash_balance = float(summary.get('cashBalance', 0) or 0)
+    runway_raw = summary.get('runway', 'N/A')
+    try:
+        runway = 100.0 if runway_raw == '100+' else float(runway_raw)
+    except (TypeError, ValueError):
+        runway = 0.0
+    avg_burn = float(summary.get('avgMonthlyBurn', 0) or 0)
+    avg_income = float(summary.get('avgMonthlyIncome', 0) or 0)
+    overdue_bills_ct = int(summary.get('overdueBillsCount', 0) or 0)
+    overdue_bills_amt = float(summary.get('overdueBillsAmount', 0) or 0)
+    overdue_inv_ct = int(summary.get('overdueInvoicesCount', 0) or 0)
+    overdue_inv_amt = float(summary.get('overdueInvoicesAmount', 0) or 0)
+    dup_ct = int(summary.get('duplicateCount', 0) or 0)
+    txn_ct = int(summary.get('transactionCount', 0) or 0)
+    match_rate = float(summary.get('matchRate', 0) or 0)
+    open_alerts = int(summary.get('openAlerts', 0) or 0)
+    spike_cats = summary.get('spikeCategories', []) or []
+    top_cat_pct = float(summary.get('topCategoryPct', 0) or 0)
+
+    # 1. Liquidity Health — runway + burn-vs-income
+    if runway >= 12:
+        liq = 95
+    elif runway >= 6:
+        liq = 75
+    elif runway >= 3:
+        liq = 55
+    elif runway >= 1:
+        liq = 30
+    else:
+        liq = 15
+    if avg_burn > 0 and avg_income < avg_burn:
+        liq -= 15
+    liq = clamp(liq)
+
+    # 2. Revenue Stability — income vs expenses
+    if avg_income == 0:
+        rev = 20
+    else:
+        ratio = avg_income / max(avg_burn, 1)
+        rev = clamp(30 + 50 * min(ratio / 2, 1.4))
+    if net_income < 0:
+        rev -= 15
+    rev = clamp(rev)
+
+    # 3. Expense Control — concentration + spikes
+    exp = 85
+    if top_cat_pct >= 50:
+        exp -= 25
+    elif top_cat_pct >= 35:
+        exp -= 10
+    exp -= min(len(spike_cats) * 8, 30)
+    exp = clamp(exp)
+
+    # 4. Receivables Quality — overdue invoices
+    if total_income <= 0:
+        arq = 60 if overdue_inv_ct == 0 else 40
+    else:
+        pct = (overdue_inv_amt / total_income) * 100
+        arq = clamp(95 - pct * 2)
+    if overdue_inv_ct > 20:
+        arq -= 10
+    arq = clamp(arq)
+
+    # 5. Payables Management — overdue bills
+    if total_expenses <= 0:
+        apm = 70
+    else:
+        pct = (overdue_bills_amt / total_expenses) * 100
+        apm = clamp(95 - pct * 2)
+    if overdue_bills_ct > 20:
+        apm -= 10
+    apm = clamp(apm)
+
+    # 6. Data Integrity — match rate, duplicates
+    di = clamp(40 + match_rate * 0.5)
+    if dup_ct > 0:
+        di -= min(dup_ct * 3, 30)
+    di = clamp(di)
+
+    # 7. Compliance Posture — open alerts
+    if open_alerts == 0:
+        cp = 90
+    elif open_alerts <= 3:
+        cp = 70
+    elif open_alerts <= 10:
+        cp = 50
+    else:
+        cp = 30
+    cp = clamp(cp)
+
+    # 8. Overall Financial Resilience — weighted echo
+    resilience = round((liq * 0.35 + rev * 0.25 + di * 0.15 + apm * 0.15 + cp * 0.10))
+
+    factors = [
+        {"name": "Liquidity Health", "score": round(liq), "weight": 20,
+         "finding": f"Cash runway is {runway_raw} months with avg burn {cur} {avg_burn:,.0f}/mo.",
+         "recommendation": "Maintain at least 6 months of runway; tighten discretionary spend if below." if runway < 6 else "Runway is healthy — continue current cash management."},
+        {"name": "Revenue Stability", "score": round(rev), "weight": 15,
+         "finding": f"Avg monthly income {cur} {avg_income:,.0f} vs burn {cur} {avg_burn:,.0f}; net {cur} {net_income:,.0f}.",
+         "recommendation": "Diversify revenue streams and track monthly recurring income." if rev < 60 else "Revenue vs burn ratio is healthy."},
+        {"name": "Expense Control", "score": round(exp), "weight": 15,
+         "finding": f"Top category is {top_cat_pct:.0f}% of spend; {len(spike_cats)} category spike(s) detected.",
+         "recommendation": "Diversify expense categories and investigate any spikes." if exp < 70 else "Expense profile looks balanced."},
+        {"name": "Receivables Quality", "score": round(arq), "weight": 10,
+         "finding": f"{overdue_inv_ct} overdue invoices totaling {cur} {overdue_inv_amt:,.0f}.",
+         "recommendation": "Tighten collections cadence and send reminders on overdue AR." if arq < 70 else "Receivables are in good shape."},
+        {"name": "Payables Management", "score": round(apm), "weight": 10,
+         "finding": f"{overdue_bills_ct} overdue bills totaling {cur} {overdue_bills_amt:,.0f}.",
+         "recommendation": "Prioritize overdue supplier payments to preserve credit terms." if apm < 70 else "Payables are well-managed."},
+        {"name": "Data Integrity", "score": round(di), "weight": 15,
+         "finding": f"Reconciliation match rate {match_rate:.0f}% with {dup_ct} possible duplicate(s).",
+         "recommendation": "Reconcile more frequently and investigate duplicates." if di < 70 else "Data integrity is strong."},
+        {"name": "Compliance Posture", "score": round(cp), "weight": 5,
+         "finding": f"{open_alerts} open risk alert(s).",
+         "recommendation": "Triage and resolve open alerts promptly." if cp < 70 else "Compliance posture is solid."},
+        {"name": "Overall Financial Resilience", "score": resilience, "weight": 10,
+         "finding": f"Composite across liquidity, revenue, data, AP, and compliance ≈ {resilience}.",
+         "recommendation": "Focus improvements on the lowest-scoring factor above." if resilience < 70 else "Resilience is broadly healthy."},
+    ]
+
+    overall = round(sum(f['score'] * f['weight'] for f in factors) / 100)
+    if overall >= 81:
+        level = "Low Risk"
+    elif overall >= 61:
+        level = "Medium Risk"
+    elif overall >= 41:
+        level = "High Risk"
+    else:
+        level = "Critical Risk"
+
+    summary_text = (
+        f"Rule-based score: {overall}/100 ({level}). "
+        f"Runway {runway_raw} months, net income {cur} {net_income:,.0f}, "
+        f"{overdue_bills_ct} overdue bills, {overdue_inv_ct} overdue invoices, "
+        f"match rate {match_rate:.0f}%."
+    )
+
+    return {
+        "score": overall,
+        "level": level,
+        "factors": factors,
+        "summary": summary_text,
+        "engine": "rule-based",
+    }
+
+
 @risk_bp.route('/api/risk/ai-score', methods=['POST'])
 def risk_ai_score():
-    """Generate AI-powered risk score with detailed factor analysis."""
+    """Generate AI-powered risk score with detailed factor analysis.
+
+    Falls back to a deterministic rule-based engine when OpenAI is
+    unavailable (missing key, quota exhausted, timeout). The response shape
+    is identical so the frontend renders both paths the same way.
+    """
     try:
         data = request.get_json()
         summary = data.get('summary', {})
@@ -100,7 +264,9 @@ def risk_ai_score():
 
         client = _get_openai_client()
         if not client:
-            return jsonify({"score": None, "factors": [], "summary": "AI scoring requires OpenAI API key configuration."}), 200
+            result = _rule_based_score(summary)
+            result["summary"] = "OpenAI key not configured — showing rule-based score. " + result["summary"]
+            return jsonify(result), 200
 
         prompt = (
             "You are a senior forensic accountant and risk analyst. Analyze this company's financial data "
@@ -170,13 +336,27 @@ def risk_ai_score():
 
         result = json.loads(ai_text)
         if not isinstance(result, dict) or 'score' not in result:
-            return jsonify({"score": None, "factors": [], "summary": "AI returned invalid format."}), 200
+            fallback = _rule_based_score(summary)
+            fallback["summary"] = "AI returned invalid format — showing rule-based score. " + fallback["summary"]
+            return jsonify(fallback), 200
 
+        result["engine"] = "openai"
         return jsonify(result)
 
     except Exception as e:
         import traceback, sys
         traceback.print_exc(file=sys.stderr)
         sys.stderr.flush()
-        print(f"Risk AI score error: {type(e).__name__}: {e}", flush=True)
-        return jsonify({"score": None, "factors": [], "summary": f"AI scoring failed: {type(e).__name__}: {str(e)}"}), 200
+        err_name = type(e).__name__
+        print(f"Risk AI score error: {err_name}: {e}", flush=True)
+        try:
+            data = request.get_json(silent=True) or {}
+            summary = data.get('summary', {}) or {}
+            if summary:
+                fallback = _rule_based_score(summary)
+                reason = "quota exceeded" if "RateLimit" in err_name or "Quota" in err_name else "AI unavailable"
+                fallback["summary"] = f"OpenAI {reason} — showing rule-based score. " + fallback["summary"]
+                return jsonify(fallback), 200
+        except Exception:
+            pass
+        return jsonify({"score": None, "factors": [], "summary": f"AI scoring failed: {err_name}: {str(e)}"}), 200

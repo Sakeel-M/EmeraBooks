@@ -69,14 +69,15 @@ import {
   Settings,
   Loader2,
   BookOpen,
-  CheckCircle2,
-  AlertTriangle,
+  Receipt,
+  Save,
 } from "lucide-react";
 import { useActiveClient } from "@/hooks/useActiveClient";
 import { useDateRange } from "@/hooks/useDateRange";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { database } from "@/lib/database";
+import { toast } from "sonner";
 import { formatAmount } from "@/lib/utils";
 import { FC } from "@/components/shared/FormattedCurrency";
 import { getCanonicalCategory, resolveIncomeCategory } from "@/lib/sectorMapping";
@@ -263,6 +264,19 @@ function ProfitLossTab() {
     enabled: !!clientId,
   });
 
+  // Pull paid manual invoices/bills in the same window — they don't have a
+  // transaction row, so we fold their totals into the P&L manually.
+  const { data: plInvoices = [] } = useQuery({
+    queryKey: ["fr-pl-invoices", clientId, start, end],
+    queryFn: () => database.getInvoices(clientId!, { startDate: start, endDate: end }),
+    enabled: !!clientId,
+  });
+  const { data: plBills = [] } = useQuery({
+    queryKey: ["fr-pl-bills", clientId, start, end],
+    queryFn: () => database.getBills(clientId!, { startDate: start, endDate: end }),
+    enabled: !!clientId,
+  });
+
   const _frLoading = _frLoad && transactions.length === 0;
 
   // Previous period totals
@@ -313,6 +327,32 @@ function ProfitLossTab() {
         }
       });
 
+      // Fold paid manual invoices (no transaction row exists for them)
+      plInvoices.forEach((i: any) => {
+        if (i.status !== "paid" || (i.source ?? "manual") !== "manual") return;
+        const amt = Number(i.total || 0);
+        if (!amt) return;
+        const cat = resolveIncomeCategory(i.category, i.v2_customers?.name, businessSector) || "Other";
+        const month = (i.invoice_date || "").slice(0, 7);
+        if (month && !monthly[month]) monthly[month] = { income: 0, expense: 0 };
+        inc += amt;
+        incByCat[cat] = (incByCat[cat] || 0) + amt;
+        if (month) monthly[month].income += amt;
+      });
+
+      // Fold paid manual bills
+      plBills.forEach((b: any) => {
+        if (b.status !== "paid" || (b.source ?? "manual") !== "manual") return;
+        const amt = Number(b.total || 0);
+        if (!amt) return;
+        const cat = getCanonicalCategory(b.category, b.v2_vendors?.name, b.notes) || "Other";
+        const month = (b.bill_date || "").slice(0, 7);
+        if (month && !monthly[month]) monthly[month] = { income: 0, expense: 0 };
+        exp += amt;
+        expByCat[cat] = (expByCat[cat] || 0) + amt;
+        if (month) monthly[month].expense += amt;
+      });
+
       const monthlyArr = Object.entries(monthly)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([m, d]) => ({
@@ -329,7 +369,7 @@ function ProfitLossTab() {
         expenseByCategory: Object.entries(expByCat).sort(([, a], [, b]) => b - a),
         monthlyData: monthlyArr,
       };
-    }, [transactions, businessSector]);
+    }, [transactions, plInvoices, plBills, businessSector]);
 
   const netIncome = income - expenses;
   const margin = income > 0 ? (netIncome / income) * 100 : 0;
@@ -358,7 +398,7 @@ function ProfitLossTab() {
   };
 
   if (transactions.length === 0) {
-    return <EmptyState text="No transactions for this period" icon={BarChart3} />;
+    return <EmptyState text="Nothing to show yet" icon={BarChart3} />;
   }
 
   if (_frLoading) {
@@ -1581,7 +1621,7 @@ function EmptyState({ text, icon: Icon }: { text: string; icon: React.ComponentT
         </div>
         <h3 className="text-lg font-semibold mb-2">{text}</h3>
         <p className="text-sm text-muted-foreground max-w-md">
-          Upload bank statements or connect an ERP to populate financial reports.
+          Upload your bank statement to generate your P&L, Balance Sheet, and Cash Flow →
         </p>
       </CardContent>
     </Card>
@@ -2034,6 +2074,304 @@ function ClosingBalanceTab() {
   );
 }
 
+// ── Taxation Tab ──────────────────────────────────────────────────────────
+
+const VAT_RATE_KEY = "tax_vat_rate";
+const CT_RATE_KEY = "tax_corporate_rate";
+const DEFAULT_VAT = 5;
+const DEFAULT_CT = 9;
+
+function TaxationTab() {
+  const { clientId, currency, client } = useActiveClient();
+  const businessSector = client?.industry || null;
+  const { startDate: globalStart } = useDateRange();
+  const [period, setPeriod] = useState<PeriodKey>(() => getSmartDefaultPeriod(globalStart));
+  const [periodInitialized, setPeriodInitialized] = useState(!!globalStart);
+  const { start, end, label } = getPeriodDates(period);
+
+  useEffect(() => {
+    if (globalStart && !periodInitialized) {
+      setPeriod(getSmartDefaultPeriod(globalStart));
+      setPeriodInitialized(true);
+    }
+  }, [globalStart, periodInitialized]);
+
+  const [vatRate, setVatRate] = useState<number>(DEFAULT_VAT);
+  const [ctRate, setCtRate] = useState<number>(DEFAULT_CT);
+  const [savingVat, setSavingVat] = useState(false);
+  const [savingCt, setSavingCt] = useState(false);
+
+  useEffect(() => {
+    if (!clientId) return;
+    database
+      .getControlSetting(clientId, VAT_RATE_KEY)
+      .then((v) => {
+        if (v != null && !isNaN(Number(v))) setVatRate(Number(v));
+      })
+      .catch(() => {});
+    database
+      .getControlSetting(clientId, CT_RATE_KEY)
+      .then((v) => {
+        if (v != null && !isNaN(Number(v))) setCtRate(Number(v));
+      })
+      .catch(() => {});
+  }, [clientId]);
+
+  const handleSaveVat = async () => {
+    if (!clientId) return;
+    setSavingVat(true);
+    try {
+      await database.setControlSetting(clientId, VAT_RATE_KEY, vatRate);
+      toast.success(`VAT rate saved at ${vatRate}%`);
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to save VAT rate");
+    } finally {
+      setSavingVat(false);
+    }
+  };
+
+  const handleSaveCt = async () => {
+    if (!clientId) return;
+    setSavingCt(true);
+    try {
+      await database.setControlSetting(clientId, CT_RATE_KEY, ctRate);
+      toast.success(`Corporate Tax rate saved at ${ctRate}%`);
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to save Corporate Tax rate");
+    } finally {
+      setSavingCt(false);
+    }
+  };
+
+  const { data: transactions = [] } = useQuery({
+    queryKey: ["fr-tax-txns", clientId, start, end],
+    queryFn: () =>
+      database.getTransactions(clientId!, {
+        startDate: start,
+        endDate: end,
+        limit: 5000,
+      }),
+    enabled: !!clientId,
+  });
+
+  const { data: taxInvoices = [] } = useQuery({
+    queryKey: ["fr-tax-invoices", clientId, start, end],
+    queryFn: () => database.getInvoices(clientId!, { startDate: start, endDate: end }),
+    enabled: !!clientId,
+  });
+  const { data: taxBills = [] } = useQuery({
+    queryKey: ["fr-tax-bills", clientId, start, end],
+    queryFn: () => database.getBills(clientId!, { startDate: start, endDate: end }),
+    enabled: !!clientId,
+  });
+
+  const { revenue, expenses } = useMemo(() => {
+    let inc = 0;
+    let exp = 0;
+    transactions.forEach((t: any) => {
+      const entity = t.counterparty_name || t.description;
+      const cat = t.amount > 0
+        ? resolveIncomeCategory(t.category, entity, businessSector)
+        : getCanonicalCategory(t.category, entity, t.description) || "Other";
+      if (!isPlCategory(cat)) return;
+      if (t.amount > 0) inc += t.amount;
+      else exp += Math.abs(t.amount);
+    });
+    // Fold paid manual invoices and bills inside the window
+    inc += taxInvoices
+      .filter((i: any) => i.status === "paid" && (i.source ?? "manual") === "manual")
+      .reduce((s: number, i: any) => s + Number(i.total || 0), 0);
+    exp += taxBills
+      .filter((b: any) => b.status === "paid" && (b.source ?? "manual") === "manual")
+      .reduce((s: number, b: any) => s + Number(b.total || 0), 0);
+    return { revenue: inc, expenses: exp };
+  }, [transactions, taxInvoices, taxBills, businessSector]);
+
+  const profit = revenue - expenses;
+  const vatTax = revenue * (vatRate / 100);
+  const corporateTax = Math.max(0, profit) * (ctRate / 100);
+  const totalTax = vatTax + corporateTax;
+  const afterTaxProfit = profit - totalTax;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <PeriodSelector value={period} onChange={setPeriod} />
+        <Badge variant="outline" className="text-xs">{label}</Badge>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {[
+          { label: "Revenue", value: revenue, color: "text-primary" },
+          { label: "Expenses", value: expenses, color: "text-red-500" },
+          { label: "Profit", value: profit, color: profit >= 0 ? "text-emerald-600" : "text-red-500" },
+          { label: "Total Tax", value: totalTax, color: "text-amber-600" },
+          { label: "After-Tax Profit", value: afterTaxProfit, color: afterTaxProfit >= 0 ? "text-emerald-600" : "text-red-500" },
+        ].map((k) => (
+          <Card key={k.label}>
+            <CardContent className="p-4">
+              <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">{k.label}</p>
+              <p className={`text-xl font-bold mt-1 ${k.color}`}>
+                <FC amount={k.value} currency={currency} />
+              </p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Receipt className="h-4 w-4 text-muted-foreground" /> VAT (Value Added Tax)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Label className="text-xs text-muted-foreground">Rate</Label>
+              <Input
+                type="number"
+                value={vatRate}
+                onChange={(e) => setVatRate(parseFloat(e.target.value) || 0)}
+                className="w-24 h-8 text-sm"
+                min={0}
+                step={0.1}
+              />
+              <span className="text-sm">%</span>
+              <span className="text-xs text-muted-foreground">of Revenue</span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs gap-1 ml-auto"
+                disabled={savingVat}
+                onClick={handleSaveVat}
+              >
+                {savingVat ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                Save
+              </Button>
+            </div>
+            <div className="flex items-end justify-between border-t pt-3">
+              <div>
+                <p className="text-xs text-muted-foreground">VAT Payable</p>
+                <p className="text-2xl font-bold text-amber-600 mt-1">
+                  <FC amount={vatTax} currency={currency} />
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {vatRate}% × <FC amount={revenue} currency={currency} />
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Landmark className="h-4 w-4 text-muted-foreground" /> Corporate Tax
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Label className="text-xs text-muted-foreground">Rate</Label>
+              <Input
+                type="number"
+                value={ctRate}
+                onChange={(e) => setCtRate(parseFloat(e.target.value) || 0)}
+                className="w-24 h-8 text-sm"
+                min={0}
+                step={0.1}
+              />
+              <span className="text-sm">%</span>
+              <span className="text-xs text-muted-foreground">of Profit</span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs gap-1 ml-auto"
+                disabled={savingCt}
+                onClick={handleSaveCt}
+              >
+                {savingCt ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                Save
+              </Button>
+            </div>
+            <div className="flex items-end justify-between border-t pt-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Corporate Tax Due</p>
+                <p className="text-2xl font-bold text-amber-600 mt-1">
+                  <FC amount={corporateTax} currency={currency} />
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {profit > 0 ? (
+                  <>
+                    {ctRate}% × <FC amount={profit} currency={currency} />
+                  </>
+                ) : (
+                  <span className="italic">No CT on a loss</span>
+                )}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium">Tax Summary — {label}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Item</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell>Revenue</TableCell>
+                <TableCell className="text-right">
+                  <FC amount={revenue} currency={currency} />
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell>Expenses</TableCell>
+                <TableCell className="text-right text-red-500">
+                  (<FC amount={expenses} currency={currency} />)
+                </TableCell>
+              </TableRow>
+              <TableRow className="font-semibold">
+                <TableCell>Profit (before tax)</TableCell>
+                <TableCell className={`text-right ${profit >= 0 ? "" : "text-red-500"}`}>
+                  <FC amount={profit} currency={currency} />
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell>VAT ({vatRate}% of Revenue)</TableCell>
+                <TableCell className="text-right text-amber-600">
+                  (<FC amount={vatTax} currency={currency} />)
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell>Corporate Tax ({ctRate}% of Profit)</TableCell>
+                <TableCell className="text-right text-amber-600">
+                  (<FC amount={corporateTax} currency={currency} />)
+                </TableCell>
+              </TableRow>
+              <TableRow className="font-semibold border-t-2">
+                <TableCell>After-Tax Profit</TableCell>
+                <TableCell className={`text-right ${afterTaxProfit >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                  <FC amount={afterTaxProfit} currency={currency} />
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────
 
 export default function FinancialReporting() {
@@ -2042,11 +2380,10 @@ export default function FinancialReporting() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold font-heading gradient-text">
-            Financial Reporting
+            Reports
           </h1>
           <p className="text-muted-foreground">
-            Structured financial visibility — P&L, Balance Sheet, Cash Flow, and
-            key ratios.
+            Your full financial picture — profit, expenses, and cash flow in one place
           </p>
         </div>
 
@@ -2080,6 +2417,10 @@ export default function FinancialReporting() {
               <ArrowRightLeft className="h-3.5 w-3.5" />
               Closing Balance
             </TabsTrigger>
+            <TabsTrigger value="taxation" className="gap-1.5">
+              <Landmark className="h-3.5 w-3.5" />
+              Taxation
+            </TabsTrigger>
             <TabsTrigger value="filters" className="gap-1.5">
               <Filter className="h-3.5 w-3.5" />
               Custom Filters
@@ -2106,6 +2447,9 @@ export default function FinancialReporting() {
           </TabsContent>
           <TabsContent value="closing-balance" className="mt-4">
             <ClosingBalanceTab />
+          </TabsContent>
+          <TabsContent value="taxation" className="mt-4">
+            <TaxationTab />
           </TabsContent>
           <TabsContent value="filters" className="mt-4">
             <CustomFiltersTab />

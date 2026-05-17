@@ -29,6 +29,24 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
+    // Stale/invalid JWT — force sign-out + back to /auth.
+    if (res.status === 401) {
+      try {
+        await supabase.auth.signOut();
+      } catch {}
+      if (typeof window !== "undefined" && !window.location.pathname.startsWith("/auth")) {
+        const returnTo = window.location.pathname + window.location.search;
+        window.location.assign(`/auth?returnTo=${encodeURIComponent(returnTo)}`);
+      }
+      throw new Error("unauthorized");
+    }
+    // Subscription gate — redirect to /pricing instead of throwing into the React tree.
+    if (res.status === 403 && body?.error === "subscription_required") {
+      if (typeof window !== "undefined" && !window.location.pathname.startsWith("/pricing")) {
+        window.location.assign("/pricing");
+      }
+      throw new Error("subscription_required");
+    }
     throw new Error(body?.error || `Request failed: ${res.status}`);
   }
 
@@ -66,5 +84,24 @@ export const flaskApi = {
 
   del<T>(path: string): Promise<T> {
     return request<T>(path, { method: "DELETE" });
+  },
+
+  async postForm<T>(path: string, formData: FormData): Promise<T> {
+    // Multipart: build headers without forcing Content-Type so the browser
+    // sets the boundary automatically.
+    const headers = await getAuthHeaders();
+    delete headers["Content-Type"];
+    const res = await fetch(`${BASE}${path}`, {
+      method: "POST",
+      body: formData,
+      headers,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body?.error || `Request failed: ${res.status}`);
+    }
+    const text = await res.text();
+    if (!text || text === "null") return null as T;
+    return JSON.parse(text) as T;
   },
 };
