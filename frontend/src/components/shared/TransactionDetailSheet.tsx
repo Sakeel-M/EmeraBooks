@@ -114,7 +114,7 @@ export function TransactionDetailSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle>{title}</SheetTitle>
           {description && <SheetDescription>{description}</SheetDescription>}
@@ -162,14 +162,14 @@ export function TransactionDetailSheet({
             </div>
           ) : (
             <div className="rounded-md border max-h-[60vh] overflow-y-auto">
-              <Table>
+              <Table className="table-fixed w-full">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-xs">Date</TableHead>
+                    <TableHead className="text-xs w-[88px]">Date</TableHead>
                     <TableHead className="text-xs">Description</TableHead>
-                    <TableHead className="text-xs text-right">Amount</TableHead>
+                    <TableHead className="text-xs text-right w-[130px]">Amount</TableHead>
                     {hasRowActions && (
-                      <TableHead className="text-xs text-right">Actions</TableHead>
+                      <TableHead className="text-xs text-right w-[120px]">Actions</TableHead>
                     )}
                   </TableRow>
                 </TableHeader>
@@ -193,7 +193,7 @@ export function TransactionDetailSheet({
                           className="text-xs py-2"
                           onClick={clickable ? () => onRowClick?.(t) : undefined}
                         >
-                          <div className={`max-w-[200px] truncate ${clickable ? "text-primary hover:underline" : ""}`}>{desc}</div>
+                          <div className={`truncate ${clickable ? "text-primary hover:underline" : ""}`}>{desc}</div>
                           {cat && (
                             <Badge variant="outline" className="text-[9px] mt-0.5">
                               {cat}
@@ -215,29 +215,31 @@ export function TransactionDetailSheet({
                             </span>
                             {isRiskAlert && (onResolve || onDismiss) && (
                               <div
-                                className="flex items-center gap-1 mt-0.5"
+                                className="flex items-center gap-1.5 mt-1"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 {onResolve && (
                                   <Button
-                                    variant="ghost"
+                                    variant="outline"
                                     size="sm"
-                                    className="h-6 px-1.5 text-[10px] text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 gap-0.5"
+                                    className="h-6 w-6 p-0 rounded-full border-emerald-200 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
                                     onClick={(e) => { e.stopPropagation(); onResolve(t); }}
                                     title="Resolve"
+                                    aria-label="Resolve alert"
                                   >
-                                    <Check className="h-3 w-3" /> Resolve
+                                    <Check className="h-3 w-3" />
                                   </Button>
                                 )}
                                 {onDismiss && (
                                   <Button
-                                    variant="ghost"
+                                    variant="outline"
                                     size="sm"
-                                    className="h-6 px-1.5 text-[10px] text-slate-500 hover:text-slate-700 hover:bg-slate-100 gap-0.5"
+                                    className="h-6 w-6 p-0 rounded-full border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-100"
                                     onClick={(e) => { e.stopPropagation(); onDismiss(t); }}
                                     title="Dismiss"
+                                    aria-label="Dismiss alert"
                                   >
-                                    <X className="h-3 w-3" /> Dismiss
+                                    <X className="h-3 w-3" />
                                   </Button>
                                 )}
                               </div>
