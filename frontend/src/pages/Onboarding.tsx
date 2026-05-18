@@ -151,8 +151,10 @@ export default function Onboarding() {
   };
 
   const handleSignOut = async () => {
+    // ProtectedRoute's onAuthStateChange listener will route us to /auth as
+    // soon as the session disappears. Don't double-navigate from here — it
+    // caused a brief blank flash on the way out.
     await supabase.auth.signOut();
-    navigate("/auth", { replace: true });
   };
 
   return (

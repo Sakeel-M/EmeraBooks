@@ -19,6 +19,7 @@ import FinancialReporting from "./pages/FinancialReporting";
 import Integrations from "./pages/Integrations";
 import ControlSettings from "./pages/ControlSettings";
 import InvoiceFormPage from "./pages/InvoiceFormPage";
+import RiskAlerts from "./pages/RiskAlerts";
 import { AdminGuard } from "./components/admin/AdminGuard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminUsers from "./pages/admin/AdminUsers";
@@ -80,7 +81,7 @@ const App = () => (
               <Route path="/ledger" element={<P><Ledger /></P>} />
               <Route path="/reports" element={<P><FinancialReporting /></P>} />
               <Route path="/integrations" element={<P><Integrations /></P>} />
-              <Route path="/risk" element={<Navigate to="/" replace />} />
+              <Route path="/risk" element={<P><RiskAlerts /></P>} />
               <Route path="/settings" element={<P><ControlSettings /></P>} />
               <Route path="/admin" element={<P><AdminGuard><AdminDashboard /></AdminGuard></P>} />
               <Route path="/admin/users" element={<P><AdminGuard><AdminUsers /></AdminGuard></P>} />

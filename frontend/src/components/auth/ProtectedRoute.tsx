@@ -93,6 +93,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
         queryClient.clear();
+        setLoading(true);
         setAuthenticated(false);
         navigate("/auth", { replace: true });
       }
