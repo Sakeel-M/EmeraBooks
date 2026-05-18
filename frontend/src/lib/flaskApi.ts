@@ -29,21 +29,30 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    // Stale/invalid JWT — force sign-out + back to /auth.
+    // Stale/invalid JWT — sign-out and let ProtectedRoute's onAuthStateChange
+    // listener route to /auth via React Router. NEVER hard-reload here — the
+    // initial gate-check often fires several requests in parallel, and a
+    // window.location.assign would race with Supabase session rehydration and
+    // cause an infinite /auth ↔ / reload loop.
     if (res.status === 401) {
       try {
         await supabase.auth.signOut();
       } catch {}
-      if (typeof window !== "undefined" && !window.location.pathname.startsWith("/auth")) {
-        const returnTo = window.location.pathname + window.location.search;
-        window.location.assign(`/auth?returnTo=${encodeURIComponent(returnTo)}`);
-      }
       throw new Error("unauthorized");
     }
-    // Subscription gate — redirect to /pricing instead of throwing into the React tree.
+    // Subscription gate — soft-route to /pricing. The caller's try/catch
+    // (or React Query) absorbs the throw; the redirect itself is handled
+    // by ProtectedRoute on next gate check, so this is just a fallback.
     if (res.status === 403 && body?.error === "subscription_required") {
       if (typeof window !== "undefined" && !window.location.pathname.startsWith("/pricing")) {
-        window.location.assign("/pricing");
+        // history.pushState is React-Router-friendly; falls back to assign
+        // only if React Router isn't intercepting.
+        try {
+          window.history.pushState({}, "", "/pricing");
+          window.dispatchEvent(new PopStateEvent("popstate"));
+        } catch {
+          window.location.assign("/pricing");
+        }
       }
       throw new Error("subscription_required");
     }
