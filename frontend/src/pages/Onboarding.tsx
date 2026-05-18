@@ -19,8 +19,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { database } from "@/lib/database";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Building2, Users, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Building2, Users, ArrowRight, CheckCircle2, LogOut } from "lucide-react";
 import emaraLogo from "@/assets/emara-logo-new.png";
 
 const countries = [
@@ -149,9 +150,25 @@ export default function Onboarding() {
     }
   };
 
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigate("/auth", { replace: true });
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="w-full max-w-lg space-y-6">
+    <div className="min-h-screen bg-background p-4">
+      <div className="w-full max-w-lg mx-auto pt-8 space-y-6">
+        <div className="flex justify-end -mb-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleSignOut}
+            className="gap-1.5 text-muted-foreground hover:text-foreground"
+          >
+            <LogOut className="h-3.5 w-3.5" /> Sign out
+          </Button>
+        </div>
+
         {/* Logo */}
         <div className="flex flex-col items-center gap-2">
           <img src={emaraLogo} alt="EMARA" className="h-14 w-auto" />
