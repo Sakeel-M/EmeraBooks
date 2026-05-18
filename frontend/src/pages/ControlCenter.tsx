@@ -62,7 +62,7 @@ import { flaskApi } from "@/lib/flaskApi";
 import { toast } from "sonner";
 import { formatAmount } from "@/lib/utils";
 import { FC } from "@/components/shared/FormattedCurrency";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { format, differenceInDays, parseISO, isAfter, startOfMonth } from "date-fns";
 import { getCanonicalCategory } from "@/lib/sectorMapping";
 import { useAIScore, type AIScoreResult } from "@/hooks/useAIScore";
@@ -118,6 +118,7 @@ export default function ControlCenter() {
   const queryClient = useQueryClient();
   const { startDate, endDate, backendReachable } = useDateRange();
   const [drillDown, setDrillDown] = useState<DrillDown | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const { aiScore, aiGenerating, generate: handleGenerateAI } = useAIScore();
 
   // ── Data queries ──────────────────────────────────────────────────────
@@ -389,6 +390,61 @@ export default function ControlCenter() {
       .then((v) => { if (v != null && !isNaN(Number(v))) setCtRate(Number(v)); })
       .catch(() => {});
   }, [clientId]);
+
+  // Auto-open All Open Alerts side sheet when arriving with ?openAlerts=1
+  // (used by the NotificationBell so the bell rows behave like the dashboard
+  // tile).
+  useEffect(() => {
+    if (searchParams.get("openAlerts") !== "1") return;
+    const allItemsTotal = totalOpen + (breakdown.overdueInvoices || 0) + (breakdown.overdueBills || 0);
+    if (allItemsTotal === 0) {
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    const openAlerts = riskAlerts.filter((a: any) => a.status === "open" || a.status === "new");
+    const alertTxns = openAlerts.map((a: any) => ({
+      id: a.id,
+      transaction_date: a.created_at?.slice(0, 10),
+      description: a.title || a.description || a.alert_type || "Risk Alert",
+      amount: a.amount || 0,
+      category: a.alert_type === "anomaly" ? "Anomaly" : `Risk: ${a.severity}`,
+      _kind: "risk_alert",
+      _entity_type: a.entity_type,
+      _entity_id: a.entity_id,
+    }));
+    const overdueInvTxns = invoices
+      .filter((i: any) => i.status !== "paid" && i.status !== "cancelled" && i.due_date && new Date(i.due_date) < new Date())
+      .map((i: any) => ({
+        id: i.id,
+        transaction_date: i.due_date,
+        description: `Invoice ${i.invoice_number || ""} — ${i.v2_customers?.name || "Unknown"}`.trim(),
+        amount: i.total || 0,
+        category: "Overdue Invoice",
+        _kind: "invoice",
+      }));
+    const overdueBillTxns = bills
+      .filter((b: any) => b.status !== "paid" && b.status !== "cancelled" && b.due_date && new Date(b.due_date) < new Date())
+      .map((b: any) => ({
+        id: b.id,
+        transaction_date: b.due_date,
+        description: `Bill ${b.bill_number || ""} — ${b.v2_vendors?.name || "Unknown"}`.trim(),
+        amount: b.total || 0,
+        category: "Overdue Bill",
+        _kind: "bill",
+      }));
+    const summaryItems: { label: string; value: string }[] = [];
+    if (breakdown.riskAlerts > 0) summaryItems.push({ label: "Risk Alerts", value: String(breakdown.riskAlerts) });
+    if (breakdown.anomalies > 0) summaryItems.push({ label: "Anomalies", value: String(breakdown.anomalies) });
+    if (breakdown.overdueInvoices > 0) summaryItems.push({ label: "Overdue Invoices", value: String(breakdown.overdueInvoices) });
+    if (breakdown.overdueBills > 0) summaryItems.push({ label: "Overdue Bills", value: String(breakdown.overdueBills) });
+    setDrillDown({
+      title: "All Open Alerts",
+      description: `${totalOpen} risk alert(s) + ${allItemsTotal - totalOpen} flags requiring attention`,
+      transactions: [...alertTxns, ...overdueInvTxns, ...overdueBillTxns],
+      summary: summaryItems,
+    });
+    setSearchParams({}, { replace: true });
+  }, [searchParams, totalOpen, breakdown, riskAlerts, invoices, bills, setSearchParams]);
 
   const { data: taxTxns = [] } = useQuery({
     queryKey: ["cc-tax-txns", clientId, taxFrom, taxTo],

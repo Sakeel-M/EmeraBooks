@@ -33,7 +33,7 @@ export function NotificationBell() {
       label: "Risk Alerts",
       count: breakdown.riskAlerts || 0,
       icon: <AlertTriangle className="h-4 w-4 text-red-500" />,
-      href: "/",
+      href: "/?openAlerts=1",
       tint: "hover:bg-red-50",
     },
     {
@@ -41,7 +41,7 @@ export function NotificationBell() {
       label: "Anomalies Detected",
       count: breakdown.anomalies || 0,
       icon: <Activity className="h-4 w-4 text-amber-500" />,
-      href: "/",
+      href: "/?openAlerts=1",
       tint: "hover:bg-amber-50",
     },
     {
