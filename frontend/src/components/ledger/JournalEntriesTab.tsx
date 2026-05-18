@@ -1,4 +1,5 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,9 @@ export function JournalEntriesTab() {
   const [dialogEntry, setDialogEntry] = useState<any | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTxn, setEditTxn] = useState<any | null>(null);
+  const [searchParams] = useSearchParams();
+  const txnId = searchParams.get("txnId");
+  const [highlightId, setHighlightId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     let r: LedgerEntry[] = entries;
@@ -56,6 +60,25 @@ export function JournalEntriesTab() {
     const tcr = filtered.reduce((s, e) => s + e.total_credit, 0);
     return { tdr, tcr, count: filtered.length };
   }, [filtered]);
+
+  useEffect(() => {
+    if (!txnId || isLoading) return;
+    const targetId = `txn-${txnId}`;
+    const match = entries.find((e) => e.id === targetId);
+    if (!match) {
+      toast.info("Transaction not in current date range — adjust the range to find it.");
+      return;
+    }
+    setHighlightId(targetId);
+    requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-id="${targetId}"]`) as HTMLElement | null;
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    });
+    const t = setTimeout(() => setHighlightId(null), 3000);
+    return () => clearTimeout(t);
+  }, [txnId, isLoading, entries]);
 
   const fmtDate = (d: string) => {
     try { return format(new Date(d), "dd MMM yyyy"); } catch { return d; }
@@ -194,7 +217,9 @@ export function JournalEntriesTab() {
                   return (
                     <Fragment key={e.id}>
                       <TableRow
-                        className={isMulti ? "cursor-pointer hover:bg-muted/40" : ""}
+                        data-id={e.id}
+                        data-highlight={highlightId === e.id ? "true" : undefined}
+                        className={`${isMulti ? "cursor-pointer hover:bg-muted/40" : ""} data-[highlight=true]:bg-amber-50 data-[highlight=true]:ring-2 data-[highlight=true]:ring-amber-300 transition-colors`}
                         onClick={() => isMulti && setExpanded((p) => ({ ...p, [e.id]: !p[e.id] }))}
                       >
                         <TableCell className="text-xs">{fmtDate(e.date)}</TableCell>

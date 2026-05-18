@@ -1382,14 +1382,15 @@ export default function ControlCenter() {
             } else if (item._kind === "bill") {
               navigate("/expenses");
             } else if (item._kind === "risk_alert") {
-              if (item._entity_type === "transaction") {
-                navigate("/ledger");
+              if (item._entity_type === "transaction" && item._entity_id) {
+                navigate(`/ledger?txnId=${item._entity_id}`);
               } else if (item._entity_type === "invoice") {
                 navigate("/revenue");
               } else if (item._entity_type === "bill") {
                 navigate("/expenses");
               } else {
                 navigate("/ledger");
+                toast.info("Anomaly alert — no single transaction to jump to.");
               }
             }
           } : undefined}

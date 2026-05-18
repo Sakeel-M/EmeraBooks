@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BookOpen, FileText, GitCompareArrows } from "lucide-react";
 import { Layout } from "@/components/layout/Layout";
@@ -6,6 +8,13 @@ import { JournalEntriesTab } from "@/components/ledger/JournalEntriesTab";
 import { DoubleEntriesTab } from "@/components/ledger/DoubleEntriesTab";
 
 export default function Ledger() {
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState("summary");
+
+  useEffect(() => {
+    if (searchParams.get("txnId")) setTab("journal");
+  }, [searchParams]);
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -18,7 +27,7 @@ export default function Ledger() {
           </p>
         </div>
 
-        <Tabs defaultValue="summary">
+        <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="flex-wrap h-auto gap-1">
             <TabsTrigger value="summary" className="gap-1.5">
               <BookOpen className="h-3.5 w-3.5" />

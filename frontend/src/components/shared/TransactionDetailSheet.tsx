@@ -79,7 +79,9 @@ export function TransactionDetailSheet({
   onDismiss,
   onRowClick,
 }: TransactionDetailSheetProps) {
-  const hasRowActions = !!(onStatusChange || onDelete || onResolve || onDismiss);
+  // Right-side Actions column is only for invoice/bill drill-downs.
+  // Resolve/Dismiss render inline under the Amount cell instead.
+  const hasRowActions = !!(onStatusChange || onDelete);
   const total = transactions.reduce((s, t) => s + (t.amount || t.total || 0), 0);
   const count = transactions.length;
   const avg = count > 0 ? total / count : 0;
@@ -202,41 +204,50 @@ export function TransactionDetailSheet({
                           className="text-xs text-right py-2 whitespace-nowrap"
                           onClick={clickable ? () => onRowClick?.(t) : undefined}
                         >
-                          <span className={amt >= 0 ? "text-emerald-600" : "text-red-500"}>
-                            {amt >= 0 ? (
-                              <ArrowUpRight className="inline h-3 w-3 mr-0.5" />
-                            ) : (
-                              <ArrowDownRight className="inline h-3 w-3 mr-0.5" />
+                          <div className="flex flex-col items-end gap-1">
+                            <span className={amt >= 0 ? "text-emerald-600" : "text-red-500"}>
+                              {amt >= 0 ? (
+                                <ArrowUpRight className="inline h-3 w-3 mr-0.5" />
+                              ) : (
+                                <ArrowDownRight className="inline h-3 w-3 mr-0.5" />
+                              )}
+                              <FC amount={Math.abs(amt)} currency={currency} />
+                            </span>
+                            {isRiskAlert && (onResolve || onDismiss) && (
+                              <div
+                                className="flex items-center gap-1 mt-0.5"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {onResolve && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-1.5 text-[10px] text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 gap-0.5"
+                                    onClick={(e) => { e.stopPropagation(); onResolve(t); }}
+                                    title="Resolve"
+                                  >
+                                    <Check className="h-3 w-3" /> Resolve
+                                  </Button>
+                                )}
+                                {onDismiss && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-1.5 text-[10px] text-slate-500 hover:text-slate-700 hover:bg-slate-100 gap-0.5"
+                                    onClick={(e) => { e.stopPropagation(); onDismiss(t); }}
+                                    title="Dismiss"
+                                  >
+                                    <X className="h-3 w-3" /> Dismiss
+                                  </Button>
+                                )}
+                              </div>
                             )}
-                            <FC amount={Math.abs(amt)} currency={currency} />
-                          </span>
+                          </div>
                         </TableCell>
                         {hasRowActions && (
                           <TableCell className="text-xs text-right py-2" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
-                              {isRiskAlert && onResolve && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 px-1.5 text-[10px] text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 gap-0.5"
-                                  onClick={(e) => { e.stopPropagation(); onResolve(t); }}
-                                  title="Resolve"
-                                >
-                                  <Check className="h-3 w-3" /> Resolve
-                                </Button>
-                              )}
-                              {isRiskAlert && onDismiss && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 px-1.5 text-[10px] text-slate-500 hover:text-slate-700 hover:bg-slate-100 gap-0.5"
-                                  onClick={(e) => { e.stopPropagation(); onDismiss(t); }}
-                                  title="Dismiss"
-                                >
-                                  <X className="h-3 w-3" /> Dismiss
-                                </Button>
-                              )}
-                              {!isRiskAlert && onStatusChange && (
+                              {onStatusChange && (
                                 <Select
                                   value={t.status || ""}
                                   onValueChange={(v) => onStatusChange(t, v)}
@@ -251,7 +262,7 @@ export function TransactionDetailSheet({
                                   </SelectContent>
                                 </Select>
                               )}
-                              {!isRiskAlert && onDelete && (
+                              {onDelete && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
