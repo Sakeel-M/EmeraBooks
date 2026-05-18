@@ -640,6 +640,9 @@ export default function ControlCenter() {
                           description: a.title || a.description || a.alert_type || "Risk Alert",
                           amount: a.amount || 0,
                           category: a.alert_type === "anomaly" ? "Anomaly" : `Risk: ${a.severity}`,
+                          _kind: "risk_alert",
+                          _entity_type: a.entity_type,
+                          _entity_id: a.entity_id,
                         }));
                         const overdueInvTxns = invoices
                           .filter((i: any) => i.status !== "paid" && i.status !== "cancelled" && i.due_date && new Date(i.due_date) < new Date())
@@ -649,6 +652,7 @@ export default function ControlCenter() {
                             description: `Invoice ${i.invoice_number || ""} — ${i.v2_customers?.name || "Unknown"}`.trim(),
                             amount: i.total || 0,
                             category: "Overdue Invoice",
+                            _kind: "invoice",
                           }));
                         const overdueBillTxns = bills
                           .filter((b: any) => b.status !== "paid" && b.status !== "cancelled" && b.due_date && new Date(b.due_date) < new Date())
@@ -658,6 +662,7 @@ export default function ControlCenter() {
                             description: `Bill ${b.bill_number || ""} — ${b.v2_vendors?.name || "Unknown"}`.trim(),
                             amount: b.total || 0,
                             category: "Overdue Bill",
+                            _kind: "bill",
                           }));
 
                         const summaryItems: { label: string; value: string }[] = [];
@@ -1340,6 +1345,52 @@ export default function ControlCenter() {
               toast.success("Deleted successfully");
             } catch (err: any) {
               toast.error(err.message || "Failed to delete");
+            }
+          } : undefined}
+          onResolve={drillDown.title === "All Open Alerts" ? async (item) => {
+            try {
+              await flaskApi.patch(`/risk-alerts/${item.id}`, { status: "resolved" });
+              setDrillDown((prev) => prev ? {
+                ...prev,
+                transactions: prev.transactions.filter((t) => t.id !== item.id),
+              } : null);
+              queryClient.invalidateQueries({ queryKey: ["risk-alerts-count"] });
+              queryClient.invalidateQueries({ queryKey: ["risk-alerts"] });
+              toast.success("Alert resolved");
+            } catch (err: any) {
+              toast.error(err.message || "Failed to resolve alert");
+            }
+          } : undefined}
+          onDismiss={drillDown.title === "All Open Alerts" ? async (item) => {
+            try {
+              await flaskApi.patch(`/risk-alerts/${item.id}`, { status: "dismissed" });
+              setDrillDown((prev) => prev ? {
+                ...prev,
+                transactions: prev.transactions.filter((t) => t.id !== item.id),
+              } : null);
+              queryClient.invalidateQueries({ queryKey: ["risk-alerts-count"] });
+              queryClient.invalidateQueries({ queryKey: ["risk-alerts"] });
+              toast.success("Alert dismissed");
+            } catch (err: any) {
+              toast.error(err.message || "Failed to dismiss alert");
+            }
+          } : undefined}
+          onRowClick={drillDown.title === "All Open Alerts" ? (item) => {
+            setDrillDown(null);
+            if (item._kind === "invoice") {
+              navigate("/revenue");
+            } else if (item._kind === "bill") {
+              navigate("/expenses");
+            } else if (item._kind === "risk_alert") {
+              if (item._entity_type === "transaction") {
+                navigate("/ledger");
+              } else if (item._entity_type === "invoice") {
+                navigate("/revenue");
+              } else if (item._entity_type === "bill") {
+                navigate("/expenses");
+              } else {
+                navigate("/ledger");
+              }
             }
           } : undefined}
         />

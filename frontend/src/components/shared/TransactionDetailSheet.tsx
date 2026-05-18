@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Download, ArrowUpRight, ArrowDownRight, Trash2 } from "lucide-react";
+import { Download, ArrowUpRight, ArrowDownRight, Trash2, Check, X } from "lucide-react";
 import { formatAmount } from "@/lib/utils";
 import { FC } from "@/components/shared/FormattedCurrency";
 import { format } from "date-fns";
@@ -47,6 +47,12 @@ interface TransactionDetailSheetProps {
   onDelete?: (item: any) => void;
   /** Which status options to show (defaults to invoice statuses) */
   statusOptions?: string[];
+  /** Per-row Resolve action (shown for items with _kind === "risk_alert"). */
+  onResolve?: (item: any) => void;
+  /** Per-row Dismiss action (shown for items with _kind === "risk_alert"). */
+  onDismiss?: (item: any) => void;
+  /** Per-row click. When set, description becomes a button that navigates / opens detail. */
+  onRowClick?: (item: any) => void;
 }
 
 function formatDate(dateStr: string | null | undefined): string {
@@ -69,7 +75,11 @@ export function TransactionDetailSheet({
   onStatusChange,
   onDelete,
   statusOptions = ["draft", "sent", "paid", "overdue", "cancelled"],
+  onResolve,
+  onDismiss,
+  onRowClick,
 }: TransactionDetailSheetProps) {
+  const hasRowActions = !!(onStatusChange || onDelete || onResolve || onDismiss);
   const total = transactions.reduce((s, t) => s + (t.amount || t.total || 0), 0);
   const count = transactions.length;
   const avg = count > 0 ? total / count : 0;
@@ -156,7 +166,7 @@ export function TransactionDetailSheet({
                     <TableHead className="text-xs">Date</TableHead>
                     <TableHead className="text-xs">Description</TableHead>
                     <TableHead className="text-xs text-right">Amount</TableHead>
-                    {(onStatusChange || onDelete) && (
+                    {hasRowActions && (
                       <TableHead className="text-xs text-right">Actions</TableHead>
                     )}
                   </TableRow>
@@ -167,20 +177,31 @@ export function TransactionDetailSheet({
                     const desc = t.description || t.notes || t.vendor_name || t.customer_name || "—";
                     const cat = getCanonicalCategory(t.category, desc, desc) || "";
                     const dateStr = t.transaction_date || t.bill_date || t.invoice_date || "";
+                    const isRiskAlert = t._kind === "risk_alert";
+                    const clickable = !!onRowClick;
                     return (
-                      <TableRow key={t.id || i}>
-                        <TableCell className="text-xs whitespace-nowrap py-2">
+                      <TableRow key={t.id || i} className={clickable ? "cursor-pointer hover:bg-muted/40" : undefined}>
+                        <TableCell
+                          className="text-xs whitespace-nowrap py-2"
+                          onClick={clickable ? () => onRowClick?.(t) : undefined}
+                        >
                           {formatDate(dateStr)}
                         </TableCell>
-                        <TableCell className="text-xs py-2">
-                          <div className="max-w-[200px] truncate">{desc}</div>
+                        <TableCell
+                          className="text-xs py-2"
+                          onClick={clickable ? () => onRowClick?.(t) : undefined}
+                        >
+                          <div className={`max-w-[200px] truncate ${clickable ? "text-primary hover:underline" : ""}`}>{desc}</div>
                           {cat && (
                             <Badge variant="outline" className="text-[9px] mt-0.5">
                               {cat}
                             </Badge>
                           )}
                         </TableCell>
-                        <TableCell className="text-xs text-right py-2 whitespace-nowrap">
+                        <TableCell
+                          className="text-xs text-right py-2 whitespace-nowrap"
+                          onClick={clickable ? () => onRowClick?.(t) : undefined}
+                        >
                           <span className={amt >= 0 ? "text-emerald-600" : "text-red-500"}>
                             {amt >= 0 ? (
                               <ArrowUpRight className="inline h-3 w-3 mr-0.5" />
@@ -190,10 +211,32 @@ export function TransactionDetailSheet({
                             <FC amount={Math.abs(amt)} currency={currency} />
                           </span>
                         </TableCell>
-                        {(onStatusChange || onDelete) && (
-                          <TableCell className="text-xs text-right py-2">
+                        {hasRowActions && (
+                          <TableCell className="text-xs text-right py-2" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
-                              {onStatusChange && (
+                              {isRiskAlert && onResolve && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-1.5 text-[10px] text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 gap-0.5"
+                                  onClick={(e) => { e.stopPropagation(); onResolve(t); }}
+                                  title="Resolve"
+                                >
+                                  <Check className="h-3 w-3" /> Resolve
+                                </Button>
+                              )}
+                              {isRiskAlert && onDismiss && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-1.5 text-[10px] text-slate-500 hover:text-slate-700 hover:bg-slate-100 gap-0.5"
+                                  onClick={(e) => { e.stopPropagation(); onDismiss(t); }}
+                                  title="Dismiss"
+                                >
+                                  <X className="h-3 w-3" /> Dismiss
+                                </Button>
+                              )}
+                              {!isRiskAlert && onStatusChange && (
                                 <Select
                                   value={t.status || ""}
                                   onValueChange={(v) => onStatusChange(t, v)}
@@ -208,12 +251,12 @@ export function TransactionDetailSheet({
                                   </SelectContent>
                                 </Select>
                               )}
-                              {onDelete && (
+                              {!isRiskAlert && onDelete && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   className="h-6 w-6 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
-                                  onClick={() => onDelete(t)}
+                                  onClick={(e) => { e.stopPropagation(); onDelete(t); }}
                                 >
                                   <Trash2 className="h-3 w-3" />
                                 </Button>
@@ -226,7 +269,7 @@ export function TransactionDetailSheet({
                   })}
                   {count > 200 && (
                     <TableRow>
-                      <TableCell colSpan={3} className="text-center text-xs text-muted-foreground py-2">
+                      <TableCell colSpan={hasRowActions ? 4 : 3} className="text-center text-xs text-muted-foreground py-2">
                         Showing 200 of {count} transactions
                       </TableCell>
                     </TableRow>

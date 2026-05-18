@@ -16,6 +16,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
+    setLoading(true);
     const checkAuth = async (session: any) => {
       if (!session) {
         queryClient.clear();
@@ -29,9 +30,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
       setAuthenticated(true);
 
-      // /pricing and /billing/success skip the subscription check, but they still
-      // require an org — payment is only asked AFTER business profile setup.
-      const billingExempt = ["/pricing", "/billing/success"].includes(location.pathname);
+      // Payment is only asked AFTER business profile setup, so /onboarding,
+      // /pricing and /billing/success all skip the subscription check.
+      const billingExempt = ["/onboarding", "/pricing", "/billing/success"].includes(location.pathname);
       const orgExempt = location.pathname === "/onboarding";
 
       // Platform admins bypass org + subscription gates entirely
