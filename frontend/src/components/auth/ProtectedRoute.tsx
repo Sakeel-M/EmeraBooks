@@ -16,7 +16,6 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    setLoading(true);
     const checkAuth = async (session: any) => {
       if (!session) {
         queryClient.clear();
