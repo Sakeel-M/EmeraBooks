@@ -98,15 +98,44 @@ export const flaskApi = {
   async postForm<T>(path: string, formData: FormData): Promise<T> {
     // Multipart: build headers without forcing Content-Type so the browser
     // sets the boundary automatically.
-    const headers = await getAuthHeaders();
+    let headers: Record<string, string>;
+    try {
+      headers = await getAuthHeaders();
+    } catch (e) {
+      throw new Error(
+        "Could not read session — try refreshing the page and signing in again.",
+      );
+    }
     delete headers["Content-Type"];
-    const res = await fetch(`${BASE}${path}`, {
-      method: "POST",
-      body: formData,
-      headers,
-    });
+
+    let res: Response;
+    try {
+      res = await fetch(`${BASE}${path}`, {
+        method: "POST",
+        body: formData,
+        headers,
+      });
+    } catch (e: any) {
+      // fetch() throws TypeError "Failed to fetch" for genuine network
+      // failures — DNS, connection drop, mid-upload abort, etc. Give the
+      // user something more actionable than the raw browser string.
+      if (e?.message === "Failed to fetch") {
+        throw new Error(
+          "Network error while uploading — check your connection or try a smaller file (max 10 MB).",
+        );
+      }
+      throw e;
+    }
+
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        // Stale JWT — sign out and let ProtectedRoute route to /auth.
+        try {
+          await supabase.auth.signOut();
+        } catch {}
+        throw new Error("Your session expired — please sign in again.");
+      }
       throw new Error(body?.error || `Request failed: ${res.status}`);
     }
     const text = await res.text();
