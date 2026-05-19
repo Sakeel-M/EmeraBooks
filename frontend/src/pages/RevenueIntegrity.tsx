@@ -1034,6 +1034,21 @@ function ReceiptsTab() {
     }
   };
 
+  const deleteReceipt = async (inv: any) => {
+    const label = inv.invoice_number || `the receipt`;
+    if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
+    try {
+      await flaskApi.del(`/invoices/${inv.id}`);
+      queryClient.invalidateQueries({ queryKey: ["revenue-invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["cc-invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["fr-invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["cash-invoices"] });
+      toast.success(`${label} deleted`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete");
+    }
+  };
+
   if (isFetching && finalInvoices.length === 0) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -1139,26 +1154,37 @@ function ReceiptsTab() {
                       </TableCell>
                     )}
                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => openEdit(inv)}
-                        title="Edit amount and tax"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      {(innerTab === "overdue" || innerTab === "cancelled") && (
+                      <div className="flex items-center justify-end gap-0.5">
                         <Button
                           variant="ghost"
-                          size="sm"
-                          className="h-7 px-2 text-xs"
-                          onClick={() => restoreToSent(inv)}
-                          title="Restore to Sent"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => openEdit(inv)}
+                          title="Edit amount and tax"
                         >
-                          Restore
+                          <Pencil className="h-3.5 w-3.5" />
                         </Button>
-                      )}
+                        {(innerTab === "overdue" || innerTab === "cancelled") && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => restoreToSent(inv)}
+                            title="Restore to Sent"
+                          >
+                            Restore
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50"
+                          onClick={() => deleteReceipt(inv)}
+                          title="Delete receipt"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
