@@ -122,12 +122,39 @@ def create_bill(client_id):
             db.session.flush()
         vendor_id = v.id
 
+    bill_number = (data.get("bill_number") or "").strip() or None
+    bill_date = data.get("bill_date", datetime.now(timezone.utc).date().isoformat())
+
+    # Duplicate guard (covers every entry point: Bills tab, Bill Receipts,
+    # uploads, integrations). Pass force=true to override intentionally.
+    if not data.get("force"):
+        existing = None
+        if bill_number:
+            dq = Bill.query.filter_by(client_id=cid, bill_number=bill_number)
+            if vendor_id:
+                dq = dq.filter_by(vendor_id=vendor_id)
+            existing = dq.first()
+        elif vendor_id:
+            # No bill number — fall back to vendor + date + amount match.
+            existing = Bill.query.filter_by(
+                client_id=cid, vendor_id=vendor_id, bill_date=bill_date, total=total,
+            ).first()
+        if existing:
+            return jsonify({
+                "error": (
+                    f"A bill {('#' + bill_number + ' ') if bill_number else ''}"
+                    "for this vendor already exists — it was not added again."
+                ),
+                "code": "duplicate",
+                "existing_id": str(existing.id),
+            }), 409
+
     bill = Bill(
         client_id=cid,
         vendor_id=vendor_id,
         source=data.get("source", "manual"),
-        bill_number=data.get("bill_number"),
-        bill_date=data.get("bill_date", datetime.now(timezone.utc).date().isoformat()),
+        bill_number=bill_number,
+        bill_date=bill_date,
         due_date=data.get("due_date"),
         subtotal=subtotal,
         tax_amount=tax_amount,
@@ -225,12 +252,38 @@ def create_invoice(client_id):
             db.session.flush()
         customer_id = cust.id
 
+    invoice_number = (data.get("invoice_number") or "").strip() or None
+    invoice_date = data.get("invoice_date", datetime.now(timezone.utc).date().isoformat())
+
+    # Duplicate guard (covers every entry point: Invoices tab, Invoice Receipts,
+    # uploads, integrations). Pass force=true to override intentionally.
+    if not data.get("force"):
+        existing = None
+        if invoice_number:
+            dq = Invoice.query.filter_by(client_id=cid, invoice_number=invoice_number)
+            if customer_id:
+                dq = dq.filter_by(customer_id=customer_id)
+            existing = dq.first()
+        elif customer_id:
+            existing = Invoice.query.filter_by(
+                client_id=cid, customer_id=customer_id, invoice_date=invoice_date, total=total,
+            ).first()
+        if existing:
+            return jsonify({
+                "error": (
+                    f"An invoice {('#' + invoice_number + ' ') if invoice_number else ''}"
+                    "for this customer already exists — it was not added again."
+                ),
+                "code": "duplicate",
+                "existing_id": str(existing.id),
+            }), 409
+
     invoice = Invoice(
         client_id=cid,
         customer_id=customer_id,
         source=data.get("source", "manual"),
-        invoice_number=data.get("invoice_number"),
-        invoice_date=data.get("invoice_date", datetime.now(timezone.utc).date().isoformat()),
+        invoice_number=invoice_number,
+        invoice_date=invoice_date,
         due_date=data.get("due_date"),
         subtotal=subtotal,
         tax_amount=tax_amount,
