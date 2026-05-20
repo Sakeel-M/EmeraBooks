@@ -89,8 +89,12 @@ def _coerce_bool(raw):
 def _reconcile_amounts(subtotal, tax, total, vat_inclusive, vat_rate):
     """Return a consistent (subtotal, tax, total) where subtotal + tax == total.
 
-    Anchors on the grand total — the most reliable figure on an invoice — so a
-    VAT-inclusive total never gets VAT added on top of it again.
+    Invoices here are single-rate (UAE 5%), so the three figures must satisfy
+    tax = subtotal * rate and subtotal + tax = total. The printed VAT line is
+    the most reliably-read figure on a dense document, so it is the anchor: a
+    directly-read total is kept only when it agrees with the VAT (crisp scans
+    stay penny-exact); otherwise the total/subtotal are derived from the VAT
+    (so a misread total can't introduce a large error).
     """
     # Normalise the rate: accept 5 (percent) or 0.05 (fraction); default UAE 5%.
     if vat_rate:
@@ -98,7 +102,20 @@ def _reconcile_amounts(subtotal, tax, total, vat_inclusive, vat_rate):
     else:
         rate = 0.05
 
-    # Establish the authoritative total
+    # 1. VAT-anchored path — only when a VAT amount was actually read. With the
+    #    current prompt the model returns tax only for a PRINTED VAT line and
+    #    uses its printed value verbatim, so anchoring on it is safe.
+    if tax is not None and tax > 0 and rate > 0:
+        vat_implied_total = round(tax * (1 + rate) / rate, 2)
+        tol = max(1.0, 0.005 * vat_implied_total)  # 0.5% band
+        if total is not None and total > 0 and abs(total - vat_implied_total) <= tol:
+            # Directly-read total agrees with the VAT -> keep its exact value.
+            t = round(total, 2)
+            return (round(t - tax, 2), round(tax, 2), t)
+        # Total missing or inconsistent (likely misread) -> derive from the VAT.
+        return (round(tax / rate, 2), round(tax, 2), vat_implied_total)
+
+    # 2. No VAT line read -> total-anchored fallback.
     if total is None:
         total = (subtotal or 0) + (tax or 0)
     if total <= 0:
@@ -107,12 +124,6 @@ def _reconcile_amounts(subtotal, tax, total, vat_inclusive, vat_rate):
     # Already consistent (within rounding tolerance)? keep the model's split.
     if subtotal is not None and tax is not None and abs(subtotal + tax - total) <= 0.02:
         return (round(subtotal, 2), round(tax, 2), round(total, 2))
-
-    # An explicit, believable tax figure (e.g. a printed "Total VAT @ 5%" line)
-    # -> trust it verbatim; subtotal is the remainder. This runs BEFORE the
-    # vat_inclusive recompute so a stated VAT is never silently replaced.
-    if tax is not None and 0 <= tax < total:
-        return (round(total - tax, 2), round(tax, 2), round(total, 2))
 
     # VAT-inclusive total with no usable tax figure: back the tax out of gross.
     if vat_inclusive and rate > 0:
