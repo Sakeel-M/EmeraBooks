@@ -96,9 +96,18 @@ def create_customer(client_id):
 def create_bill(client_id):
     data = request.get_json()
     cid = uuid.UUID(client_id)
-    total = float(data.get("total", 0))
-    subtotal = float(data.get("subtotal", round(total / 1.05, 2)))
-    tax_amount = float(data.get("tax_amount", round(total - subtotal, 2)))
+    total = float(data.get("total", 0) or 0)
+    sub_raw = data.get("subtotal")
+    tax_raw = data.get("tax_amount")
+    if sub_raw is not None:
+        subtotal = float(sub_raw)
+        tax_amount = float(tax_raw) if tax_raw is not None else round(total - subtotal, 2)
+    elif tax_raw is not None:
+        tax_amount = float(tax_raw)
+        subtotal = round(total - tax_amount, 2)
+    else:
+        subtotal = round(total / 1.05, 2)
+        tax_amount = round(total - subtotal, 2)
 
     # Resolve vendor: accept vendor_id OR vendor_name
     vendor_id = None
@@ -190,9 +199,18 @@ def delete_bill(bill_id):
 def create_invoice(client_id):
     data = request.get_json()
     cid = uuid.UUID(client_id)
-    total = float(data.get("total", 0))
-    subtotal = float(data.get("subtotal", round(total / 1.05, 2)))
-    tax_amount = float(data.get("tax_amount", round(total - subtotal, 2)))
+    total = float(data.get("total", 0) or 0)
+    sub_raw = data.get("subtotal")
+    tax_raw = data.get("tax_amount")
+    if sub_raw is not None:
+        subtotal = float(sub_raw)
+        tax_amount = float(tax_raw) if tax_raw is not None else round(total - subtotal, 2)
+    elif tax_raw is not None:
+        tax_amount = float(tax_raw)
+        subtotal = round(total - tax_amount, 2)
+    else:
+        subtotal = round(total / 1.05, 2)
+        tax_amount = round(total - subtotal, 2)
 
     # Resolve customer: accept customer_id OR customer_name
     customer_id = None

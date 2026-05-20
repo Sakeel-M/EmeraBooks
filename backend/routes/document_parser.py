@@ -77,6 +77,49 @@ def _coerce_number(raw):
     return None
 
 
+def _coerce_bool(raw):
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str):
+        return raw.strip().lower() in ("true", "yes", "1", "inclusive")
+    return False
+
+
+def _reconcile_amounts(subtotal, tax, total, vat_inclusive, vat_rate):
+    """Return a consistent (subtotal, tax, total) where subtotal + tax == total.
+
+    Anchors on the grand total — the most reliable figure on an invoice — so a
+    VAT-inclusive total never gets VAT added on top of it again.
+    """
+    rate = (vat_rate / 100.0) if vat_rate else 0.05  # default UAE 5%
+
+    # Establish the authoritative total
+    if total is None:
+        total = (subtotal or 0) + (tax or 0)
+    if total <= 0:
+        return (subtotal or 0.0, tax or 0.0, total or 0.0)
+
+    # Already consistent (within rounding tolerance)? keep the model's split.
+    if subtotal is not None and tax is not None and abs(subtotal + tax - total) <= 0.02:
+        return (round(subtotal, 2), round(tax, 2), round(total, 2))
+
+    # VAT-inclusive total: back the tax out of the gross total.
+    if vat_inclusive and rate > 0:
+        sub = round(total / (1 + rate), 2)
+        return (sub, round(total - sub, 2), round(total, 2))
+
+    # A believable tax figure -> subtotal is the remainder.
+    if tax is not None and 0 <= tax < total:
+        return (round(total - tax, 2), round(tax, 2), round(total, 2))
+
+    # A believable subtotal -> tax is the remainder.
+    if subtotal is not None and 0 <= subtotal <= total:
+        return (round(subtotal, 2), round(total - subtotal, 2), round(total, 2))
+
+    # Nothing usable -> assume no tax.
+    return (round(total, 2), 0.0, round(total, 2))
+
+
 @document_parser_bp.route("/parse-document", methods=["POST"])
 @require_auth
 def parse_document():
@@ -123,10 +166,19 @@ def parse_document():
         '  "doc_date": string | null,           // YYYY-MM-DD\n'
         '  "subtotal": number | null,           // amount before tax, plain decimal, no currency symbol\n'
         '  "tax_amount": number | null,         // VAT/tax amount, plain decimal\n'
-        '  "total": number | null,              // grand total, plain decimal\n'
+        '  "total": number | null,              // grand total (amount actually due/paid), plain decimal\n'
+        '  "vat_inclusive": boolean,            // true if the prices/total already include VAT\n'
+        '  "vat_rate": number | null,           // VAT percentage, e.g. 5\n'
         '  "currency": string | null            // ISO code, e.g. AED, USD, EUR\n'
         "}\n"
-        "Use null for any field you cannot determine. Numbers must be plain decimals (no commas, no symbols)."
+        "Rules:\n"
+        "- The grand total is the amount actually due/paid. When the invoice says "
+        '"inclusive of VAT" the total ALREADY contains the tax — do NOT add tax on top of it.\n'
+        "- subtotal, tax_amount and total MUST satisfy: subtotal + tax_amount == total.\n"
+        "- If the invoice is VAT-inclusive and only shows a gross total, decompose it: "
+        "subtotal = total / (1 + vat_rate/100), tax_amount = total - subtotal.\n"
+        "- Never compute tax as a percentage added on top of a VAT-inclusive total.\n"
+        "- Use null for any field you cannot determine. Numbers must be plain decimals (no commas, no symbols)."
     )
 
     try:
@@ -151,13 +203,21 @@ def parse_document():
     except Exception as e:
         return jsonify({"error": f"AI extraction failed: {e}"}), 502
 
+    subtotal, tax_amount, total = _reconcile_amounts(
+        _coerce_number(parsed.get("subtotal")),
+        _coerce_number(parsed.get("tax_amount")),
+        _coerce_number(parsed.get("total")),
+        _coerce_bool(parsed.get("vat_inclusive")),
+        _coerce_number(parsed.get("vat_rate")),
+    )
+
     out = {
         "counterparty_name": parsed.get("counterparty_name") or None,
         "doc_number": parsed.get("doc_number") or None,
         "doc_date": _coerce_date(parsed.get("doc_date")),
-        "subtotal": _coerce_number(parsed.get("subtotal")),
-        "tax_amount": _coerce_number(parsed.get("tax_amount")),
-        "total": _coerce_number(parsed.get("total")),
+        "subtotal": subtotal,
+        "tax_amount": tax_amount,
+        "total": total,
         "currency": (parsed.get("currency") or "AED").upper() if parsed.get("currency") else "AED",
     }
     return jsonify(out)
