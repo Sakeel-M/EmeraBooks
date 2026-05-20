@@ -36,8 +36,9 @@ def _pdf_first_page_to_png(pdf_bytes: bytes) -> bytes:
         if doc.page_count == 0:
             raise ValueError("PDF has no pages")
         page = doc.load_page(0)
-        # 144 DPI = 2x default
-        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+        # 216 DPI = 3x default — dense, multi-column invoices need the extra
+        # resolution for small table digits to survive the OCR step.
+        pix = page.get_pixmap(matrix=fitz.Matrix(3, 3), alpha=False)
         return pix.tobytes("png")
     finally:
         doc.close()
@@ -103,14 +104,16 @@ def _reconcile_amounts(subtotal, tax, total, vat_inclusive, vat_rate):
     if subtotal is not None and tax is not None and abs(subtotal + tax - total) <= 0.02:
         return (round(subtotal, 2), round(tax, 2), round(total, 2))
 
-    # VAT-inclusive total: back the tax out of the gross total.
+    # An explicit, believable tax figure (e.g. a printed "Total VAT @ 5%" line)
+    # -> trust it verbatim; subtotal is the remainder. This runs BEFORE the
+    # vat_inclusive recompute so a stated VAT is never silently replaced.
+    if tax is not None and 0 <= tax < total:
+        return (round(total - tax, 2), round(tax, 2), round(total, 2))
+
+    # VAT-inclusive total with no usable tax figure: back the tax out of gross.
     if vat_inclusive and rate > 0:
         sub = round(total / (1 + rate), 2)
         return (sub, round(total - sub, 2), round(total, 2))
-
-    # A believable tax figure -> subtotal is the remainder.
-    if tax is not None and 0 <= tax < total:
-        return (round(total - tax, 2), round(tax, 2), round(total, 2))
 
     # A believable subtotal -> tax is the remainder.
     if subtotal is not None and 0 <= subtotal <= total:
@@ -172,30 +175,46 @@ def parse_document():
         '  "currency": string | null            // ISO code, e.g. AED, USD, EUR\n'
         "}\n"
         "Rules:\n"
-        "- The grand total is the amount actually due/paid. When the invoice says "
-        '"inclusive of VAT" the total ALREADY contains the tax — do NOT add tax on top of it.\n'
+        "- Read the document carefully; it may be a dense, multi-section, or bilingual "
+        "(English/Arabic) invoice. Extract the figures EXACTLY as printed.\n"
+        "- If the invoice prints the VAT/tax as its own labelled line (e.g. "
+        "'Total VAT @ 5%: AED 622.91', 'VAT Amount', 'Tax'), use that exact printed "
+        "value as tax_amount. Do NOT recompute it from a percentage.\n"
+        "- For total, use the total of THIS invoice's current charges INCLUDING VAT — "
+        "typically labelled 'Total (Incl. VAT)', 'Total Including VAT', 'Invoice Total', "
+        "or 'Grand Total' for the current period. Do NOT use 'Total Due', 'Balance Due', "
+        "'Previous Balance', 'Balance Brought Forward', 'Opening Balance', or 'Arrears' — "
+        "those carry amounts from earlier periods that are NOT part of this invoice's charge.\n"
+        "- subtotal = total - tax_amount.\n"
         "- subtotal, tax_amount and total MUST satisfy: subtotal + tax_amount == total.\n"
-        "- If the invoice is VAT-inclusive and only shows a gross total, decompose it: "
-        "subtotal = total / (1 + vat_rate/100), tax_amount = total - subtotal.\n"
+        "- When the invoice says 'inclusive of VAT', the total ALREADY contains the tax — "
+        "do NOT add tax on top of it. If only a gross VAT-inclusive total is shown, "
+        "decompose it: subtotal = total / (1 + vat_rate/100), tax_amount = total - subtotal.\n"
         "- Never compute tax as a percentage added on top of a VAT-inclusive total.\n"
         "- Use null for any field you cannot determine. Numbers must be plain decimals (no commas, no symbols)."
     )
 
     try:
         response = openai.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {
                     "role": "user",
                     "content": [
                         {"type": "text", "text": f"Parse this {kind}."},
-                        {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime};base64,{b64}",
+                                "detail": "high",
+                            },
+                        },
                     ],
                 },
             ],
             response_format={"type": "json_object"},
-            max_tokens=400,
+            max_tokens=700,
             temperature=0.0,
         )
         raw = response.choices[0].message.content or "{}"
