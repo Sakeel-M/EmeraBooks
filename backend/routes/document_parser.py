@@ -92,7 +92,11 @@ def _reconcile_amounts(subtotal, tax, total, vat_inclusive, vat_rate):
     Anchors on the grand total — the most reliable figure on an invoice — so a
     VAT-inclusive total never gets VAT added on top of it again.
     """
-    rate = (vat_rate / 100.0) if vat_rate else 0.05  # default UAE 5%
+    # Normalise the rate: accept 5 (percent) or 0.05 (fraction); default UAE 5%.
+    if vat_rate:
+        rate = (vat_rate / 100.0) if vat_rate >= 1 else float(vat_rate)
+    else:
+        rate = 0.05
 
     # Establish the authoritative total
     if total is None:
@@ -159,40 +163,7 @@ def parse_document():
 
     b64 = base64.b64encode(png_bytes).decode("ascii")
 
-    counterparty_label = "supplier or vendor that issued the bill" if kind == "bill" else "customer being billed"
-    system_prompt = (
-        "You are an expert invoice/bill parser. Extract the header fields from the document image. "
-        "Return ONLY a JSON object with this exact shape:\n"
-        "{\n"
-        '  "counterparty_name": string | null,  // ' + counterparty_label + "\n"
-        '  "doc_number": string | null,         // invoice number / bill number\n'
-        '  "doc_date": string | null,           // YYYY-MM-DD\n'
-        '  "subtotal": number | null,           // amount before tax, plain decimal, no currency symbol\n'
-        '  "tax_amount": number | null,         // VAT/tax amount, plain decimal\n'
-        '  "total": number | null,              // grand total (amount actually due/paid), plain decimal\n'
-        '  "vat_inclusive": boolean,            // true if the prices/total already include VAT\n'
-        '  "vat_rate": number | null,           // VAT percentage, e.g. 5\n'
-        '  "currency": string | null            // ISO code, e.g. AED, USD, EUR\n'
-        "}\n"
-        "Rules:\n"
-        "- Read the document carefully; it may be a dense, multi-section, or bilingual "
-        "(English/Arabic) invoice. Extract the figures EXACTLY as printed.\n"
-        "- If the invoice prints the VAT/tax as its own labelled line (e.g. "
-        "'Total VAT @ 5%: AED 622.91', 'VAT Amount', 'Tax'), use that exact printed "
-        "value as tax_amount. Do NOT recompute it from a percentage.\n"
-        "- For total, use the total of THIS invoice's current charges INCLUDING VAT — "
-        "typically labelled 'Total (Incl. VAT)', 'Total Including VAT', 'Invoice Total', "
-        "or 'Grand Total' for the current period. Do NOT use 'Total Due', 'Balance Due', "
-        "'Previous Balance', 'Balance Brought Forward', 'Opening Balance', or 'Arrears' — "
-        "those carry amounts from earlier periods that are NOT part of this invoice's charge.\n"
-        "- subtotal = total - tax_amount.\n"
-        "- subtotal, tax_amount and total MUST satisfy: subtotal + tax_amount == total.\n"
-        "- When the invoice says 'inclusive of VAT', the total ALREADY contains the tax — "
-        "do NOT add tax on top of it. If only a gross VAT-inclusive total is shown, "
-        "decompose it: subtotal = total / (1 + vat_rate/100), tax_amount = total - subtotal.\n"
-        "- Never compute tax as a percentage added on top of a VAT-inclusive total.\n"
-        "- Use null for any field you cannot determine. Numbers must be plain decimals (no commas, no symbols)."
-    )
+    system_prompt = _build_system_prompt(kind)
 
     try:
         response = openai.chat.completions.create(
@@ -240,3 +211,40 @@ def parse_document():
         "currency": (parsed.get("currency") or "AED").upper() if parsed.get("currency") else "AED",
     }
     return jsonify(out)
+
+
+def _build_system_prompt(kind: str) -> str:
+    counterparty_label = "supplier or vendor that issued the bill" if kind == "bill" else "customer being billed"
+    return (
+        "You are an expert invoice/bill parser. Extract the header fields from the document image. "
+        "Return ONLY a JSON object with this exact shape:\n"
+        "{\n"
+        '  "counterparty_name": string | null,  // ' + counterparty_label + "\n"
+        '  "doc_number": string | null,         // invoice number / bill number\n'
+        '  "doc_date": string | null,           // YYYY-MM-DD\n'
+        '  "subtotal": number | null,           // amount before tax, plain decimal, no currency symbol\n'
+        '  "tax_amount": number | null,         // VAT/tax amount, plain decimal\n'
+        '  "total": number | null,              // grand total (amount actually due/paid), plain decimal\n'
+        '  "vat_inclusive": boolean,            // true if the prices/total already include VAT\n'
+        '  "vat_rate": number | null,           // VAT percentage, e.g. 5\n'
+        '  "currency": string | null            // ISO code, e.g. AED, USD, EUR\n'
+        "}\n"
+        "Rules:\n"
+        "- Read the document carefully; it may be a dense, multi-section, or bilingual "
+        "(English/Arabic) invoice. Extract the figures EXACTLY as printed.\n"
+        "- If the invoice prints the VAT/tax as its own labelled line (e.g. "
+        "'Total VAT @ 5%: AED 622.91', 'VAT Amount', 'Tax'), use that exact printed "
+        "value as tax_amount. Do NOT recompute it from a percentage.\n"
+        "- For total, use the total of THIS invoice's current charges INCLUDING VAT — "
+        "typically labelled 'Total (Incl. VAT)', 'Total Including VAT', 'Invoice Total', "
+        "or 'Grand Total' for the current period. Do NOT use 'Total Due', 'Balance Due', "
+        "'Previous Balance', 'Balance Brought Forward', 'Opening Balance', or 'Arrears' — "
+        "those carry amounts from earlier periods that are NOT part of this invoice's charge.\n"
+        "- subtotal = total - tax_amount.\n"
+        "- subtotal, tax_amount and total MUST satisfy: subtotal + tax_amount == total.\n"
+        "- When the invoice says 'inclusive of VAT', the total ALREADY contains the tax — "
+        "do NOT add tax on top of it. If only a gross VAT-inclusive total is shown, "
+        "decompose it: subtotal = total / (1 + vat_rate/100), tax_amount = total - subtotal.\n"
+        "- Never compute tax as a percentage added on top of a VAT-inclusive total.\n"
+        "- Use null for any field you cannot determine. Numbers must be plain decimals (no commas, no symbols)."
+    )
