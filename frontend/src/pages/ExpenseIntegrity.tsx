@@ -2235,63 +2235,71 @@ function VendorsTab() {
       .sort((a: any, b: any) => b.totalBilled - a.totalBilled);
   }, [groupedVendors, bills]);
 
-  if (groupedVendors.length === 0) {
-    return (
-      <Card className="border-dashed">
-        <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="rounded-full bg-muted p-4 mb-4">
-            <Store className="h-10 w-10 text-muted-foreground/40" />
-          </div>
-          <h3 className="text-lg font-semibold mb-2">No Vendors Yet</h3>
-          <p className="text-sm text-muted-foreground max-w-md">
-            Vendors are created automatically when bills are synced from your
-            bank statements.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
+  const hasVendors = groupedVendors.length > 0;
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <KPICard
-          label="Total Vendors"
-          value={groupedVendors.length.toString()}
-          icon={Store}
-          color="text-primary"
-          sub={`${vendorStats.reduce((s: number, v: any) => s + v.billCount, 0)} bills`}
-        />
-        <KPICard
-          label="With Outstanding"
-          value={vendorStats
-            .filter((v: any) => v.outstanding > 0)
-            .length.toString()}
-          icon={Clock}
-          color="text-amber-500"
-          sub="have unpaid bills"
-        />
-        <KPICard
-          label="With Overdue"
-          value={vendorStats
-            .filter((v: any) => v.overdueCount > 0)
-            .length.toString()}
-          icon={AlertTriangle}
-          color={
-            vendorStats.some((v: any) => v.overdueCount > 0)
-              ? "text-red-500"
-              : "text-green-600"
-          }
-          sub="need attention"
-        />
-      </div>
+      {!hasVendors && (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="rounded-full bg-muted p-4 mb-4">
+              <Store className="h-10 w-10 text-muted-foreground/40" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">No Vendors Yet</h3>
+            <p className="text-sm text-muted-foreground max-w-md mb-4">
+              Vendors are created automatically when bills are synced from your
+              bank statements — or add one manually below.
+            </p>
+            <Button size="sm" onClick={() => setShowAddDialog(true)}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              Add Vendor
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
-      <div className="flex justify-end">
-        <Button size="sm" onClick={() => setShowAddDialog(true)}>
-          <Plus className="h-4 w-4 mr-1.5" />
-          Add Vendor
-        </Button>
-      </div>
+      {hasVendors && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <KPICard
+              label="Total Vendors"
+              value={groupedVendors.length.toString()}
+              icon={Store}
+              color="text-primary"
+              sub={`${vendorStats.reduce((s: number, v: any) => s + v.billCount, 0)} bills`}
+            />
+            <KPICard
+              label="With Outstanding"
+              value={vendorStats
+                .filter((v: any) => v.outstanding > 0)
+                .length.toString()}
+              icon={Clock}
+              color="text-amber-500"
+              sub="have unpaid bills"
+            />
+            <KPICard
+              label="With Overdue"
+              value={vendorStats
+                .filter((v: any) => v.overdueCount > 0)
+                .length.toString()}
+              icon={AlertTriangle}
+              color={
+                vendorStats.some((v: any) => v.overdueCount > 0)
+                  ? "text-red-500"
+                  : "text-green-600"
+              }
+              sub="need attention"
+            />
+          </div>
+
+          <div className="flex justify-end">
+            <Button size="sm" onClick={() => setShowAddDialog(true)}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              Add Vendor
+            </Button>
+          </div>
+        </>
+      )}
 
       {/* Add Vendor Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
@@ -2376,7 +2384,7 @@ function VendorsTab() {
       </Dialog>
 
       {/* Vendor table */}
-      <Card>
+      {hasVendors && <Card>
         <CardContent className="p-0 overflow-x-auto">
           <Table>
             <TableHeader>
@@ -2444,7 +2452,7 @@ function VendorsTab() {
             </TableBody>
           </Table>
         </CardContent>
-      </Card>
+      </Card>}
 
       {/* Vendor Detail Sheet */}
       <Sheet open={!!selectedVendor} onOpenChange={(open) => { if (!open) setSelectedVendor(null); }}>
