@@ -2700,6 +2700,9 @@ function BusinessProfileTab() {
         </CardContent>
       </Card>
 
+      {/* Bank Accounts */}
+      <BankAccountsCard clientId={clientId} />
+
       {/* Contact & Details */}
       <Card className="stat-card-hover">
         <CardHeader className="pb-3">
@@ -2801,9 +2804,6 @@ function BusinessProfileTab() {
           </div>
         </CardContent>
       </Card>
-
-      {/* Bank Accounts */}
-      <BankAccountsCard clientId={clientId} />
 
       {/* Bottom Save Button */}
       <div className="flex justify-end">
