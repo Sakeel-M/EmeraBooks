@@ -64,6 +64,13 @@ export const DEFAULT_TEMPLATE: InvoiceTemplate = {
   payment_terms: "Net 30",
 };
 
+export interface CounterpartyContact {
+  address?: string;
+  phone?: string;
+  email?: string;
+  trn?: string;
+}
+
 export interface InvoicePreviewProps {
   profile: InvoiceProfile;
   template: InvoiceTemplate;
@@ -79,6 +86,14 @@ export interface InvoicePreviewProps {
   currency: string;
   fmtDate: (d: string) => string;
   stamp?: "paid" | "cancelled" | null;
+  /** "invoice" (default) renders title "INVOICE" + "Bill To".
+   *  "bill" renders "BILL" + "Bill From" (supplier).
+   */
+  kind?: "invoice" | "bill";
+  /** Vendor/customer contact details rendered under the counterparty name. */
+  counterpartyContact?: CounterpartyContact;
+  /** Show a Category column on each line item row. */
+  showLineCategories?: boolean;
 }
 
 export function InvoicePreview({
@@ -96,6 +111,9 @@ export function InvoicePreview({
   currency,
   fmtDate,
   stamp = null,
+  kind = "invoice",
+  counterpartyContact,
+  showLineCategories = false,
 }: InvoicePreviewProps) {
   const accent = template.accent_color;
   const isModern = template.layout === "modern";
@@ -161,10 +179,10 @@ export function InvoicePreview({
               )}
             </div>
 
-            {/* Invoice meta */}
+            {/* Invoice/Bill meta */}
             <div className={isModern ? "" : "text-right"}>
               <p className="font-bold text-xl tracking-tight" style={{ color: accent }}>
-                INVOICE
+                {kind === "bill" ? "BILL" : "INVOICE"}
               </p>
               <p className="text-xs font-mono text-muted-foreground">{invoiceNumber || "—"}</p>
               <p className="text-[10px] text-muted-foreground mt-1">Date: {fmtDate(invoiceDate)}</p>
@@ -179,12 +197,28 @@ export function InvoicePreview({
 
           <Separator />
 
-          {/* Bill To */}
+          {/* Bill To / Bill From */}
           <div>
             <p className="text-[9px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: accent }}>
-              Bill To
+              {kind === "bill" ? "Bill From" : "Bill To"}
             </p>
             <p className="font-medium">{customerName || "—"}</p>
+            {counterpartyContact && (
+              <div className="mt-0.5 space-y-0.5">
+                {counterpartyContact.address && (
+                  <p className="text-[10px] text-muted-foreground whitespace-pre-line">{counterpartyContact.address}</p>
+                )}
+                {counterpartyContact.phone && (
+                  <p className="text-[10px] text-muted-foreground">{counterpartyContact.phone}</p>
+                )}
+                {counterpartyContact.email && (
+                  <p className="text-[10px] text-muted-foreground">{counterpartyContact.email}</p>
+                )}
+                {counterpartyContact.trn && (
+                  <p className="text-[10px] text-muted-foreground">TRN: {counterpartyContact.trn}</p>
+                )}
+              </div>
+            )}
           </div>
 
           <Separator />
@@ -195,15 +229,19 @@ export function InvoicePreview({
               className="grid grid-cols-12 text-[9px] font-semibold uppercase tracking-wider pb-1.5 mb-1 border-b-2"
               style={{ borderColor: accent, color: accent }}
             >
-              <div className="col-span-5">Description</div>
+              <div className={showLineCategories ? "col-span-3" : "col-span-5"}>Description</div>
+              {showLineCategories && <div className="col-span-2">Category</div>}
               <div className="col-span-2 text-right">Qty</div>
               <div className="col-span-2 text-right">Price</div>
               <div className="col-span-1 text-right">Tax</div>
               <div className="col-span-2 text-right">Amount</div>
             </div>
             {lineItems.map((li) => (
-              <div key={li.id} className="grid grid-cols-12 text-xs py-1 border-b border-muted/50">
-                <div className="col-span-5 truncate">{li.description || "—"}</div>
+              <div key={li.id} className="grid grid-cols-12 text-xs py-1 border-b border-muted/50 items-start">
+                <div className={`${showLineCategories ? "col-span-3" : "col-span-5"} pr-1 break-words`}>{li.description || "—"}</div>
+                {showLineCategories && (
+                  <div className="col-span-2 text-[10px] text-muted-foreground pr-1 break-words">{li.category || "—"}</div>
+                )}
                 <div className="col-span-2 text-right">{li.quantity}</div>
                 <div className="col-span-2 text-right"><FC amount={li.unit_price} currency={currency} /></div>
                 <div className="col-span-1 text-right text-muted-foreground">{li.tax_rate}%</div>

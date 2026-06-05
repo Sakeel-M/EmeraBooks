@@ -1256,6 +1256,13 @@ function ReceiptsTab() {
               <InvoicePreview
                 profile={profile}
                 template={template}
+                showLineCategories
+                counterpartyContact={{
+                  address: selectedInvoice.v2_customers?.address,
+                  phone: selectedInvoice.v2_customers?.phone,
+                  email: selectedInvoice.v2_customers?.email,
+                  trn: selectedInvoice.v2_customers?.trn,
+                }}
                 customerName={selectedInvoice.v2_customers?.name || selectedInvoice.customer_name || "—"}
                 invoiceNumber={selectedInvoice.invoice_number || "—"}
                 invoiceDate={selectedInvoice.invoice_date || ""}
@@ -1268,6 +1275,7 @@ function ReceiptsTab() {
                         quantity: Number(li.quantity || 1),
                         unit_price: Number(li.unit_price || 0),
                         tax_rate: Number(li.tax_rate ?? 0),
+                        category: li.category || selectedInvoice.category,
                       }))
                     : [{
                         id: "0",
@@ -1277,6 +1285,7 @@ function ReceiptsTab() {
                         tax_rate: Number(selectedInvoice.subtotal || 0) > 0
                           ? +((Number(selectedInvoice.tax_amount || 0) / Number(selectedInvoice.subtotal || 1)) * 100).toFixed(2)
                           : 0,
+                        category: selectedInvoice.category,
                       }]
                 }
                 subtotal={Number(selectedInvoice.subtotal || 0)}

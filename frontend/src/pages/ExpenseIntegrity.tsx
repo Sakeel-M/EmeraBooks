@@ -106,6 +106,7 @@ import { useDateRange } from "@/hooks/useDateRange";
 import { TransactionDetailSheet } from "@/components/shared/TransactionDetailSheet";
 import { DocumentDropzone } from "@/components/shared/DocumentDropzone";
 import { CategorySelect } from "@/components/shared/CategorySelect";
+import { PrintableBill } from "@/components/shared/PrintableBill";
 import { useNavigate } from "react-router-dom";
 import { ThankYouBlock } from "./RevenueIntegrity";
 
@@ -1108,7 +1109,7 @@ function BillReceiptsTab() {
           {selectedBill && (
             <div className="space-y-4 pt-4">
               <div data-print-region>
-                <BillDetail bill={selectedBill} currency={currency} />
+                <PrintableBill bill={selectedBill} currency={currency} />
               </div>
 
               {selectedBill.status === "paid" && (
@@ -1711,7 +1712,7 @@ function BillsTab() {
                 </div>
               </div>
               <div data-print-region>
-                <BillDetail bill={selectedBill} currency={currency} />
+                <PrintableBill bill={selectedBill} currency={currency} />
               </div>
 
               {/* Status banners */}
