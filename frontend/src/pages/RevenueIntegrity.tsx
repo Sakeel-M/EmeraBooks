@@ -112,6 +112,7 @@ import {
   type InvoiceProfile,
   type InvoiceTemplate,
 } from "@/components/shared/InvoicePreview";
+import { PaymentMethodDialog } from "@/components/shared/PaymentMethodDialog";
 import { format, subMonths, differenceInDays, isAfter, parseISO } from "date-fns";
 import { resolveIncomeCategory } from "@/lib/sectorMapping";
 import { toast } from "sonner";
@@ -1522,6 +1523,36 @@ function InvoicesTab() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [deleting, setDeleting] = useState(false);
+  // When the user picks "paid" we prompt for payment method before patching.
+  const [paidPrompt, setPaidPrompt] = useState<{ invoiceId: string; isSelected: boolean } | null>(null);
+
+  const invalidateInvoiceCaches = () => {
+    queryClient.invalidateQueries({ queryKey: ["revenue-invoices"] });
+    queryClient.invalidateQueries({ queryKey: ["cc-invoices"] });
+    queryClient.invalidateQueries({ queryKey: ["fr-invoices"] });
+    queryClient.invalidateQueries({ queryKey: ["cash-invoices"] });
+    queryClient.invalidateQueries({ queryKey: ["ai-score-invoices"] });
+    queryClient.invalidateQueries({ queryKey: ["rev-txns-pay"] });
+    queryClient.invalidateQueries({ queryKey: ["revenue-txns"] });
+  };
+
+  const markInvoicePaid = async (invoiceId: string, method: "bank_transfer" | "cash" | "card") => {
+    try {
+      const updated: any = await flaskApi.patch(`/invoices/${invoiceId}`, {
+        status: "paid",
+        metadata: { paid_at: new Date().toISOString(), payment_method: method },
+      });
+      if (paidPrompt?.isSelected && selectedInvoice && selectedInvoice.id === invoiceId) {
+        setSelectedInvoice({ ...selectedInvoice, ...updated, status: "paid" });
+      }
+      invalidateInvoiceCaches();
+      const label = method === "bank_transfer" ? "Bank Transfer" : method === "cash" ? "Cash" : "Card";
+      toast.success(`Marked as paid (${label})`);
+      setPaidPrompt(null);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update status");
+    }
+  };
 
   // Profile & Template state
   const [showProfileDialog, setShowProfileDialog] = useState(false);
@@ -1730,17 +1761,13 @@ function InvoicesTab() {
                     <Select
                       value={isOverdue ? "overdue" : inv.status}
                       onValueChange={async (newStatus) => {
+                        if (newStatus === "paid") {
+                          setPaidPrompt({ invoiceId: inv.id, isSelected: false });
+                          return;
+                        }
                         try {
-                          const body: any = { status: newStatus };
-                          if (newStatus === "paid") {
-                            body.metadata = { paid_at: new Date().toISOString(), payment_method: "manual" };
-                          }
-                          await flaskApi.patch(`/invoices/${inv.id}`, body);
-                          queryClient.invalidateQueries({ queryKey: ["revenue-invoices"] });
-                          queryClient.invalidateQueries({ queryKey: ["cc-invoices"] });
-                          queryClient.invalidateQueries({ queryKey: ["fr-invoices"] });
-                          queryClient.invalidateQueries({ queryKey: ["rev-txns-pay"] });
-                          queryClient.invalidateQueries({ queryKey: ["revenue-txns"] });
+                          await flaskApi.patch(`/invoices/${inv.id}`, { status: newStatus });
+                          invalidateInvoiceCaches();
                           toast.success(`Status → ${newStatus}`);
                         } catch (err: any) {
                           toast.error(err.message || "Failed to update");
@@ -1804,17 +1831,13 @@ function InvoicesTab() {
                         <Select
                           value={isOverdue ? "overdue" : inv.status}
                           onValueChange={async (newStatus) => {
+                            if (newStatus === "paid") {
+                              setPaidPrompt({ invoiceId: inv.id, isSelected: false });
+                              return;
+                            }
                             try {
-                              const body: any = { status: newStatus };
-                              if (newStatus === "paid") {
-                                body.metadata = { paid_at: new Date().toISOString(), payment_method: "manual" };
-                              }
-                              await flaskApi.patch(`/invoices/${inv.id}`, body);
-                              queryClient.invalidateQueries({ queryKey: ["revenue-invoices"] });
-                              queryClient.invalidateQueries({ queryKey: ["cc-invoices"] });
-                              queryClient.invalidateQueries({ queryKey: ["fr-invoices"] });
-                              queryClient.invalidateQueries({ queryKey: ["rev-txns-pay"] });
-                              queryClient.invalidateQueries({ queryKey: ["revenue-txns"] });
+                              await flaskApi.patch(`/invoices/${inv.id}`, { status: newStatus });
+                              invalidateInvoiceCaches();
                               toast.success(`Status → ${newStatus}`);
                             } catch (err: any) {
                               toast.error(err.message || "Failed to update");
@@ -1889,20 +1912,14 @@ function InvoicesTab() {
                   <Select
                     value={selectedInvoice.status}
                     onValueChange={async (newStatus) => {
+                      if (newStatus === "paid") {
+                        setPaidPrompt({ invoiceId: selectedInvoice.id, isSelected: true });
+                        return;
+                      }
                       try {
-                        const body: any = { status: newStatus };
-                        if (newStatus === "paid") {
-                          body.metadata = { paid_at: new Date().toISOString(), payment_method: "manual" };
-                        }
-                        const updated = await flaskApi.patch<any>(`/invoices/${selectedInvoice.id}`, body);
+                        const updated = await flaskApi.patch<any>(`/invoices/${selectedInvoice.id}`, { status: newStatus });
                         setSelectedInvoice({ ...selectedInvoice, ...updated, status: newStatus });
-                        queryClient.invalidateQueries({ queryKey: ["revenue-invoices"] });
-                        queryClient.invalidateQueries({ queryKey: ["cc-invoices"] });
-                        queryClient.invalidateQueries({ queryKey: ["fr-invoices"] });
-                        queryClient.invalidateQueries({ queryKey: ["cash-invoices"] });
-                        queryClient.invalidateQueries({ queryKey: ["ai-score-invoices"] });
-                        queryClient.invalidateQueries({ queryKey: ["rev-txns-pay"] });
-                        queryClient.invalidateQueries({ queryKey: ["revenue-txns"] });
+                        invalidateInvoiceCaches();
                         toast.success(`Status updated to ${newStatus}`);
                       } catch (err: any) {
                         toast.error(err.message || "Failed to update status");
@@ -2286,6 +2303,13 @@ function InvoicesTab() {
         </SheetContent>
       </Sheet>
 
+      <PaymentMethodDialog
+        open={!!paidPrompt}
+        onOpenChange={(o) => { if (!o) setPaidPrompt(null); }}
+        onConfirm={async (method) => {
+          if (paidPrompt) await markInvoicePaid(paidPrompt.invoiceId, method);
+        }}
+      />
     </div>
   );
 }
