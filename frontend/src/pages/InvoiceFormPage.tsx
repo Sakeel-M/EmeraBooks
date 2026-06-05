@@ -88,8 +88,15 @@ function readFileAsDataURL(file: File): Promise<string> {
   });
 }
 
-function newLineItem(): LineItem {
-  return { id: crypto.randomUUID(), description: "", quantity: 1, unit_price: 0, tax_rate: 5 };
+function newLineItem(defaultCategory: string = "Other"): LineItem {
+  return {
+    id: crypto.randomUUID(),
+    description: "",
+    quantity: 1,
+    unit_price: 0,
+    tax_rate: 5,
+    category: defaultCategory,
+  };
 }
 
 // ── Main Page ──────────────────────────────────────────────────────────────
@@ -171,6 +178,7 @@ export default function InvoiceFormPage() {
               quantity: li.quantity || 1,
               unit_price: li.unit_price || 0,
               tax_rate: li.tax_rate ?? 5,
+              category: li.category || inv.category || "Other",
             })));
           } else {
             const sub = inv.subtotal || (inv.total || 0) / 1.05;
@@ -181,6 +189,7 @@ export default function InvoiceFormPage() {
               quantity: 1,
               unit_price: sub,
               tax_rate: taxPct,
+              category: inv.category || "Other",
             }]);
           }
         }
@@ -229,6 +238,12 @@ export default function InvoiceFormPage() {
     }
     setSaving(true);
     try {
+      // Top-level category mirrors the backend's computation: single unique
+      // line category -> use it; multiple -> "Mixed"; none -> "Other".
+      const lineCats = Array.from(new Set(
+        lineItems.map((li) => (li.category || "").trim()).filter(Boolean),
+      ));
+      const topCategory = lineCats.length === 1 ? lineCats[0] : (lineCats.length > 1 ? "Mixed" : "Other");
       const payload = {
         customer_name: customerName,
         invoice_number: invoiceNumber,
@@ -238,13 +253,14 @@ export default function InvoiceFormPage() {
         tax_amount: totalTax,
         total: grandTotal,
         notes,
-        category,
+        category: topCategory,
         description: lineItems.map((li) => li.description).filter(Boolean).join("; "),
         line_items: lineItems.map((li) => ({
           description: li.description,
           quantity: li.quantity,
           unit_price: li.unit_price,
           tax_rate: li.tax_rate,
+          category: li.category || "Other",
         })),
         status: sendStatus || status,
       };
@@ -357,7 +373,7 @@ export default function InvoiceFormPage() {
                     <Input value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} />
                   </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="text-xs">Invoice Date</Label>
                     <Input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
@@ -365,10 +381,6 @@ export default function InvoiceFormPage() {
                   <div className="space-y-2">
                     <Label className="text-xs">Due Date</Label>
                     <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs">Category</Label>
-                    <CategorySelect value={category} onChange={setCategory} type="invoice" />
                   </div>
                 </div>
               </CardContent>
@@ -387,10 +399,11 @@ export default function InvoiceFormPage() {
               <CardContent className="space-y-3">
                 {/* Header */}
                 <div className="grid grid-cols-12 gap-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
-                  <div className="col-span-5">Description</div>
-                  <div className="col-span-2">Qty</div>
+                  <div className="col-span-3">Description</div>
+                  <div className="col-span-1">Qty</div>
                   <div className="col-span-2">Unit Price</div>
-                  <div className="col-span-1">Tax %</div>
+                  <div className="col-span-1">Tax</div>
+                  <div className="col-span-3">Category</div>
                   <div className="col-span-1 text-right">Amount</div>
                   <div className="col-span-1"></div>
                 </div>
@@ -402,7 +415,7 @@ export default function InvoiceFormPage() {
                       : ((li as any)._tax_kind === "exempt" ? "exempt" : "zero");
                   return (
                     <div key={li.id} className="grid grid-cols-12 gap-2 items-center">
-                      <div className="col-span-5">
+                      <div className="col-span-3">
                         <Input
                           placeholder="Item description"
                           value={li.description}
@@ -410,7 +423,7 @@ export default function InvoiceFormPage() {
                           className="text-sm h-9"
                         />
                       </div>
-                      <div className="col-span-2">
+                      <div className="col-span-1">
                         <Input
                           type="number"
                           min="1"
@@ -454,6 +467,13 @@ export default function InvoiceFormPage() {
                             <SelectItem value="exempt">Tax Exempt</SelectItem>
                           </SelectContent>
                         </Select>
+                      </div>
+                      <div className="col-span-3">
+                        <CategorySelect
+                          value={li.category || "Other"}
+                          onChange={(v) => updateLineItem(li.id, "category", v)}
+                          type="invoice"
+                        />
                       </div>
                       <div className="col-span-1 text-right text-sm font-medium">
                         <FC amount={lineTotal} currency={currency} />

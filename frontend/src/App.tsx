@@ -19,6 +19,7 @@ import FinancialReporting from "./pages/FinancialReporting";
 import Integrations from "./pages/Integrations";
 import ControlSettings from "./pages/ControlSettings";
 import InvoiceFormPage from "./pages/InvoiceFormPage";
+import BillFormPage from "./pages/BillFormPage";
 import RiskAlerts from "./pages/RiskAlerts";
 import { AdminGuard } from "./components/admin/AdminGuard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -77,6 +78,7 @@ const App = () => (
               <Route path="/revenue" element={<P><RevenueIntegrity /></P>} />
               <Route path="/revenue/invoices/new" element={<P><InvoiceFormPage /></P>} />
               <Route path="/expenses" element={<P><ExpenseIntegrity /></P>} />
+              <Route path="/expenses/bills/new" element={<P><BillFormPage /></P>} />
               <Route path="/cash" element={<P><CashLiquidity /></P>} />
               <Route path="/ledger" element={<P><Ledger /></P>} />
               <Route path="/reports" element={<P><FinancialReporting /></P>} />

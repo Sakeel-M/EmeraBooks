@@ -106,6 +106,7 @@ import { useDateRange } from "@/hooks/useDateRange";
 import { TransactionDetailSheet } from "@/components/shared/TransactionDetailSheet";
 import { DocumentDropzone } from "@/components/shared/DocumentDropzone";
 import { CategorySelect } from "@/components/shared/CategorySelect";
+import { useNavigate } from "react-router-dom";
 import { ThankYouBlock } from "./RevenueIntegrity";
 
 // ── Expense Overview Tab ─────────────────────────────────────────────────
@@ -1347,6 +1348,7 @@ function BillsTab() {
   const { clientId, currency } = useActiveClient();
   const { startDate, endDate } = useDateRange();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedBill, setSelectedBill] = useState<any>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -1495,7 +1497,7 @@ function BillsTab() {
               Bills will appear here after uploading bank statements, syncing
               from your ERP system, or adding them manually.
             </p>
-            <Button size="sm" className="gap-1.5" onClick={() => setShowCreateForm(true)}>
+            <Button size="sm" className="gap-1.5" onClick={() => navigate("/expenses/bills/new")}>
               <Plus className="h-3.5 w-3.5" />
               Create Bill
             </Button>
@@ -1550,7 +1552,7 @@ function BillsTab() {
           <span className="text-xs text-muted-foreground ml-auto">
             {filtered.length} bill{filtered.length !== 1 && "s"}
           </span>
-          <Button size="sm" className="gap-1.5 text-xs" onClick={() => setShowCreateForm(true)}>
+          <Button size="sm" className="gap-1.5 text-xs" onClick={() => navigate("/expenses/bills/new")}>
             <Plus className="h-3.5 w-3.5" />
             Create Bill
           </Button>

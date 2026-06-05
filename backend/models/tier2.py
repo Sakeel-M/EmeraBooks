@@ -98,6 +98,7 @@ class Vendor(db.Model):
     name = db.Column(db.Text, nullable=False)
     email = db.Column(db.Text)
     phone = db.Column(db.Text)
+    address = db.Column(db.Text)
     trn = db.Column(db.Text)
     category = db.Column(db.Text)
     source = db.Column(db.Text)
@@ -115,6 +116,7 @@ class Vendor(db.Model):
             "name": self.name,
             "email": self.email,
             "phone": self.phone,
+            "address": self.address,
             "trn": self.trn,
             "category": self.category,
             "source": self.source,
@@ -187,6 +189,7 @@ class Bill(db.Model):
     category = db.Column(db.Text)
     account_id = db.Column(UUID(as_uuid=True), db.ForeignKey("v2_accounts.id"))
     notes = db.Column(db.Text)
+    line_items = db.Column(JSONB, default=list)
     metadata_ = db.Column("metadata", JSONB, default={})
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
@@ -212,6 +215,7 @@ class Bill(db.Model):
             "category": self.category,
             "account_id": str(self.account_id) if self.account_id else None,
             "notes": self.notes,
+            "line_items": self.line_items or [],
             "metadata": self.metadata_,
             "v2_vendors": {"name": self.vendor.name} if self.vendor else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,

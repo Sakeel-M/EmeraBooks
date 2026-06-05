@@ -11,6 +11,70 @@ from models.tier2 import Vendor, Customer, Bill, Invoice, Account
 entities_bp = Blueprint("entities", __name__, url_prefix="/api")
 
 
+def _category_from_line_items(line_items, fallback):
+    """Top-level category for a bill/invoice with per-line categories.
+
+    Single distinct value -> use it. Multiple distinct values -> "Mixed".
+    No usable line categories -> fallback (the caller's data.get("category")).
+    """
+    if not isinstance(line_items, list) or not line_items:
+        return fallback
+    cats = []
+    for li in line_items:
+        if isinstance(li, dict):
+            c = (li.get("category") or "").strip()
+            if c:
+                cats.append(c)
+    if not cats:
+        return fallback
+    distinct = set(cats)
+    if len(distinct) == 1:
+        return cats[0]
+    return "Mixed"
+
+
+def _patch_vendor_contact(vendor, data):
+    """Patch address/phone/email/trn onto a Vendor from a bill payload.
+
+    Only writes non-empty values so we don't blank out previously-saved
+    contact details when a bill payload omits a field.
+    """
+    if vendor is None:
+        return
+    for src_key, attr in (
+        ("vendor_address", "address"),
+        ("vendor_phone", "phone"),
+        ("vendor_email", "email"),
+        ("vendor_trn", "trn"),
+        # Also accept the un-prefixed forms for convenience.
+        ("address", "address"),
+        ("phone", "phone"),
+        ("email", "email"),
+        ("trn", "trn"),
+    ):
+        if src_key in data:
+            v = data.get(src_key)
+            if isinstance(v, str) and v.strip():
+                setattr(vendor, attr, v.strip())
+
+
+def _patch_customer_contact(customer, data):
+    if customer is None:
+        return
+    for src_key, attr in (
+        ("customer_address", "address"),
+        ("customer_phone", "phone"),
+        ("customer_email", "email"),
+        ("customer_trn", "trn"),
+    ):
+        if src_key in data:
+            v = data.get(src_key)
+            if isinstance(v, str) and v.strip():
+                # Customer model may or may not have these fields; only set if it does.
+                if hasattr(customer, attr):
+                    setattr(customer, attr, v.strip())
+
+
 @entities_bp.route("/clients/<client_id>/vendors", methods=["GET"])
 @require_auth
 @require_client_access
@@ -111,8 +175,10 @@ def create_bill(client_id):
 
     # Resolve vendor: accept vendor_id OR vendor_name
     vendor_id = None
+    vendor_obj = None
     if data.get("vendor_id"):
         vendor_id = uuid.UUID(data["vendor_id"])
+        vendor_obj = Vendor.query.get(vendor_id)
     elif data.get("vendor_name"):
         name = data["vendor_name"].strip()
         v = Vendor.query.filter_by(client_id=cid, name=name).first()
@@ -121,9 +187,14 @@ def create_bill(client_id):
             db.session.add(v)
             db.session.flush()
         vendor_id = v.id
+        vendor_obj = v
+    # Patch vendor contact details from the bill payload (address/phone/...)
+    _patch_vendor_contact(vendor_obj, data)
 
     bill_number = (data.get("bill_number") or "").strip() or None
     bill_date = data.get("bill_date", datetime.now(timezone.utc).date().isoformat())
+    line_items = data.get("line_items") if isinstance(data.get("line_items"), list) else None
+    top_category = _category_from_line_items(line_items, data.get("category"))
 
     # Duplicate guard (covers every entry point: Bills tab, Bill Receipts,
     # uploads, integrations). Pass force=true to override intentionally.
@@ -161,8 +232,9 @@ def create_bill(client_id):
         total=total,
         currency=data.get("currency", "AED"),
         status=data.get("status", "open"),
-        category=data.get("category"),
+        category=top_category,
         notes=data.get("notes"),
+        line_items=line_items or [],
         metadata_=data.get("metadata") or {},
     )
     db.session.add(bill)
@@ -184,6 +256,10 @@ def update_bill(bill_id):
                 "tax_amount", "total", "currency", "status", "category", "notes"):
         if key in data:
             setattr(bill, key, data[key])
+    if "line_items" in data and isinstance(data["line_items"], list):
+        bill.line_items = data["line_items"]
+        # Recompute category from the new lines (Mixed / shared / fallback).
+        bill.category = _category_from_line_items(bill.line_items, data.get("category", bill.category))
     if "metadata" in data and isinstance(data["metadata"], dict):
         merged = dict(bill.metadata_ or {})
         merged.update(data["metadata"])
@@ -193,8 +269,10 @@ def update_bill(bill_id):
         meta.setdefault("paid_at", datetime.now(timezone.utc).isoformat())
         meta.setdefault("payment_method", data.get("payment_method", "manual"))
         bill.metadata_ = meta
+    vendor_obj = None
     if "vendor_id" in data:
         bill.vendor_id = uuid.UUID(data["vendor_id"]) if data["vendor_id"] else None
+        vendor_obj = Vendor.query.get(bill.vendor_id) if bill.vendor_id else None
     elif "vendor_name" in data and data["vendor_name"]:
         name = data["vendor_name"].strip()
         v = Vendor.query.filter_by(client_id=bill.client_id, name=name).first()
@@ -203,6 +281,10 @@ def update_bill(bill_id):
             db.session.add(v)
             db.session.flush()
         bill.vendor_id = v.id
+        vendor_obj = v
+    else:
+        vendor_obj = bill.vendor
+    _patch_vendor_contact(vendor_obj, data)
     db.session.commit()
     return jsonify(bill.to_dict())
 
@@ -278,6 +360,9 @@ def create_invoice(client_id):
                 "existing_id": str(existing.id),
             }), 409
 
+    inv_line_items = data.get("line_items") if isinstance(data.get("line_items"), list) else None
+    inv_top_category = _category_from_line_items(inv_line_items, data.get("category"))
+
     invoice = Invoice(
         client_id=cid,
         customer_id=customer_id,
@@ -290,9 +375,9 @@ def create_invoice(client_id):
         total=total,
         currency=data.get("currency", "AED"),
         status=data.get("status", "draft"),
-        category=data.get("category"),
+        category=inv_top_category,
         description=data.get("description"),
-        line_items=data.get("line_items"),
+        line_items=inv_line_items or [],
         notes=data.get("notes"),
         metadata_=data.get("metadata") or {},
     )
@@ -372,6 +457,11 @@ def update_invoice(invoice_id):
                 "description", "line_items"):
         if key in data:
             setattr(invoice, key, data[key])
+    if "line_items" in data and isinstance(data["line_items"], list):
+        # Recompute top-level category from the new lines.
+        invoice.category = _category_from_line_items(
+            invoice.line_items, data.get("category", invoice.category)
+        )
     if "metadata" in data and isinstance(data["metadata"], dict):
         merged = dict(invoice.metadata_ or {})
         merged.update(data["metadata"])

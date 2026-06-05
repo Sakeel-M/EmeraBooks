@@ -8,6 +8,10 @@ export interface LineItem {
   quantity: number;
   unit_price: number;
   tax_rate: number;
+  /** Optional per-line category — when present, the bill/invoice's top-level
+   *  category becomes "Mixed" if lines differ, or the shared value otherwise.
+   */
+  category?: string;
 }
 
 export interface InvoiceProfile {
