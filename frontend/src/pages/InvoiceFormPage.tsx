@@ -109,8 +109,6 @@ export default function InvoiceFormPage() {
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState("draft");
   const [lineItems, setLineItems] = useState<LineItem[]>([newLineItem()]);
-  const [taxExempt, setTaxExempt] = useState(false);
-  const [zeroTax, setZeroTax] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
@@ -164,8 +162,6 @@ export default function InvoiceFormPage() {
           setCategory(inv.category || "Professional Services");
           setNotes(inv.notes || "");
           setStatus(inv.status || "draft");
-          setTaxExempt(!!inv.metadata?.tax_exempt);
-          setZeroTax(!!inv.metadata?.zero_tax);
           // Load line items from stored data, or reconstruct from totals
           if (inv.line_items && Array.isArray(inv.line_items) && inv.line_items.length > 0) {
             setLineItems(inv.line_items.map((li: any) => ({
@@ -203,12 +199,9 @@ export default function InvoiceFormPage() {
     () => lineItems.reduce((s, li) => s + li.quantity * li.unit_price, 0),
     [lineItems],
   );
-  const noTax = taxExempt || zeroTax;
   const totalTax = useMemo(
-    () => noTax
-      ? 0
-      : lineItems.reduce((s, li) => s + li.quantity * li.unit_price * (li.tax_rate / 100), 0),
-    [lineItems, noTax],
+    () => lineItems.reduce((s, li) => s + li.quantity * li.unit_price * (li.tax_rate / 100), 0),
+    [lineItems],
   );
   const grandTotal = subtotal + totalTax;
 
@@ -250,10 +243,9 @@ export default function InvoiceFormPage() {
           description: li.description,
           quantity: li.quantity,
           unit_price: li.unit_price,
-          tax_rate: noTax ? 0 : li.tax_rate,
+          tax_rate: li.tax_rate,
         })),
         status: sendStatus || status,
-        metadata: { tax_exempt: taxExempt, zero_tax: zeroTax },
       };
 
       if (editId) {
@@ -393,49 +385,9 @@ export default function InvoiceFormPage() {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <CardTitle className="text-sm font-semibold">Line Items</CardTitle>
-                  <TooltipProvider delayDuration={150}>
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <div className="flex items-center gap-1.5">
-                        <Switch
-                          id="zero-tax"
-                          checked={zeroTax}
-                          onCheckedChange={setZeroTax}
-                        />
-                        <Label htmlFor="zero-tax" className="text-xs cursor-pointer">
-                          Zero Tax
-                        </Label>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="max-w-xs text-xs">
-                            Zero-rates the entire invoice. Per-line tax dropdowns become disabled and the Tax row is hidden from the total. Use this for goods/services with a 0% VAT rate (e.g. exports, certain healthcare, education).
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <Switch
-                          id="tax-exempt"
-                          checked={taxExempt}
-                          onCheckedChange={setTaxExempt}
-                        />
-                        <Label htmlFor="tax-exempt" className="text-xs cursor-pointer">
-                          Tax exempt
-                        </Label>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="max-w-xs text-xs">
-                            Marks the invoice as VAT-exempt (outside the scope of VAT) — different from zero-rated. Per-line tax stays at 0 and is hidden from the total. Common for residential rent, local passenger transport, and certain financial services.
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                      <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={() => setLineItems([...lineItems, newLineItem()])}>
-                        <Plus className="h-3 w-3" /> Add Item
-                      </Button>
-                    </div>
-                  </TooltipProvider>
+                  <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={() => setLineItems([...lineItems, newLineItem()])}>
+                    <Plus className="h-3 w-3" /> Add Item
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -449,8 +401,11 @@ export default function InvoiceFormPage() {
                   <div className="col-span-1"></div>
                 </div>
                 {lineItems.map((li) => {
-                  const effectiveTaxRate = noTax ? 0 : li.tax_rate;
-                  const lineTotal = li.quantity * li.unit_price * (1 + effectiveTaxRate / 100);
+                  const lineTotal = li.quantity * li.unit_price * (1 + li.tax_rate / 100);
+                  const taxKind: "standard" | "zero" | "exempt" =
+                    li.tax_rate === 5
+                      ? "standard"
+                      : ((li as any)._tax_kind === "exempt" ? "exempt" : "zero");
                   return (
                     <div key={li.id} className="grid grid-cols-12 gap-2 items-center">
                       <div className="col-span-5">
@@ -483,18 +438,26 @@ export default function InvoiceFormPage() {
                       </div>
                       <div className="col-span-1">
                         <Select
-                          value={String(effectiveTaxRate)}
-                          onValueChange={(v) => updateLineItem(li.id, "tax_rate", parseFloat(v) || 0)}
-                          disabled={noTax}
+                          value={taxKind}
+                          onValueChange={(v) => {
+                            const rate = v === "standard" ? 5 : 0;
+                            const kind = v === "standard" ? undefined : v;
+                            setLineItems((prev) =>
+                              prev.map((x) =>
+                                x.id === li.id
+                                  ? ({ ...x, tax_rate: rate, _tax_kind: kind } as any)
+                                  : x,
+                              ),
+                            );
+                          }}
                         >
                           <SelectTrigger className="h-9 text-sm px-2">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="5">5%</SelectItem>
-                            <SelectItem value="0">0% (Exempt)</SelectItem>
-                            <SelectItem value="10">10%</SelectItem>
-                            <SelectItem value="15">15%</SelectItem>
+                            <SelectItem value="standard">5%</SelectItem>
+                            <SelectItem value="zero">Zero Tax</SelectItem>
+                            <SelectItem value="exempt">Tax Exempt</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
