@@ -305,3 +305,50 @@ class PaymentAllocation(db.Model):
             "amount": float(self.amount) if self.amount is not None else 0,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
+
+class InventoryItem(db.Model):
+    __tablename__ = "v2_inventory_items"
+    __table_args__ = (
+        db.Index("idx_v2_inv_client_active", "client_id", "is_active"),
+        db.UniqueConstraint("client_id", "sku", name="uq_v2_inv_client_sku"),
+    )
+
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    client_id = db.Column(UUID(as_uuid=True), db.ForeignKey("clients.id", ondelete="CASCADE"), nullable=False)
+    sku = db.Column(db.Text)                  # optional, unique within client when set
+    name = db.Column(db.Text, nullable=False)
+    description = db.Column(db.Text)
+    category = db.Column(db.Text)
+    unit = db.Column(db.Text, default="each")  # each / box / kg / hour / m / ...
+    unit_price = db.Column(db.Numeric(18, 2), default=0)   # selling price
+    cost_price = db.Column(db.Numeric(18, 2), default=0)   # purchase cost
+    tax_rate = db.Column(db.Numeric(5, 2), default=5)
+    quantity_on_hand = db.Column(db.Numeric(18, 2), default=0)
+    reorder_level = db.Column(db.Numeric(18, 2), default=0)
+    currency = db.Column(db.Text, nullable=False, default="AED")
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    metadata_ = db.Column("metadata", JSONB, default={})
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self):
+        return {
+            "id": str(self.id),
+            "client_id": str(self.client_id),
+            "sku": self.sku,
+            "name": self.name,
+            "description": self.description,
+            "category": self.category,
+            "unit": self.unit,
+            "unit_price": float(self.unit_price) if self.unit_price is not None else 0,
+            "cost_price": float(self.cost_price) if self.cost_price is not None else 0,
+            "tax_rate": float(self.tax_rate) if self.tax_rate is not None else 0,
+            "quantity_on_hand": float(self.quantity_on_hand) if self.quantity_on_hand is not None else 0,
+            "reorder_level": float(self.reorder_level) if self.reorder_level is not None else 0,
+            "currency": self.currency,
+            "is_active": self.is_active,
+            "metadata": self.metadata_,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

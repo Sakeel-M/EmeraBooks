@@ -47,6 +47,7 @@ import {
   Download,
   Copy,
   Info,
+  Package,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useActiveClient } from "@/hooks/useActiveClient";
@@ -120,6 +121,9 @@ export default function InvoiceFormPage() {
   const [bankAccountId, setBankAccountId] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  // Inventory item picker — which line is currently picking?
+  const [pickerLineId, setPickerLineId] = useState<string | null>(null);
+  const [itemSearch, setItemSearch] = useState("");
 
   // Load saved bank accounts so the user can pick one to receive payment to.
   const { data: bankAccounts = [] } = useQuery({
@@ -128,6 +132,37 @@ export default function InvoiceFormPage() {
     enabled: !!clientId,
   });
   const selectedBankAccount = bankAccounts.find((b: any) => b.id === bankAccountId) || null;
+
+  // Load inventory items so users can pick a saved item on each line.
+  const { data: inventory = [] } = useQuery({
+    queryKey: ["invoice-inventory", clientId],
+    queryFn: () => database.getInventory(clientId!, { activeOnly: true }),
+    enabled: !!clientId,
+  });
+
+  const pickInventoryItem = (lineId: string, item: any) => {
+    setLineItems((prev) => prev.map((x) =>
+      x.id === lineId
+        ? {
+            ...x,
+            description: item.name + (item.description ? ` — ${item.description}` : ""),
+            unit_price: Number(item.unit_price) || 0,
+            tax_rate: Number(item.tax_rate) || 0,
+            category: item.category || x.category || "Other",
+          }
+        : x,
+    ));
+    setPickerLineId(null);
+    setItemSearch("");
+  };
+
+  const filteredInventory = (() => {
+    const q = itemSearch.trim().toLowerCase();
+    if (!q) return inventory;
+    return inventory.filter((it: any) =>
+      `${it.name} ${it.sku || ""} ${it.description || ""}`.toLowerCase().includes(q),
+    );
+  })();
 
   // Customize dialogs
   const [showProfileDialog, setShowProfileDialog] = useState(false);
@@ -451,12 +486,24 @@ export default function InvoiceFormPage() {
                   return (
                     <div key={li.id} className="grid grid-cols-12 gap-2 items-center">
                       <div className="col-span-3">
-                        <Input
-                          placeholder="Item description"
-                          value={li.description}
-                          onChange={(e) => updateLineItem(li.id, "description", e.target.value)}
-                          className="text-sm h-9"
-                        />
+                        <div className="flex gap-1">
+                          <Input
+                            placeholder="Item description"
+                            value={li.description}
+                            onChange={(e) => updateLineItem(li.id, "description", e.target.value)}
+                            className="text-sm h-9 flex-1 min-w-0"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-9 w-9 shrink-0"
+                            title="Pick from inventory"
+                            onClick={() => { setPickerLineId(li.id); setItemSearch(""); }}
+                          >
+                            <Package className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
                       <div className="col-span-1">
                         <Input
@@ -878,6 +925,63 @@ export default function InvoiceFormPage() {
             currency={currency}
             fmtDate={fmtDate}
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* Inventory item picker */}
+      <Dialog open={!!pickerLineId} onOpenChange={(o) => { if (!o) setPickerLineId(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Pick an inventory item</DialogTitle>
+            <DialogDescription>
+              Click an item to fill this line's description, price, tax and category.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="pt-2 space-y-2">
+            <Input
+              placeholder="Search by name, SKU or description…"
+              value={itemSearch}
+              onChange={(e) => setItemSearch(e.target.value)}
+              autoFocus
+            />
+            <div className="max-h-[55vh] overflow-y-auto border rounded-md divide-y">
+              {filteredInventory.length === 0 ? (
+                <div className="p-6 text-center text-sm text-muted-foreground">
+                  {inventory.length === 0
+                    ? "No inventory items yet. Add some in the Inventory page."
+                    : "No items match your search."}
+                </div>
+              ) : (
+                filteredInventory.map((it: any) => (
+                  <button
+                    key={it.id}
+                    type="button"
+                    className="w-full text-left px-3 py-2 hover:bg-muted/50 transition-colors"
+                    onClick={() => pickerLineId && pickInventoryItem(pickerLineId, it)}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">
+                          {it.name}{it.sku ? ` (${it.sku})` : ""}
+                        </p>
+                        {it.description && (
+                          <p className="text-xs text-muted-foreground truncate">{it.description}</p>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-semibold">
+                          <FC amount={it.unit_price || 0} currency={it.currency || currency} />
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {it.tax_rate ?? 5}% · {it.category || "—"} · {(it.quantity_on_hand || 0)} {it.unit || "each"}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </Layout>

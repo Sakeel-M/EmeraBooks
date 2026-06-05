@@ -45,6 +45,7 @@ from routes.entities import entities_bp
 from routes.journal_entries import journal_entries_bp
 from routes.document_parser import document_parser_bp
 from routes.categories import categories_bp
+from routes.inventory import inventory_bp
 from routes.audit import audit_bp
 from routes.control_settings import control_settings_bp
 from routes.admin import admin_bp
@@ -61,6 +62,7 @@ app.register_blueprint(entities_bp)
 app.register_blueprint(journal_entries_bp)
 app.register_blueprint(document_parser_bp)
 app.register_blueprint(categories_bp)
+app.register_blueprint(inventory_bp)
 app.register_blueprint(audit_bp)
 app.register_blueprint(control_settings_bp)
 app.register_blueprint(admin_bp)

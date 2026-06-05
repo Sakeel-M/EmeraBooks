@@ -260,6 +260,28 @@ export const database = {
     await flaskApi.del(`/bank-accounts/${accountId}`);
   },
 
+  // ── Inventory items ──────────────────────────────────────────────────
+  async getInventory(clientId: string, opts?: { activeOnly?: boolean }): Promise<any[]> {
+    const qs = opts?.activeOnly ? "?active_only=true" : "";
+    return flaskApi.get<any[]>(`/clients/${clientId}/inventory${qs}`);
+  },
+
+  async createInventoryItem(clientId: string, data: any): Promise<any> {
+    return flaskApi.post(`/clients/${clientId}/inventory`, data);
+  },
+
+  async updateInventoryItem(itemId: string, data: any): Promise<any> {
+    return flaskApi.patch(`/inventory/${itemId}`, data);
+  },
+
+  async deleteInventoryItem(itemId: string): Promise<void> {
+    await flaskApi.del(`/inventory/${itemId}`);
+  },
+
+  async adjustInventoryStock(itemId: string, delta: number): Promise<any> {
+    return flaskApi.post(`/inventory/${itemId}/adjust`, { delta });
+  },
+
   // ── Uploaded Files ───────────────────────────────────────────────────
 
   async saveUploadedFile(clientId: string, fileData: {
