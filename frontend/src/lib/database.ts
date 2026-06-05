@@ -231,10 +231,33 @@ export const database = {
     account_name: string;
     bank_name: string;
     account_number?: string;
+    bank_code?: string;
+    iban?: string;
+    swift_code?: string;
+    branch?: string;
     currency: string;
     current_balance?: number;
   }): Promise<BankAccount> {
     return flaskApi.post<BankAccount>(`/clients/${clientId}/bank-accounts`, data);
+  },
+
+  async updateBankAccount(accountId: string, data: Partial<{
+    account_name: string;
+    bank_name: string;
+    account_number: string;
+    bank_code: string;
+    iban: string;
+    swift_code: string;
+    branch: string;
+    currency: string;
+    current_balance: number;
+    is_active: boolean;
+  }>): Promise<BankAccount> {
+    return flaskApi.patch<BankAccount>(`/bank-accounts/${accountId}`, data);
+  },
+
+  async deleteBankAccount(accountId: string): Promise<void> {
+    await flaskApi.del(`/bank-accounts/${accountId}`);
   },
 
   // ── Uploaded Files ───────────────────────────────────────────────────

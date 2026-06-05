@@ -2,7 +2,7 @@
 import uuid
 from flask import Blueprint, request, jsonify, g
 from auth import require_auth
-from permissions import require_client_access
+from permissions import require_client_access, user_has_client_access
 from models.base import db
 from models.tier1 import BankAccount
 
@@ -34,9 +34,46 @@ def create_bank_account(client_id):
         account_name=data.get("account_name"),
         bank_name=data.get("bank_name"),
         account_number=data.get("account_number"),
+        bank_code=data.get("bank_code"),
+        iban=data.get("iban"),
+        swift_code=data.get("swift_code"),
+        branch=data.get("branch"),
         currency=data.get("currency", "AED"),
         current_balance=data.get("current_balance", 0),
     )
     db.session.add(account)
     db.session.commit()
     return jsonify(account.to_dict()), 201
+
+
+@bank_accounts_bp.route("/bank-accounts/<account_id>", methods=["PATCH"])
+@require_auth
+def update_bank_account(account_id):
+    account = BankAccount.query.get(uuid.UUID(account_id))
+    if not account:
+        return jsonify({"error": "Not found"}), 404
+    if not user_has_client_access(account.client_id):
+        return jsonify({"error": "Access denied"}), 403
+    data = request.get_json() or {}
+    for key in (
+        "account_name", "bank_name", "account_number", "bank_code",
+        "iban", "swift_code", "branch", "currency", "current_balance",
+        "is_active",
+    ):
+        if key in data:
+            setattr(account, key, data[key])
+    db.session.commit()
+    return jsonify(account.to_dict())
+
+
+@bank_accounts_bp.route("/bank-accounts/<account_id>", methods=["DELETE"])
+@require_auth
+def delete_bank_account(account_id):
+    account = BankAccount.query.get(uuid.UUID(account_id))
+    if not account:
+        return jsonify({"error": "Not found"}), 404
+    if not user_has_client_access(account.client_id):
+        return jsonify({"error": "Access denied"}), 403
+    db.session.delete(account)
+    db.session.commit()
+    return jsonify({"ok": True})

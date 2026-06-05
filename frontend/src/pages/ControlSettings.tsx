@@ -82,6 +82,7 @@ import {
   Calendar as CalendarIcon,
 } from "lucide-react";
 import { useActiveClient } from "@/hooks/useActiveClient";
+import { BankAccountsCard } from "@/components/shared/BankAccountsCard";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { database } from "@/lib/database";
 import { flaskApi } from "@/lib/flaskApi";
@@ -2800,6 +2801,9 @@ function BusinessProfileTab() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Bank Accounts */}
+      <BankAccountsCard clientId={clientId} />
 
       {/* Bottom Save Button */}
       <div className="flex justify-end">

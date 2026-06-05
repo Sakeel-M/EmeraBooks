@@ -934,6 +934,17 @@ function ReceiptsTab() {
       .then((v) => { if (v) setTemplate({ ...DEFAULT_TEMPLATE, ...v }); })
       .catch(() => {});
   }, [clientId]);
+
+  // Saved bank accounts so the receipt's "Pay To" block can be populated.
+  const { data: bankAccounts = [] } = useQuery({
+    queryKey: ["invoice-bank-accounts", clientId],
+    queryFn: () => database.getBankAccounts(clientId!),
+    enabled: !!clientId,
+  });
+  const selectedInvoiceBank = selectedInvoice?.metadata?.bank_account_id
+    ? bankAccounts.find((b: any) => b.id === selectedInvoice.metadata.bank_account_id) || null
+    : null;
+
   const [showAddReceipt, setShowAddReceipt] = useState(false);
   const [addForm, setAddForm] = useState({
     customer_name: "",
@@ -1296,6 +1307,7 @@ function ReceiptsTab() {
                 currency={currency}
                 fmtDate={fmtDate}
                 stamp={selectedInvoice.status === "paid" ? "paid" : selectedInvoice.status === "cancelled" ? "cancelled" : null}
+                bankAccount={selectedInvoiceBank}
               />
               </div>
 

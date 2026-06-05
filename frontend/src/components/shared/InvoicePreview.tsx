@@ -71,6 +71,16 @@ export interface CounterpartyContact {
   trn?: string;
 }
 
+export interface BankAccountDetails {
+  bank_name?: string;
+  account_name?: string;
+  account_number?: string;
+  iban?: string;
+  swift_code?: string;
+  branch?: string;
+  currency?: string;
+}
+
 export interface InvoicePreviewProps {
   profile: InvoiceProfile;
   template: InvoiceTemplate;
@@ -94,6 +104,8 @@ export interface InvoicePreviewProps {
   counterpartyContact?: CounterpartyContact;
   /** Show a Category column on each line item row. */
   showLineCategories?: boolean;
+  /** Bank account to render in a "Pay To" block above the footer. */
+  bankAccount?: BankAccountDetails | null;
 }
 
 export function InvoicePreview({
@@ -114,6 +126,7 @@ export function InvoicePreview({
   kind = "invoice",
   counterpartyContact,
   showLineCategories = false,
+  bankAccount,
 }: InvoicePreviewProps) {
   const accent = template.accent_color;
   const isModern = template.layout === "modern";
@@ -272,6 +285,41 @@ export function InvoicePreview({
               <span style={{ color: accent }}><FC amount={grandTotal} currency={currency} /></span>
             </div>
           </div>
+
+          {/* Pay To (bank account) */}
+          {bankAccount && (bankAccount.bank_name || bankAccount.iban || bankAccount.account_number) && (
+            <>
+              <Separator />
+              <div>
+                <p className="text-[9px] font-semibold uppercase tracking-wider mb-1" style={{ color: accent }}>
+                  Pay To
+                </p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px]">
+                  {bankAccount.bank_name && (
+                    <p><span className="text-muted-foreground">Bank:</span> {bankAccount.bank_name}</p>
+                  )}
+                  {bankAccount.account_name && (
+                    <p><span className="text-muted-foreground">Account Name:</span> {bankAccount.account_name}</p>
+                  )}
+                  {bankAccount.account_number && (
+                    <p><span className="text-muted-foreground">Account #:</span> <span className="font-mono">{bankAccount.account_number}</span></p>
+                  )}
+                  {bankAccount.iban && (
+                    <p><span className="text-muted-foreground">IBAN:</span> <span className="font-mono">{bankAccount.iban}</span></p>
+                  )}
+                  {bankAccount.swift_code && (
+                    <p><span className="text-muted-foreground">SWIFT:</span> <span className="font-mono">{bankAccount.swift_code}</span></p>
+                  )}
+                  {bankAccount.branch && (
+                    <p><span className="text-muted-foreground">Branch:</span> {bankAccount.branch}</p>
+                  )}
+                  {bankAccount.currency && (
+                    <p><span className="text-muted-foreground">Currency:</span> {bankAccount.currency}</p>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Notes */}
           {template.show_notes && notes && (

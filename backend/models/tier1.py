@@ -80,6 +80,9 @@ class BankAccount(db.Model):
     account_number = db.Column(db.Text)
     bank_name = db.Column(db.Text, nullable=False)
     bank_code = db.Column(db.Text)
+    iban = db.Column(db.Text)
+    swift_code = db.Column(db.Text)
+    branch = db.Column(db.Text)
     currency = db.Column(db.Text, nullable=False, default="AED")
     current_balance = db.Column(db.Numeric(18, 2), default=0)
     last_statement_date = db.Column(db.Date)
@@ -96,6 +99,9 @@ class BankAccount(db.Model):
             "account_number": self.account_number,
             "bank_name": self.bank_name,
             "bank_code": self.bank_code,
+            "iban": self.iban,
+            "swift_code": self.swift_code,
+            "branch": self.branch,
             "currency": self.currency,
             "current_balance": float(self.current_balance) if self.current_balance else 0,
             "last_statement_date": self.last_statement_date.isoformat() if self.last_statement_date else None,

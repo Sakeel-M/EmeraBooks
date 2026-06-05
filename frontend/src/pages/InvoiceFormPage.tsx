@@ -117,8 +117,17 @@ export default function InvoiceFormPage() {
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState("draft");
   const [lineItems, setLineItems] = useState<LineItem[]>([newLineItem()]);
+  const [bankAccountId, setBankAccountId] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+
+  // Load saved bank accounts so the user can pick one to receive payment to.
+  const { data: bankAccounts = [] } = useQuery({
+    queryKey: ["invoice-bank-accounts", clientId],
+    queryFn: () => database.getBankAccounts(clientId!),
+    enabled: !!clientId,
+  });
+  const selectedBankAccount = bankAccounts.find((b: any) => b.id === bankAccountId) || null;
 
   // Customize dialogs
   const [showProfileDialog, setShowProfileDialog] = useState(false);
@@ -170,6 +179,7 @@ export default function InvoiceFormPage() {
           setCategory(inv.category || "Professional Services");
           setNotes(inv.notes || "");
           setStatus(inv.status || "draft");
+          if (inv.metadata?.bank_account_id) setBankAccountId(inv.metadata.bank_account_id);
           // Load line items from stored data, or reconstruct from totals
           if (inv.line_items && Array.isArray(inv.line_items) && inv.line_items.length > 0) {
             setLineItems(inv.line_items.map((li: any) => ({
@@ -263,6 +273,7 @@ export default function InvoiceFormPage() {
           category: li.category || "Other",
         })),
         status: sendStatus || status,
+        metadata: bankAccountId ? { bank_account_id: bankAccountId } : undefined,
       };
 
       if (editId) {
@@ -382,6 +393,30 @@ export default function InvoiceFormPage() {
                     <Label className="text-xs">Due Date</Label>
                     <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Receive Payment To</Label>
+                  <Select
+                    value={bankAccountId || "__none__"}
+                    onValueChange={(v) => setBankAccountId(v === "__none__" ? "" : v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pick a bank account..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— No bank account on this invoice —</SelectItem>
+                      {bankAccounts.map((b: any) => (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.bank_name} — {b.account_name} ({b.currency})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {bankAccounts.length === 0 && (
+                    <p className="text-[10px] text-muted-foreground">
+                      Add bank accounts in Settings → Business Profile to make them selectable here.
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -561,6 +596,8 @@ export default function InvoiceFormPage() {
                 notes={notes}
                 currency={currency}
                 fmtDate={fmtDate}
+                showLineCategories
+                bankAccount={selectedBankAccount as any}
               />
             </div>
           </div>
