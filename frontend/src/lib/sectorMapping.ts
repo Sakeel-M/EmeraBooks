@@ -265,6 +265,30 @@ export function mapRawBankCategory(raw: string | null | undefined): string | nul
   return RAW_CATEGORY_MAP[raw.toLowerCase().trim()] ?? null;
 }
 
+// ── User-defined categories ──────────────────────────────────────────
+// Loaded once per session via registerCustomCategories(). resolveCategory and
+// getCanonicalCategory treat these as valid sector names so they flow through
+// to Bills/Invoices/Ledger displays without being collapsed to "Other".
+const _customCategories = new Map<string, string>();  // lower-case -> exact display name
+
+export function registerCustomCategories(list: string[] | null | undefined): void {
+  if (!Array.isArray(list)) return;
+  for (const name of list) {
+    const clean = (name || "").trim();
+    if (!clean) continue;
+    _customCategories.set(clean.toLowerCase(), clean);
+  }
+}
+
+export function isCustomCategory(name: string | null | undefined): string | null {
+  if (!name) return null;
+  return _customCategories.get(name.toLowerCase().trim()) ?? null;
+}
+
+export function listCustomCategories(): string[] {
+  return Array.from(_customCategories.values());
+}
+
 /**
  * Canonical category resolver used by all pages.
  * 1. If rawCategory maps to a known sector via RAW_CATEGORY_MAP → return mapped name.
@@ -280,6 +304,12 @@ export function resolveCategory(
   // (bank statements may tag ATM withdrawals as "Food & Dining", "Internal Transfer", etc.)
   if (fallbackName && /\batm\s+withdrawal\b/i.test(fallbackName.trim())) {
     return "Finance & Banking";
+  }
+
+  // ── User-defined custom categories pass through verbatim ──
+  if (rawCategory) {
+    const custom = isCustomCategory(rawCategory);
+    if (custom) return custom;
   }
 
   // ── User category registry: check exact stored-category name first ──
@@ -421,6 +451,13 @@ export function getCanonicalCategory(
   // ATM Withdrawal always overrides everything — stored category is unreliable for ATMs
   const fallback = entityName ?? description ?? "";
   if (/\batm\s+withdrawal\b/i.test(fallback)) return "Finance & Banking";
+
+  // Top priority: a stored user-defined custom category always wins (the user
+  // picked it explicitly in Create Invoice / Create Bill).
+  if (rawCategory) {
+    const custom = isCustomCategory(rawCategory);
+    if (custom) return custom;
+  }
 
   // Priority 1: merchant / vendor / customer name
   if (entityName) {

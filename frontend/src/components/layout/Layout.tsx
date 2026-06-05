@@ -21,6 +21,8 @@ import {
 import { CalendarIcon, AlertTriangle, RefreshCw } from "lucide-react";
 import { format, subMonths, subYears, startOfYear } from "date-fns";
 import { toast } from "sonner";
+import { flaskApi } from "@/lib/flaskApi";
+import { registerCustomCategories } from "@/lib/sectorMapping";
 
 interface LayoutProps {
   children: ReactNode;
@@ -50,6 +52,16 @@ export function Layout({ children }: LayoutProps) {
   const [backendReachable, setBackendReachable] = useState<boolean | null>(null);
   const [open, setOpen] = useState(false);
   const [calendarMode, setCalendarMode] = useState<"start" | "end">("start");
+
+  // Register user-defined custom categories so resolveCategory passes them
+  // through to Ledger / Bills / Invoices instead of collapsing to "Other".
+  useEffect(() => {
+    if (!clientId) return;
+    flaskApi
+      .get<any[]>("/categories?type=all")
+      .then((cats) => registerCustomCategories((cats || []).map((c) => c.name)))
+      .catch(() => {});
+  }, [clientId]);
 
   // Auto-detect date range from backend; use localStorage only as brief visual fallback
   useEffect(() => {

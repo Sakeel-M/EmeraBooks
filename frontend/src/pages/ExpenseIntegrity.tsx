@@ -105,6 +105,7 @@ import { toast } from "sonner";
 import { useDateRange } from "@/hooks/useDateRange";
 import { TransactionDetailSheet } from "@/components/shared/TransactionDetailSheet";
 import { DocumentDropzone } from "@/components/shared/DocumentDropzone";
+import { CategorySelect } from "@/components/shared/CategorySelect";
 import { ThankYouBlock } from "./RevenueIntegrity";
 
 // ── Expense Overview Tab ─────────────────────────────────────────────────
@@ -1790,16 +1791,11 @@ function BillsTab() {
               </div>
               <div className="space-y-2">
                 <Label className="text-xs">Category</Label>
-                <Select value={billForm.category} onValueChange={(v) => setBillForm({ ...billForm, category: v })}>
-                  <SelectTrigger className="text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {["Utilities", "Rent & Real Estate", "Transportation & Logistics", "Technology", "Food & Beverage", "Retail & Shopping", "Professional Services", "Other"].map((c) => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <CategorySelect
+                  value={billForm.category}
+                  onChange={(v) => setBillForm({ ...billForm, category: v })}
+                  type="bill"
+                />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">

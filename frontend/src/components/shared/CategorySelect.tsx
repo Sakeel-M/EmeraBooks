@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { flaskApi } from "@/lib/flaskApi";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { PREDEFINED_SECTORS } from "@/lib/predefinedSectors";
+import { registerCustomCategories } from "@/lib/sectorMapping";
 
 interface CategorySelectProps {
   value: string;
@@ -24,6 +25,12 @@ export function CategorySelect({ value, onChange, type, placeholder = "Select ca
     queryKey: ["categories", type],
     queryFn: () => flaskApi.get<any[]>(`/categories?type=${type}`),
   });
+
+  // Keep sectorMapping's custom-category registry in sync so the Ledger /
+  // Bills / Invoices pages render these names verbatim.
+  useEffect(() => {
+    registerCustomCategories((categories || []).map((c: any) => c.name));
+  }, [categories]);
 
   const handleCreate = async () => {
     if (!newCategory.trim()) return;

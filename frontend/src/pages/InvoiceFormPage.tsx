@@ -55,6 +55,7 @@ import { database } from "@/lib/database";
 import { flaskApi } from "@/lib/flaskApi";
 import { formatAmount } from "@/lib/utils";
 import { FC } from "@/components/shared/FormattedCurrency";
+import { CategorySelect } from "@/components/shared/CategorySelect";
 import { format, addDays } from "date-fns";
 import { toast } from "sonner";
 
@@ -367,14 +368,7 @@ export default function InvoiceFormPage() {
                   </div>
                   <div className="space-y-2">
                     <Label className="text-xs">Category</Label>
-                    <Select value={category} onValueChange={setCategory}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {["Professional Services", "Consulting", "Technology", "Retail & Shopping", "Healthcare", "Education", "Business Income", "Other"].map((c) => (
-                          <SelectItem key={c} value={c}>{c}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <CategorySelect value={category} onChange={setCategory} type="invoice" />
                   </div>
                 </div>
               </CardContent>
