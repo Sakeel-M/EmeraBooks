@@ -825,7 +825,33 @@ const FINANCING_PATTERN = /loan|borrow|repay|dividend|equity|share|capital|draw|
 function CashFlowTab() {
   const { clientId, currency } = useActiveClient();
   const [period, setPeriod] = useState<PeriodKey>("this-year");
+  // Track whether the user has explicitly picked a period yet — auto-detect
+  // below must not overwrite their choice.
+  const [userTouched, setUserTouched] = useState(false);
   const { start, end, label } = getPeriodDates(period);
+
+  // One-shot lookup of the client's transaction date range so we can default
+  // to "last-year" when the user's data hasn't reached the current year yet
+  // (e.g. 2025 bank statements + today is 2026 -> "this-year" returns empty).
+  const { data: txDateRange } = useQuery({
+    queryKey: ["fr-tx-range", clientId],
+    queryFn: () => database.getTransactionDateRange(clientId!),
+    enabled: !!clientId,
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    if (userTouched || !txDateRange?.max_date) return;
+    const maxYear = new Date(txDateRange.max_date).getFullYear();
+    const currentYear = new Date().getFullYear();
+    if (maxYear < currentYear) setPeriod("last-year");
+    else if (maxYear > currentYear) setPeriod("this-year");
+  }, [txDateRange, userTouched]);
+
+  const handlePeriodChange = (v: PeriodKey) => {
+    setUserTouched(true);
+    setPeriod(v);
+  };
 
   const { data: transactions = [] } = useQuery({
     queryKey: ["fr-txns", clientId, start, end],
@@ -855,7 +881,7 @@ function CashFlowTab() {
 
   // Beginning balance estimated from prior transactions
   const beginningCash = useMemo(
-    () => priorTransactions.reduce((s: number, t: any) => s + (t.amount || 0), 0),
+    () => priorTransactions.reduce((s: number, t: any) => s + (Number(t.amount) || 0), 0),
     [priorTransactions],
   );
 
@@ -866,18 +892,19 @@ function CashFlowTab() {
     const monthly: Record<string, number> = {};
 
     transactions.forEach((t: any) => {
+      const amount = Number(t.amount) || 0;
       const desc = (t.description || "").toLowerCase();
       const cat = (t.category || "").toLowerCase();
       const combined = `${desc} ${cat}`;
       const month = t.transaction_date?.slice(0, 7);
 
-      total += t.amount;
-      if (month) monthly[month] = (monthly[month] || 0) + t.amount;
+      total += amount;
+      if (month) monthly[month] = (monthly[month] || 0) + amount;
 
       if (INVESTING_PATTERN.test(combined)) {
-        investAmt += t.amount;
+        investAmt += amount;
       } else if (FINANCING_PATTERN.test(combined)) {
-        financeAmt += t.amount;
+        financeAmt += amount;
       }
     });
 
@@ -917,20 +944,32 @@ function CashFlowTab() {
     downloadCSV(rows, `CashFlow_${label.replace(/\s/g, "_")}.csv`);
   };
 
-  if (transactions.length === 0) {
-    return <EmptyState text="No transactions for this period" icon={ArrowRightLeft} />;
-  }
+  const isEmpty = transactions.length === 0;
 
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <PeriodSelector value={period} onChange={setPeriod} />
-        <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleExport}>
+        <PeriodSelector value={period} onChange={handlePeriodChange} />
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1.5 text-xs"
+          onClick={handleExport}
+          disabled={isEmpty}
+        >
           <Download className="h-3.5 w-3.5" />
           Export CSV
         </Button>
       </div>
 
+      {isEmpty && (
+        <EmptyState
+          text={`No transactions in ${label}. Pick a different period above.`}
+          icon={ArrowRightLeft}
+        />
+      )}
+
+      {!isEmpty && <>
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KPICard
@@ -1079,6 +1118,7 @@ function CashFlowTab() {
           )}
         </CardContent>
       </Card>
+      </>}
     </div>
   );
 }
