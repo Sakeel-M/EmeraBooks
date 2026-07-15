@@ -506,6 +506,17 @@ function BanksTab() {
       const displayName = originalName
         || (data.bank_info?.bank_name ? `${data.bank_info.bank_name} Statement` : "Bank Statement");
 
+      // Guard: the extractor sometimes returns a valid response with 0 rows
+      // (unusual sheet layout, scanned image, etc). Bail early with a useful
+      // message instead of creating an empty file + failing the sync later.
+      const parsedRows: any[] = data.full_data || data.data || [];
+      if (parsedRows.length === 0) {
+        toast.error("Extraction failed", {
+          description: "No transactions could be read from this file. Try a different sheet, remove header images, or export as .xlsx from your bank.",
+        });
+        return;
+      }
+
       const file = await database.saveUploadedFile(clientId, {
         file_name: displayName,
         bank_name: data.bank_info?.bank_name,
@@ -516,7 +527,7 @@ function BanksTab() {
       await database.saveTransactions(
         clientId,
         file.id,
-        data.full_data || data.data,
+        parsedRows,
         data.bank_info?.currency || currency,
       );
 

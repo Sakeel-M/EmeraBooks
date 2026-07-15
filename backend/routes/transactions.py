@@ -102,29 +102,43 @@ def save_transactions(client_id):
 
     cid = uuid.UUID(client_id)
     fid = uuid.UUID(file_id) if file_id else None
+    print(f"[SAVE_TXNS] client={cid} file={fid} received={len(transactions)} rows")
 
     # Delete existing transactions for this file
     if fid:
         Transaction.query.filter_by(client_id=cid, file_id=fid).delete()
 
     rows = []
+    skipped = 0
     for t in transactions:
-        rows.append(Transaction(
-            client_id=cid,
-            file_id=fid,
-            source=t.get("source", "bank_upload"),
-            transaction_date=t.get("transaction_date"),
-            description=t.get("description", ""),
-            amount=t.get("amount", 0),
-            currency=currency,
-            category=t.get("category"),
-            counterparty_name=t.get("counterparty_name"),
-            is_transfer=t.get("is_transfer", False),
-        ))
+        # Skip rows with no usable date/amount — they'd fail the NOT NULL insert
+        # and roll back the whole batch silently.
+        raw_date = t.get("transaction_date")
+        if not raw_date:
+            skipped += 1
+            continue
+        try:
+            rows.append(Transaction(
+                client_id=cid,
+                file_id=fid,
+                source=t.get("source", "bank_upload"),
+                transaction_date=raw_date,
+                description=t.get("description", "") or "",
+                amount=t.get("amount", 0) or 0,
+                currency=currency,
+                category=t.get("category"),
+                counterparty_name=t.get("counterparty_name"),
+                is_transfer=t.get("is_transfer", False),
+            ))
+        except Exception as e:
+            print(f"[SAVE_TXNS] row build failed: {e} | row={t}")
+            skipped += 1
 
-    db.session.bulk_save_objects(rows)
-    db.session.commit()
-    return jsonify({"ok": True, "count": len(rows)}), 201
+    if rows:
+        db.session.bulk_save_objects(rows)
+        db.session.commit()
+    print(f"[SAVE_TXNS] client={cid} file={fid} saved={len(rows)} skipped={skipped}")
+    return jsonify({"ok": True, "count": len(rows), "skipped": skipped}), 201
 
 
 @transactions_bp.route("/transactions/<transaction_id>", methods=["PATCH"])
@@ -224,12 +238,22 @@ def sync_file_data(client_id):
     # Get the uploaded file info
     uploaded_file = UploadedFile.query.get(fid)
     if not uploaded_file:
+        print(f"[SYNC] file_id={fid} not found for client={cid}")
         return jsonify({"error": "File not found"}), 404
 
     # Get all transactions for this file
     txns = Transaction.query.filter_by(client_id=cid, file_id=fid).all()
+    print(f"[SYNC] client={cid} file={fid} found {len(txns)} transactions (upload reported total_rows={uploaded_file.total_rows})")
     if not txns:
-        return jsonify({"error": "No transactions found for this file"}), 404
+        return jsonify({
+            "error": (
+                f"No transactions were persisted for this file. "
+                f"Upload reported {uploaded_file.total_rows or 0} row(s), but 0 were saved. "
+                "Try re-uploading — if it happens again, the extractor couldn't parse the sheet."
+            ),
+            "file_id": str(fid),
+            "expected_rows": uploaded_file.total_rows or 0,
+        }), 404
 
     currency = uploaded_file.currency or "AED"
     bank_name = uploaded_file.bank_name or "Bank Account"
