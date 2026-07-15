@@ -244,17 +244,24 @@ def upload_file():
         if file_ext not in ['xlsx', 'xls', 'pdf']:
             return jsonify({"error": "Please upload an Excel file (.xlsx, .xls) or PDF file (.pdf)"}), 400
 
-        # Process based on file type
+        # Process based on file type. Skip the (slow) in-line AI categorization
+        # here so the upload returns before nginx's proxy_read_timeout on large
+        # statements — the frontend re-fires /api/categorize afterwards.
         file_content = io.BytesIO(file.read())
-
-        if file_ext == 'pdf':
-            print(f"[UPLOAD] Processing PDF file: {file.filename}")
-            result, error = pdf_processor.process_pdf_file(file_content)
-            file_type = "PDF"
-        else:
-            print(f"[UPLOAD] Processing Excel file: {file.filename}")
-            result, error = processor.process_excel_file(file_content)
-            file_type = "Excel"
+        processor._skip_ai_categorization = True
+        pdf_processor._skip_ai_categorization = True
+        try:
+            if file_ext == 'pdf':
+                print(f"[UPLOAD] Processing PDF file: {file.filename}")
+                result, error = pdf_processor.process_pdf_file(file_content)
+                file_type = "PDF"
+            else:
+                print(f"[UPLOAD] Processing Excel file: {file.filename}")
+                result, error = processor.process_excel_file(file_content)
+                file_type = "Excel"
+        finally:
+            processor._skip_ai_categorization = False
+            pdf_processor._skip_ai_categorization = False
 
         if error or not result:
             return jsonify({"error": f"Error processing {file_type} file: {error}"}), 500
@@ -282,6 +289,28 @@ def upload_file():
 
     except Exception as e:
         return jsonify({"error": f"Processing error: {str(e)}"}), 500
+
+
+@app.route('/api/categorize', methods=['POST'])
+def categorize_transactions():
+    """Background AI categorisation, called by the frontend AFTER /api/upload
+    returns. Splits the slow OpenAI passes off the upload critical path so
+    nginx doesn't time out. Falls back to the input transactions on any
+    OpenAI failure so it never blocks the user."""
+    try:
+        data = request.get_json() or {}
+        transactions = data.get('transactions') or []
+        if not isinstance(transactions, list) or not transactions:
+            return jsonify({"transactions": []})
+        try:
+            refined = processor.ai_categorize_transactions(transactions)
+        except Exception as e:
+            print(f"[/api/categorize] AI pass failed, returning input: {e}")
+            refined = transactions
+        return jsonify({"transactions": refined})
+    except Exception as e:
+        return jsonify({"error": f"Categorisation error: {str(e)}"}), 500
+
 
 @app.route('/api/analyze', methods=['POST'])
 def analyze_data():

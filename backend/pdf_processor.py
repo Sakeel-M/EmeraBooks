@@ -542,8 +542,13 @@ Extract ALL transactions you can find. Return ONLY valid JSON."""
                 'currency': 'USD'
             })
 
-            # Apply AI categorization for better accuracy
-            if len(transactions) > 0:
+            # Apply AI categorization for better accuracy. Guarded so
+            # /api/upload can skip the OpenAI batches and let the frontend
+            # trigger /api/categorize as a background follow-up (avoids
+            # nginx 504 on large statements).
+            if getattr(self, "_skip_ai_categorization", False):
+                print("[AI] Skipping in-line AI categorization (deferred to /api/categorize)")
+            elif len(transactions) > 0:
                 print(f"[AI] Applying AI categorization to {len(transactions)} transactions...")
                 transactions = self.ai_categorize_transactions(transactions)
 

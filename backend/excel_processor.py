@@ -817,8 +817,13 @@ Example format: ["Food & Beverage", "Transportation & Logistics", "Retail & Shop
 
             print(f"\n[SUCCESS] Total transactions extracted: {len(all_transactions)}")
 
-            # Apply AI-powered categorization to improve accuracy
-            if len(all_transactions) > 0:
+            # Apply AI-powered categorization to improve accuracy. Guarded so
+            # /api/upload can skip the (slow) OpenAI batches and let the
+            # frontend fire /api/categorize as a background follow-up — that
+            # avoids nginx 504s on large statements.
+            if getattr(self, "_skip_ai_categorization", False):
+                print("[AI] Skipping in-line AI categorization (deferred to /api/categorize)")
+            elif len(all_transactions) > 0:
                 print(f"[AI] Applying AI categorization to {len(all_transactions)} transactions...")
                 all_transactions = self.ai_categorize_transactions(all_transactions)
                 print(f"[AI] AI categorization complete!")

@@ -61,6 +61,22 @@ export const api = {
     return response.json();
   },
 
+  async categorizeTransactions(transactions: any[]): Promise<{ transactions: any[] } | null> {
+    // Background AI categorisation, called AFTER /api/upload returns. Never
+    // throws — callers treat this as best-effort refinement.
+    try {
+      const response = await fetch(`${API_BASE_URL}/categorize`, {
+        method: "POST",
+        headers: await apiHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ transactions }),
+      });
+      if (!response.ok) return null;
+      return response.json();
+    } catch {
+      return null;
+    }
+  },
+
   async analyzeData(data: any[], bankInfo: any): Promise<AnalysisResponse> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
