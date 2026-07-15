@@ -4,6 +4,7 @@ Supports text-based and image-based PDFs with intelligent data extraction
 """
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 import os
 import openai
@@ -263,16 +264,27 @@ class BankStatementPDFProcessor:
 
         print(f"[AI] Processing PDF in {len(chunks)} chunk(s) ({len(pages)} pages, {len(pdf_text)} chars)")
 
-        # Process each chunk
+        # Process chunks IN PARALLEL — nginx has a 300s proxy_read_timeout, so
+        # 11 sequential 25s OpenAI calls (~275s) can't finish in time. Firing
+        # them concurrently reduces wall-clock to roughly the slowest chunk.
         all_transactions = []
         bank_info = None
-        for i, chunk in enumerate(chunks):
-            chunk_tables = tables_data if i == 0 else []
-            result = self._ai_extract_chunk(chunk, chunk_tables, i + 1, len(chunks))
-            if result:
-                if not bank_info:
-                    bank_info = result.get('bank_info')
-                all_transactions.extend(result.get('transactions', []))
+        max_workers = min(len(chunks), 8)  # cap parallelism to avoid rate limits
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = []
+            for i, chunk in enumerate(chunks):
+                chunk_tables = tables_data if i == 0 else []
+                futures.append(pool.submit(self._ai_extract_chunk, chunk, chunk_tables, i + 1, len(chunks)))
+            for fut in futures:
+                try:
+                    result = fut.result()
+                except Exception as e:
+                    print(f"[AI] Chunk future raised: {e}")
+                    result = None
+                if result:
+                    if not bank_info:
+                        bank_info = result.get('bank_info')
+                    all_transactions.extend(result.get('transactions', []))
 
         if not all_transactions:
             return None
