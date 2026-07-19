@@ -42,18 +42,22 @@ const FileUpload = ({ onUploadSuccess, disabled = false }: FileUploadProps) => {
   };
 
   const uploadFile = async (file: File) => {
-    const validExtensions = ['.xlsx', '.xls', '.pdf'];
+    const validExtensions = ['.xlsx', '.xls', '.pdf', '.csv'];
     const validMimeTypes = [
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'application/vnd.ms-excel',
       'application/pdf',
+      'text/csv',
+      'application/csv',
+      'application/vnd.ms-excel', // some browsers report csv as this
+      '', // some browsers report empty MIME for csv
     ];
     const fileExtension = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
 
     if (!validExtensions.includes(fileExtension)) {
       toast({
         title: "Invalid File Type",
-        description: "Please upload an Excel file (.xlsx, .xls) or PDF file (.pdf)",
+        description: "Please upload an Excel (.xlsx, .xls), CSV (.csv), or PDF file (.pdf)",
         variant: "destructive",
       });
       return;
@@ -138,7 +142,7 @@ const FileUpload = ({ onUploadSuccess, disabled = false }: FileUploadProps) => {
           type="file"
           id="file-upload"
           className="hidden"
-          accept=".xlsx,.xls,.pdf"
+          accept=".xlsx,.xls,.csv,.pdf"
           onChange={handleFileSelect}
           disabled={isDisabled}
         />
@@ -177,7 +181,7 @@ const FileUpload = ({ onUploadSuccess, disabled = false }: FileUploadProps) => {
                 Select File
               </Button>
               <p className="text-xs text-muted-foreground">
-                Supports .xlsx, .xls, and .pdf files
+                Supports .xlsx, .xls, .csv, and .pdf files
               </p>
             </>
           )}

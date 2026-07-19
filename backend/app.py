@@ -241,8 +241,8 @@ def upload_file():
         # Check file type
         file_ext = file.filename.lower().split('.')[-1]
 
-        if file_ext not in ['xlsx', 'xls', 'pdf']:
-            return jsonify({"error": "Please upload an Excel file (.xlsx, .xls) or PDF file (.pdf)"}), 400
+        if file_ext not in ['xlsx', 'xls', 'pdf', 'csv']:
+            return jsonify({"error": "Please upload an Excel file (.xlsx, .xls), CSV (.csv) or PDF file (.pdf)"}), 400
 
         # Process based on file type. Skip the (slow) in-line AI categorization
         # here so the upload returns before nginx's proxy_read_timeout on large
@@ -255,6 +255,46 @@ def upload_file():
                 print(f"[UPLOAD] Processing PDF file: {file.filename}")
                 result, error = pdf_processor.process_pdf_file(file_content)
                 file_type = "PDF"
+            elif file_ext == 'csv':
+                print(f"[UPLOAD] Processing CSV file: {file.filename}")
+                # Convert CSV -> in-memory .xlsx so the existing Excel pipeline
+                # (bank detection, column mapping, date parsing, categorisation)
+                # works verbatim. Uses stdlib csv + openpyxl to avoid pandas.
+                try:
+                    import csv
+                    from openpyxl import Workbook
+                    text = None
+                    for enc in ("utf-8-sig", "utf-8", "latin-1", "cp1252"):
+                        try:
+                            file_content.seek(0)
+                            text = file_content.read().decode(enc)
+                            break
+                        except UnicodeDecodeError:
+                            continue
+                    if text is None:
+                        return jsonify({"error": "Could not decode CSV — try re-saving as UTF-8"}), 400
+                    # Auto-detect delimiter (, ; or tab).
+                    try:
+                        dialect = csv.Sniffer().sniff(text[:4096], delimiters=",;\t|")
+                    except csv.Error:
+                        dialect = csv.excel
+                    reader = csv.reader(io.StringIO(text), dialect=dialect)
+                    wb = Workbook()
+                    ws = wb.active
+                    ws.title = "Sheet1"
+                    row_count = 0
+                    for row in reader:
+                        ws.append(row)
+                        row_count += 1
+                    if row_count == 0:
+                        return jsonify({"error": "CSV appears to be empty"}), 400
+                    xlsx_buffer = io.BytesIO()
+                    wb.save(xlsx_buffer)
+                    xlsx_buffer.seek(0)
+                    result, error = processor.process_excel_file(xlsx_buffer)
+                    file_type = "CSV"
+                except Exception as e:
+                    return jsonify({"error": f"Failed to read CSV: {e}"}), 400
             else:
                 print(f"[UPLOAD] Processing Excel file: {file.filename}")
                 result, error = processor.process_excel_file(file_content)
